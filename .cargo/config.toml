@@ -1,0 +1,6 @@
+[build]
+target-dir = "target"
+
+[alias]
+components = "run -q --bin components --"
+component = "run -q --bin component --"
