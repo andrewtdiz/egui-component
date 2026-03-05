@@ -8,7 +8,7 @@ pub(crate) fn with_input_chrome<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) 
         style.visuals.text_edit_bg_color = Some(tokens::INPUT_BACKGROUND);
         style.visuals.code_bg_color = tokens::INPUT_BACKGROUND;
         style.visuals.selection.bg_fill = tokens::text_selection_bg(dark_mode);
-        style.visuals.selection.stroke = Stroke::NONE;
+        style.visuals.selection.stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
         let visuals = &mut style.visuals.widgets;
         visuals.noninteractive.corner_radius = egui::CornerRadius::same(tokens::RADIUS_MD);
         visuals.inactive.corner_radius = egui::CornerRadius::same(tokens::RADIUS_MD);

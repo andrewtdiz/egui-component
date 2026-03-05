@@ -19,7 +19,7 @@ pub mod prelude {
         ButtonVariant, CardProps, CheckboxProps, CollapsibleProps, ComboboxProps, CommandItem,
         CommandProps, ContextMenuAction, ContextMenuProps, ContextMenuState, DialogProps,
         DialogVariant, DropdownMenuProps, FieldProps, LabelProps, LabelTone, LabelWeight,
-        NumberInputProps, ProgressProps, ResizableProps, ScrollAreaProps, SelectProps, SliderProps,
-        SwitchProps, TabOption, TextInputProps, TooltipProps,
+        NumberInputAxis, NumberInputProps, ProgressProps, ResizableProps, ScrollAreaProps,
+        SelectProps, SliderProps, SwitchProps, SwitchSize, TabOption, TextInputProps, TooltipProps,
     };
 }

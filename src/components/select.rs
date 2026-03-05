@@ -1,8 +1,8 @@
 use crate::ui::{icons, tokens};
 use egui::{Color32, CornerRadius, CursorIcon, Id, Stroke, StrokeKind, Ui};
 
-const MENU_INNER_PADDING_X: i8 = 6;
-const MENU_INNER_PADDING_Y: i8 = 6;
+const MENU_INNER_PADDING_X: i8 = 3;
+const MENU_INNER_PADDING_Y: i8 = 3;
 const MENU_ROW_HEIGHT: f32 = 32.0;
 
 #[derive(Debug, Clone, Copy)]
@@ -48,7 +48,7 @@ pub fn select(
 
     let selected_text = selected_index.and_then(|index| props.options.get(index).copied());
     let current_selection = *selected_index;
-    let mut trigger = draw_trigger(ui, props, selected_text, dark_mode);
+    let mut trigger = draw_trigger(ui, props, selected_text);
     let mut next_selection = None;
 
     let _ = egui::Popup::menu(&trigger)
@@ -100,7 +100,6 @@ fn draw_trigger(
     ui: &mut Ui,
     props: SelectProps<'_>,
     selected_text: Option<&str>,
-    dark_mode: bool,
 ) -> egui::Response {
     ui.push_id(props.trigger_id, |ui| {
         let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
@@ -114,7 +113,7 @@ fn draw_trigger(
             tokens::INPUT_BACKGROUND
         };
         let stroke = if focused {
-            tokens::input_focus_stroke(dark_mode)
+            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
         } else if response.hovered() {
             Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
         } else {

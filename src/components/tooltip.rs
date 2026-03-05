@@ -1,4 +1,4 @@
-use egui::{CursorIcon, Response, Ui};
+use egui::{Color32, CursorIcon, Response, Shadow, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TooltipProps<'a> {
@@ -15,7 +15,7 @@ impl<'a> TooltipProps<'a> {
             trigger_label,
             text,
             width: 220.0,
-            delay_ms: 75,
+            delay_ms: 50,
             top_center: true,
         }
     }
@@ -38,8 +38,19 @@ impl<'a> TooltipProps<'a> {
 
 pub fn tooltip(ui: &mut Ui, props: TooltipProps<'_>) -> Response {
     ui.scope(|ui| {
+        let dark_mode = ui.visuals().dark_mode;
         ui.style_mut().interaction.tooltip_delay = props.delay_ms as f32 / 1000.0;
         ui.style_mut().interaction.show_tooltips_only_when_still = false;
+        ui.style_mut().visuals.popup_shadow = Shadow {
+            offset: [2, 4],
+            blur: 4,
+            spread: 0,
+            color: if dark_mode {
+                Color32::from_black_alpha(56)
+            } else {
+                Color32::from_black_alpha(20)
+            },
+        };
 
         let response = ui
             .add_sized(
@@ -55,7 +66,7 @@ pub fn tooltip(ui: &mut Ui, props: TooltipProps<'_>) -> Response {
                 .align(egui::RectAlign::TOP)
                 .align_alternatives(&[egui::RectAlign::TOP]);
             let _ = tooltip.show(|ui| {
-                ui.label(props.text);
+                let _ = ui.add(egui::Label::new(props.text).selectable(false));
             });
             response
         } else {

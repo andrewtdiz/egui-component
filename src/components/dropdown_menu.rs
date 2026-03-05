@@ -22,7 +22,7 @@ pub fn dropdown_menu(
 ) -> Response {
     if props.options.is_empty() {
         *selected_index = 0;
-        return ui.label("");
+        return ui.add(egui::Label::new("").selectable(false));
     }
 
     let response = ui

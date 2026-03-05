@@ -74,5 +74,5 @@ pub fn label(ui: &mut Ui, props: LabelProps<'_>) -> egui::Response {
         ));
     }
 
-    ui.label(text)
+    ui.add(egui::Label::new(text).selectable(false))
 }

@@ -91,7 +91,10 @@ pub fn command(
                                 .size(11.0),
                         );
                         ui.add_space(8.0);
-                        ui.label(RichText::new(item.label).color(tokens::TEXT_PRIMARY));
+                        let _ = ui.add(
+                            egui::Label::new(RichText::new(item.label).color(tokens::TEXT_PRIMARY))
+                                .selectable(false),
+                        );
                     });
                 }
 

@@ -1,18 +1,38 @@
 use crate::ui::tokens;
 use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SwitchSize {
+    Default,
+    Small,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct SwitchProps<'a> {
     pub label: Option<&'a str>,
+    pub size: SwitchSize,
 }
 
 impl<'a> SwitchProps<'a> {
     pub fn new() -> Self {
-        Self { label: None }
+        Self {
+            label: None,
+            size: SwitchSize::Default,
+        }
     }
 
     pub fn label(mut self, label: &'a str) -> Self {
         self.label = Some(label);
+        self
+    }
+
+    pub fn size(mut self, size: SwitchSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    pub fn small(mut self) -> Self {
+        self.size = SwitchSize::Small;
         self
     }
 }
@@ -21,27 +41,46 @@ pub fn switch(ui: &mut Ui, value: &mut bool, props: SwitchProps<'_>) -> Response
     match props.label {
         Some(label) => {
             ui.horizontal(|ui| {
-                let label_response = ui.label(
-                    egui::RichText::new(label)
-                        .size(12.0)
-                        .color(tokens::TEXT_PRIMARY),
+                let label_response = ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(label)
+                            .size(12.0)
+                            .color(tokens::TEXT_PRIMARY),
+                    )
+                    .selectable(false),
                 );
                 let switch_response = ui
                     .with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        draw_switch_control(ui, value)
+                        draw_switch_control(ui, value, props.size)
                     })
                     .inner;
                 label_response.union(switch_response)
             })
             .inner
         }
-        None => draw_switch_control(ui, value),
+        None => draw_switch_control(ui, value, props.size),
     }
 }
 
-fn draw_switch_control(ui: &mut Ui, value: &mut bool) -> Response {
+fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: SwitchSize) -> Response {
     let dark_mode = ui.visuals().dark_mode;
-    let desired_size = egui::vec2(42.0, 24.0);
+    let metrics = match size {
+        SwitchSize::Default => SwitchMetrics {
+            width: 42.0,
+            height: 24.0,
+            corner_radius: 12,
+            knob_radius: 8.6,
+            knob_inset: 11.2,
+        },
+        SwitchSize::Small => SwitchMetrics {
+            width: 34.0,
+            height: 20.0,
+            corner_radius: 10,
+            knob_radius: 7.0,
+            knob_inset: 9.2,
+        },
+    };
+    let desired_size = egui::vec2(metrics.width, metrics.height);
     let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
     if response.clicked() {
         *value = !*value;
@@ -54,17 +93,31 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool) -> Response {
     let stroke = Stroke::new(1.0, tokens::SWITCH_BORDER);
     ui.painter().rect(
         rect,
-        CornerRadius::same(12),
+        CornerRadius::same(metrics.corner_radius),
         fill,
         stroke,
         StrokeKind::Outside,
     );
 
-    let knob_radius = 7.5;
-    let knob_x = egui::lerp((rect.left() + 12.0)..=(rect.right() - 12.0), t);
+    let knob_x = egui::lerp(
+        (rect.left() + metrics.knob_inset)..=(rect.right() - metrics.knob_inset),
+        t,
+    );
     let knob_color = tokens::SWITCH_KNOB_OFF.lerp_to_gamma(tokens::primary_fg(dark_mode), t);
-    ui.painter()
-        .circle_filled(egui::pos2(knob_x, rect.center().y), knob_radius, knob_color);
+    ui.painter().circle_filled(
+        egui::pos2(knob_x, rect.center().y),
+        metrics.knob_radius,
+        knob_color,
+    );
 
-    response
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SwitchMetrics {
+    width: f32,
+    height: f32,
+    corner_radius: u8,
+    knob_radius: f32,
+    knob_inset: f32,
 }

@@ -52,10 +52,12 @@ pub(crate) const TEXT_PRIMARY: Color32 = Color32::from_rgb(244, 244, 245);
 pub(crate) const TEXT_SECONDARY: Color32 = Color32::from_rgb(212, 212, 216);
 pub(crate) const TEXT_MUTED: Color32 = Color32::from_rgb(161, 161, 170);
 pub(crate) const TEXT_DESTRUCTIVE: Color32 = Color32::from_rgb(248, 113, 113);
+pub(crate) const GAME_ENGINE_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
+pub(crate) const GAME_ENGINE_RED: Color32 = Color32::from_rgb(239, 68, 68);
 
 pub(crate) const INPUT_BACKGROUND: Color32 = Color32::from_rgb(24, 24, 27);
 pub(crate) const INPUT_HOVER_BACKGROUND: Color32 = Color32::from_rgb(31, 31, 35);
-pub(crate) const INPUT_FOCUS_BACKGROUND: Color32 = Color32::from_rgb(31, 31, 35);
+pub(crate) const INPUT_FOCUS_BACKGROUND: Color32 = Color32::from_rgb(14, 14, 17);
 pub(crate) const INPUT_BORDER: Color32 = Color32::from_rgb(63, 63, 70);
 pub(crate) const INPUT_HOVER_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
 
@@ -151,12 +153,12 @@ pub(crate) const fn text_selection_bg(dark_mode: bool) -> Color32 {
 
 pub(crate) const fn input_focus_border(dark_mode: bool) -> Color32 {
     if dark_mode {
-        NEUTRAL.c300
+        NEUTRAL.c400
     } else {
-        NEUTRAL.c700
+        NEUTRAL.c600
     }
 }
 
 pub(crate) fn input_focus_stroke(dark_mode: bool) -> Stroke {
-    Stroke::new(1.5, input_focus_border(dark_mode))
+    Stroke::new(1.1, input_focus_border(dark_mode))
 }

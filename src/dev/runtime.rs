@@ -1,4 +1,4 @@
-use crate::dev::showcase::{render_entity_components_editor, EntityEditorStory};
+use crate::dev::showcase::{render_component_showcase, ComponentShowcaseState};
 use crate::ui::{icons, style, tokens};
 use crate::{ComponentLibraryError, Result};
 
@@ -27,13 +27,13 @@ pub(crate) fn run_showcase_window() -> Result {
 }
 
 pub(crate) struct ShowcaseSurface {
-    story: EntityEditorStory,
+    story: ComponentShowcaseState,
 }
 
 impl ShowcaseSurface {
     pub(crate) fn new() -> Self {
         Self {
-            story: EntityEditorStory::default(),
+            story: ComponentShowcaseState::default(),
         }
     }
 
@@ -50,7 +50,7 @@ impl ShowcaseSurface {
                 let rect = ui.max_rect();
                 ui.painter().rect_filled(rect, 0.0, tokens::APP_BACKGROUND);
                 ui.set_min_size(rect.size());
-                render_entity_components_editor(ui, &mut self.story);
+                render_component_showcase(ui, &mut self.story);
             });
     }
 }

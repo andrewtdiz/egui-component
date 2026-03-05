@@ -98,6 +98,8 @@ fn apply_showcase_style_profile(style: &mut Style) {
     );
     style.spacing.slider_width = 176.0;
     style.spacing.combo_width = 220.0;
+    style.interaction.selectable_labels = false;
+    style.interaction.multi_widget_text_select = false;
 
     let corner_radius = CornerRadius::same(tokens::RADIUS_MD);
     style.visuals.widgets.noninteractive.corner_radius = corner_radius;

@@ -46,6 +46,7 @@ pub struct NumberInputProps {
     pub prefix: Option<String>,
     pub prefix_tint: Color32,
     pub prefix_align_left: bool,
+    pub axis: NumberInputAxis,
 }
 
 impl NumberInputProps {
@@ -59,6 +60,7 @@ impl NumberInputProps {
             prefix: None,
             prefix_tint: tokens::TEXT_SECONDARY,
             prefix_align_left: false,
+            axis: NumberInputAxis::Horizontal,
         }
     }
 
@@ -96,10 +98,17 @@ impl NumberInputProps {
         self.prefix_align_left = true;
         self
     }
+
+    pub fn axis(mut self, axis: NumberInputAxis) -> Self {
+        self.axis = axis;
+        self
+    }
 }
 
 pub fn number_input(ui: &mut Ui, value: &mut f32, props: NumberInputProps) -> Response {
     with_input_chrome(ui, |ui| {
+        let dark_mode = ui.visuals().dark_mode;
+        ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(dark_mode);
         ui.push_id(props.id, |ui| {
             let mut drag_value = egui::DragValue::new(value)
                 .range(props.range)
@@ -108,9 +117,16 @@ pub fn number_input(ui: &mut Ui, value: &mut f32, props: NumberInputProps) -> Re
             if let Some(prefix) = props.prefix.as_deref().filter(|_| !props.prefix_align_left) {
                 drag_value = drag_value.prefix(format!("{prefix} "));
             }
+            let cursor_icon = match props.axis {
+                NumberInputAxis::Horizontal => CursorIcon::ResizeHorizontal,
+                NumberInputAxis::Vertical => CursorIcon::ResizeVertical,
+            };
             let response = ui
                 .add_sized([props.width, ui.spacing().interact_size.y], drag_value)
-                .on_hover_cursor(CursorIcon::Text);
+                .on_hover_cursor(cursor_icon);
+            if response.dragged() {
+                ui.ctx().set_cursor_icon(cursor_icon);
+            }
 
             if props.prefix_align_left {
                 if let Some(prefix) = props.prefix.as_deref() {
@@ -128,4 +144,10 @@ pub fn number_input(ui: &mut Ui, value: &mut f32, props: NumberInputProps) -> Re
         })
         .inner
     })
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum NumberInputAxis {
+    Horizontal,
+    Vertical,
 }

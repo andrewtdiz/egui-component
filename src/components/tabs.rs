@@ -1,5 +1,5 @@
 use crate::ui::tokens;
-use egui::{Color32, CornerRadius, CursorIcon, Id, RichText, Stroke, StrokeKind, Ui};
+use egui::{Color32, CornerRadius, CursorIcon, Id, RichText, Stroke, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TabOption<'a> {
@@ -38,16 +38,6 @@ pub fn tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>])
                     )
                     .on_hover_cursor(CursorIcon::PointingHand);
 
-                if response.hovered() && !selected {
-                    ui.painter().rect(
-                        response.rect.shrink2(egui::vec2(1.0, 2.0)),
-                        CornerRadius::same(tokens::RADIUS_SM),
-                        tokens::ROW_HOVER_BG.linear_multiply(0.5),
-                        Stroke::NONE,
-                        StrokeKind::Outside,
-                    );
-                }
-
                 if selected {
                     let y = response.rect.bottom() - 1.0;
                     ui.painter().line_segment(
@@ -55,7 +45,7 @@ pub fn tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>])
                             egui::pos2(response.rect.left() + 4.0, y),
                             egui::pos2(response.rect.right() - 4.0, y),
                         ],
-                        Stroke::new(2.0, tokens::row_selected_border(dark_mode)),
+                        Stroke::new(2.6, tokens::TEXT_SECONDARY),
                     );
                 }
 
