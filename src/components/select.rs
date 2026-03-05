@@ -112,9 +112,7 @@ fn draw_trigger(
         } else {
             tokens::INPUT_BACKGROUND
         };
-        let stroke = if focused {
-            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
-        } else if response.hovered() {
+        let stroke = if focused || response.hovered() {
             Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
         } else {
             Stroke::new(1.0, tokens::INPUT_BORDER)

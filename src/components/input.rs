@@ -27,6 +27,12 @@ impl<'a> TextInputProps<'a> {
     }
 }
 
+impl<'a> Default for TextInputProps<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn text_input(ui: &mut Ui, value: &mut String, props: TextInputProps<'_>) -> egui::Response {
     with_input_chrome(ui, |ui| {
         let dark_mode = ui.visuals().dark_mode;

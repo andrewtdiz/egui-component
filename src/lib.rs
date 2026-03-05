@@ -13,13 +13,17 @@ pub use error::{ComponentLibraryError, Result};
 
 pub mod prelude {
     pub use crate::components::{
-        button, button_group, card, checkbox, collapsible, combobox, command, context_menu, dialog,
-        dropdown_menu, field, label, number_input, progress, resizable, scroll_area, select,
-        separator, slider, switch, tabs, text_input, tooltip, ButtonGroupProps, ButtonProps,
+        agent_chat, button, button_group, card, checkbox, collapsible, combobox, command,
+        context_menu, dialogue, dialogue_body, dialogue_description, dialogue_footer,
+        dialogue_header, dialogue_modal, dialogue_title, dropdown_menu, field, kbd, kbd_group,
+        label, number_input, progress, resizable, scroll_area, select, separator, slider, switch,
+        tabs, text_input, tooltip, AgentChatProps, AgentChatState, ButtonGroupProps, ButtonProps,
         ButtonVariant, CardProps, CheckboxProps, CollapsibleProps, ComboboxProps, CommandItem,
-        CommandProps, ContextMenuAction, ContextMenuProps, ContextMenuState, DialogProps,
-        DialogVariant, DropdownMenuProps, FieldProps, LabelProps, LabelTone, LabelWeight,
-        NumberInputAxis, NumberInputProps, ProgressProps, ResizableProps, ScrollAreaProps,
-        SelectProps, SliderProps, SwitchProps, SwitchSize, TabOption, TextInputProps, TooltipProps,
+        CommandProps, ContextMenuAction, ContextMenuProps, ContextMenuState, DialogueHeaderProps,
+        DialogueModalProps, DialogueProps, DialogueVariant, DropdownMenuAction, DropdownMenuEntry,
+        DropdownMenuProps, DropdownMenuState, DropdownMenuSubmenu, FieldProps, KbdGroupProps,
+        KbdProps, LabelProps, LabelTone, LabelWeight, NumberInputAxis, NumberInputProps,
+        ProgressProps, ResizableProps, ScrollAreaProps, SelectProps, SliderProps, SwitchProps,
+        SwitchSize, TabOption, TextInputProps, TooltipProps,
     };
 }

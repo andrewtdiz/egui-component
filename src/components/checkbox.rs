@@ -20,6 +20,12 @@ impl<'a> CheckboxProps<'a> {
     }
 }
 
+impl<'a> Default for CheckboxProps<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn checkbox(ui: &mut Ui, value: &mut bool, props: CheckboxProps<'_>) -> Response {
     match props.label {
         Some(label_text) => {

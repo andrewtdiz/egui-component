@@ -1,4 +1,4 @@
-use egui::{Id, Ui};
+use egui::{containers::scroll_area::ScrollSource, Id, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ScrollAreaProps {
@@ -30,6 +30,10 @@ impl ScrollAreaProps {
 pub fn scroll_area<R>(ui: &mut Ui, props: ScrollAreaProps, add: impl FnOnce(&mut Ui) -> R) {
     let mut area = egui::ScrollArea::vertical()
         .id_salt(props.id)
+        .scroll_source(ScrollSource {
+            drag: false,
+            ..ScrollSource::default()
+        })
         .auto_shrink(props.auto_shrink);
     if let Some(max_height) = props.max_height {
         area = area.max_height(max_height);

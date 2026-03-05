@@ -1,15 +1,19 @@
 use crate::components::{
-    button, button_group, card, checkbox, collapsible, combobox, command, context_menu, dialog,
-    dropdown_menu, field, icon, label, number_input, progress, resizable, scroll_area, select,
-    separator, slider, switch, tabs, text_input, tooltip, ButtonGroupProps, ButtonProps,
+    agent_chat, button, button_group, card, checkbox, collapsible, combobox, command, context_menu,
+    dialogue_body, dialogue_footer, dialogue_header, dialogue_modal, dropdown_menu, field, icon,
+    kbd, kbd_group, label, number_input, progress, resizable, scroll_area, select, separator,
+    slider, switch, tabs, text_input, tooltip, AgentChatProps, ButtonGroupProps, ButtonProps,
     ButtonVariant, CardProps, CheckboxProps, CollapsibleProps, ComboboxProps, CommandItem,
-    CommandProps, ContextMenuAction, ContextMenuProps, DialogProps, DialogVariant,
-    DropdownMenuProps, FieldProps, IconProps, LabelProps, LabelTone, LabelWeight, NumberInputAxis,
-    NumberInputProps, ProgressProps, ResizableProps, ScrollAreaProps, SelectProps, SliderProps,
-    SwitchProps, SwitchSize, TabOption, TextInputProps, TooltipProps,
+    CommandProps, ContextMenuAction, ContextMenuProps, DialogueHeaderProps, DialogueModalProps,
+    DialogueVariant, DropdownMenuEntry, DropdownMenuProps, FieldProps, IconProps, KbdGroupProps,
+    KbdProps, LabelProps, LabelTone, LabelWeight, NumberInputAxis, NumberInputProps, ProgressProps,
+    ResizableProps, ScrollAreaProps, SelectProps, SliderProps, SwitchProps, SwitchSize, TabOption,
+    TextInputProps, TooltipProps,
 };
 use crate::ui::tokens;
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Stroke, StrokeKind, Ui};
+
+use egui::containers::scroll_area::ScrollSource;
 
 const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
 const TAB_OPTIONS: [TabOption<'static>; 3] = [
@@ -18,7 +22,6 @@ const TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::new(2, "History"),
 ];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
-const DROPDOWN_OPTIONS: [&str; 4] = ["Create Material", "Create Script", "Duplicate", "Delete"];
 const COMBOBOX_OPTIONS: [&str; 6] = [
     "Material 1",
     "Material Glass",
@@ -36,6 +39,44 @@ const COMMAND_OPTIONS: [CommandItem<'static>; 8] = [
     CommandItem::new("View", "Toggle Gizmos"),
     CommandItem::new("Tools", "Snap to Pixels"),
     CommandItem::new("Tools", "Rebuild Lighting"),
+];
+const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action(4, "Email"),
+    DropdownMenuEntry::action(5, "Message"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(6, "More..."),
+];
+const DROPDOWN_ENTRIES: [DropdownMenuEntry<'static>; 15] = [
+    DropdownMenuEntry::action(0, "My Account"),
+    DropdownMenuEntry::action_with_shortcut(1, "Profile", "Shift+Cmd+P"),
+    DropdownMenuEntry::action_with_shortcut(2, "Billing", "Cmd+B"),
+    DropdownMenuEntry::action_with_shortcut(3, "Settings", "Cmd+S"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::submenu("Invite users", &DROPDOWN_INVITE_ENTRIES),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_shortcut(7, "New Team", "Cmd+T"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(8, "GitHub"),
+    DropdownMenuEntry::action(9, "Support"),
+    DropdownMenuEntry::action(10, "API"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_shortcut(11, "Log out", "Shift+Cmd+Q"),
+    DropdownMenuEntry::action(12, "Delete"),
+];
+const DROPDOWN_ACTION_LABELS: [&str; 13] = [
+    "My Account",
+    "Profile",
+    "Billing",
+    "Settings",
+    "Email",
+    "Message",
+    "More...",
+    "New Team",
+    "GitHub",
+    "Support",
+    "API",
+    "Log out",
+    "Delete",
 ];
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -56,6 +97,7 @@ impl ShowcaseGroup {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum ShowcaseComponentKind {
     Label,
+    Kbd,
     Input,
     Field,
     Button,
@@ -77,7 +119,8 @@ enum ShowcaseComponentKind {
     DropdownMenu,
     Combobox,
     Command,
-    Dialog,
+    AgentChat,
+    Dialogue,
     Icon,
 }
 
@@ -89,11 +132,17 @@ struct ShowcaseComponentDefinition {
     group: ShowcaseGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
+const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
     ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Label,
         label: "Label",
         description: "Text styles and tones",
+        group: ShowcaseGroup::PrimaryPrimitive,
+    },
+    ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::Kbd,
+        label: "Kbd",
+        description: "Keyboard keycaps and shortcuts",
         group: ShowcaseGroup::PrimaryPrimitive,
     },
     ShowcaseComponentDefinition {
@@ -208,7 +257,7 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
         kind: ShowcaseComponentKind::DropdownMenu,
         label: "Dropdown Menu",
         description: "Triggered option list",
-        group: ShowcaseGroup::DerivedComposed,
+        group: ShowcaseGroup::PrimaryPrimitive,
     },
     ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Combobox,
@@ -223,9 +272,15 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
         group: ShowcaseGroup::DerivedComposed,
     },
     ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Dialog,
-        label: "Dialog",
-        description: "Modal window trigger",
+        kind: ShowcaseComponentKind::AgentChat,
+        label: "Agent Chat",
+        description: "Prompt composer row",
+        group: ShowcaseGroup::DerivedComposed,
+    },
+    ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::Dialogue,
+        label: "Dialogue",
+        description: "Dialogue window trigger",
         group: ShowcaseGroup::DerivedComposed,
     },
     ShowcaseComponentDefinition {
@@ -254,12 +309,14 @@ pub struct ComponentShowcaseState {
     collapsible_open: bool,
     context_menu_toggle: bool,
     context_menu_action: Option<ContextMenuAction>,
-    dropdown_index: usize,
+    dropdown_action: Option<usize>,
     combobox_query: String,
     combobox_index: usize,
     command_query: String,
-    dialog_open: bool,
-    alert_dialog_open: bool,
+    agent_chat_add_clicks: usize,
+    agent_chat_send_clicks: usize,
+    dialogue_open: bool,
+    alert_dialogue_open: bool,
     tooltip_top_center: bool,
 }
 
@@ -282,12 +339,14 @@ impl Default for ComponentShowcaseState {
             collapsible_open: true,
             context_menu_toggle: true,
             context_menu_action: None,
-            dropdown_index: 0,
+            dropdown_action: None,
             combobox_query: "mat".to_owned(),
             combobox_index: 0,
             command_query: String::new(),
-            dialog_open: false,
-            alert_dialog_open: false,
+            agent_chat_add_clicks: 0,
+            agent_chat_send_clicks: 0,
+            dialogue_open: false,
+            alert_dialogue_open: false,
             tooltip_top_center: true,
         }
     }
@@ -343,6 +402,10 @@ fn draw_sidebar(ui: &mut Ui, state: &mut ComponentShowcaseState) {
 
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_sidebar_scroll")
+        .scroll_source(ScrollSource {
+            drag: false,
+            ..ScrollSource::default()
+        })
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for group in [
@@ -417,10 +480,14 @@ fn draw_center_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
 
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_preview_scroll")
+        .scroll_source(ScrollSource {
+            drag: false,
+            ..ScrollSource::default()
+        })
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                let width = ui.available_width().min(460.0).max(260.0);
+                let width = ui.available_width().clamp(260.0, 460.0);
 
                 let _ = card(
                     ui,
@@ -476,6 +543,25 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                     .tone(LabelTone::Destructive)
                     .weight(LabelWeight::Semibold),
             );
+        }
+        ShowcaseComponentKind::Kbd => {
+            let _ = kbd_group(ui, KbdGroupProps::new(), |ui| {
+                let _ = kbd(ui, KbdProps::new("⌘"));
+                let _ = kbd(ui, KbdProps::new("⇧"));
+                let _ = kbd(ui, KbdProps::new("⌥"));
+                let _ = kbd(ui, KbdProps::new("⌃"));
+            });
+            ui.add_space(6.0);
+            let _ = kbd_group(ui, KbdGroupProps::new(), |ui| {
+                let _ = kbd(ui, KbdProps::new("Ctrl"));
+                let _ = label(
+                    ui,
+                    LabelProps::new("+")
+                        .tone(LabelTone::Muted)
+                        .weight(LabelWeight::Semibold),
+                );
+                let _ = kbd(ui, KbdProps::new("B"));
+            });
         }
         ShowcaseComponentKind::Input => {
             let _ = text_input(
@@ -849,17 +935,29 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             );
         }
         ShowcaseComponentKind::DropdownMenu => {
-            let _ = dropdown_menu(
+            let (_response, menu_state) = dropdown_menu(
                 ui,
-                &mut state.dropdown_index,
-                DropdownMenuProps::new("Actions", &DROPDOWN_OPTIONS),
+                DropdownMenuProps::with_entries("Open", &DROPDOWN_ENTRIES).width(220.0),
             );
+            if let Some(action) = menu_state.action {
+                state.dropdown_action = Some(action);
+            }
             let _ = label(
                 ui,
-                LabelProps::new(DROPDOWN_OPTIONS[state.dropdown_index])
+                LabelProps::new(dropdown_action_label(state.dropdown_action))
                     .tone(LabelTone::Muted)
                     .size(11.0),
             );
+            ui.add_space(8.0);
+            let _ = label(
+                ui,
+                LabelProps::new("Shortcut keycaps")
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
+            ui.add_space(4.0);
+            draw_dropdown_shortcut_row(ui, "New Team", &["⌘", "T"]);
+            draw_dropdown_shortcut_row(ui, "Log out", &["⇧", "⌘", "Q"]);
         }
         ShowcaseComponentKind::Combobox => {
             let _ = combobox(
@@ -884,27 +982,133 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                 CommandProps::new(Id::new("component_showcase_command")).width(280.0),
             );
         }
-        ShowcaseComponentKind::Dialog => {
-            ui.horizontal(|ui| {
-                let _ = dialog(
-                    ui,
-                    &mut state.dialog_open,
-                    DialogProps::new(Id::new("component_showcase_dialog"), "Create Component")
-                        .description("Adds the selected component to the active object.")
-                        .trigger_label("Open Dialog")
-                        .confirm_label("Create"),
-                );
+        ShowcaseComponentKind::AgentChat => {
+            let chat_state = agent_chat(ui, AgentChatProps::new());
+            if chat_state.add_clicked {
+                state.agent_chat_add_clicks = state.agent_chat_add_clicks.saturating_add(1);
+            }
+            if chat_state.send_clicked {
+                state.agent_chat_send_clicks = state.agent_chat_send_clicks.saturating_add(1);
+            }
 
-                let _ = dialog(
+            let status = format!(
+                "Add clicked: {} | Send clicked: {}",
+                state.agent_chat_add_clicks, state.agent_chat_send_clicks
+            );
+            let _ = label(
+                ui,
+                LabelProps::new(status.as_str())
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
+        }
+        ShowcaseComponentKind::Dialogue => {
+            ui.horizontal(|ui| {
+                if button(
                     ui,
-                    &mut state.alert_dialog_open,
-                    DialogProps::new(Id::new("component_showcase_alert_dialog"), "Delete Object")
-                        .description("This action cannot be undone.")
-                        .trigger_label("Open Alert")
-                        .confirm_label("Delete")
-                        .variant(DialogVariant::Alert),
-                );
+                    ButtonProps::new("Open Dialogue").variant(ButtonVariant::Secondary),
+                )
+                .clicked()
+                {
+                    state.dialogue_open = true;
+                }
+
+                if button(
+                    ui,
+                    ButtonProps::new("Open Alert Dialogue").variant(ButtonVariant::Secondary),
+                )
+                .clicked()
+                {
+                    state.alert_dialogue_open = true;
+                }
             });
+
+            dialogue_modal(
+                ui,
+                &mut state.dialogue_open,
+                DialogueModalProps::new(Id::new("component_showcase_dialogue")).width(380.0),
+                |ui, close_requested| {
+                    dialogue_header(
+                        ui,
+                        DialogueHeaderProps::new("Create Component")
+                            .description("Adds the selected component to the active object."),
+                    );
+                    ui.add_space(10.0);
+                    let _ = dialogue_body(ui, |ui| {
+                        let _ = label(
+                            ui,
+                            LabelProps::new(
+                                "Pick a component from the sidebar and confirm to add it to the object.",
+                            )
+                            .tone(LabelTone::Muted)
+                            .size(11.0),
+                        );
+                    });
+                    ui.add_space(10.0);
+                    let _ = dialogue_footer(ui, |ui| {
+                        if button(
+                            ui,
+                            ButtonProps::new("Cancel").variant(ButtonVariant::Secondary),
+                        )
+                        .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                        if button(
+                            ui,
+                            ButtonProps::new("Create").variant(ButtonVariant::Primary),
+                        )
+                        .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                    });
+                },
+            );
+
+            dialogue_modal(
+                ui,
+                &mut state.alert_dialogue_open,
+                DialogueModalProps::new(Id::new("component_showcase_alert_dialogue")).width(380.0),
+                |ui, close_requested| {
+                    dialogue_header(
+                        ui,
+                        DialogueHeaderProps::new("Delete Object")
+                            .description("This action cannot be undone.")
+                            .variant(DialogueVariant::Alert),
+                    );
+                    ui.add_space(10.0);
+                    let _ = dialogue_body(ui, |ui| {
+                        let _ = label(
+                            ui,
+                            LabelProps::new(
+                                "Deleting removes the object and every child object in this hierarchy.",
+                            )
+                            .tone(LabelTone::Secondary)
+                            .size(11.0),
+                        );
+                    });
+                    ui.add_space(10.0);
+                    let _ = dialogue_footer(ui, |ui| {
+                        if button(
+                            ui,
+                            ButtonProps::new("Cancel").variant(ButtonVariant::Secondary),
+                        )
+                        .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                        if button(
+                            ui,
+                            ButtonProps::new("Delete").variant(ButtonVariant::Primary),
+                        )
+                        .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                    });
+                },
+            );
         }
         ShowcaseComponentKind::Icon => {
             ui.horizontal(|ui| {
@@ -944,6 +1148,33 @@ fn context_action_label(action: Option<ContextMenuAction>) -> &'static str {
     }
 }
 
+fn dropdown_action_label(action: Option<usize>) -> &'static str {
+    match action.and_then(|id| DROPDOWN_ACTION_LABELS.get(id).copied()) {
+        Some(label) => label,
+        None => "No action triggered",
+    }
+}
+
+fn draw_dropdown_shortcut_row(ui: &mut Ui, action_label: &str, keys: &[&str]) {
+    ui.horizontal(|ui| {
+        let _ = label(
+            ui,
+            LabelProps::new(action_label)
+                .tone(LabelTone::Secondary)
+                .size(11.0),
+        );
+        ui.add_space(8.0);
+        let _ = kbd_group(ui, KbdGroupProps::new().gap(3.0), |ui| {
+            for (index, key) in keys.iter().enumerate() {
+                if index > 0 {
+                    let _ = label(ui, LabelProps::new("+").tone(LabelTone::Muted).size(10.0));
+                }
+                let _ = kbd(ui, KbdProps::new(key).height(18.0).text_size(9.5));
+            }
+        });
+    });
+}
+
 fn clamp_state(state: &mut ComponentShowcaseState) {
     state.button_group_index = state
         .button_group_index
@@ -961,9 +1192,12 @@ fn clamp_state(state: &mut ComponentShowcaseState) {
         state.select_index = None;
     }
 
-    state.dropdown_index = state
-        .dropdown_index
-        .min(DROPDOWN_OPTIONS.len().saturating_sub(1));
+    if state
+        .dropdown_action
+        .is_some_and(|id| id >= DROPDOWN_ACTION_LABELS.len())
+    {
+        state.dropdown_action = None;
+    }
     state.combobox_index = state
         .combobox_index
         .min(COMBOBOX_OPTIONS.len().saturating_sub(1));

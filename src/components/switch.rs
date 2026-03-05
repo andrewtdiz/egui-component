@@ -37,6 +37,12 @@ impl<'a> SwitchProps<'a> {
     }
 }
 
+impl<'a> Default for SwitchProps<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn switch(ui: &mut Ui, value: &mut bool, props: SwitchProps<'_>) -> Response {
     match props.label {
         Some(label) => {

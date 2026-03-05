@@ -1,3 +1,7 @@
+use super::{
+    button::{button, ButtonProps, ButtonVariant},
+    label::{label, LabelProps, LabelTone},
+};
 use egui::{Color32, CursorIcon, Response, Shadow, Ui};
 
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +19,7 @@ impl<'a> TooltipProps<'a> {
             trigger_label,
             text,
             width: 220.0,
-            delay_ms: 50,
+            delay_ms: 0,
             top_center: true,
         }
     }
@@ -39,8 +43,6 @@ impl<'a> TooltipProps<'a> {
 pub fn tooltip(ui: &mut Ui, props: TooltipProps<'_>) -> Response {
     ui.scope(|ui| {
         let dark_mode = ui.visuals().dark_mode;
-        ui.style_mut().interaction.tooltip_delay = props.delay_ms as f32 / 1000.0;
-        ui.style_mut().interaction.show_tooltips_only_when_still = false;
         ui.style_mut().visuals.popup_shadow = Shadow {
             offset: [2, 4],
             blur: 4,
@@ -52,26 +54,60 @@ pub fn tooltip(ui: &mut Ui, props: TooltipProps<'_>) -> Response {
             },
         };
 
-        let response = ui
-            .add_sized(
-                [props.width, ui.spacing().interact_size.y],
-                egui::Button::new(props.trigger_label),
-            )
-            .on_hover_cursor(CursorIcon::PointingHand);
+        let response = button(
+            ui,
+            ButtonProps::new(props.trigger_label)
+                .variant(ButtonVariant::Secondary)
+                .min_size(egui::vec2(props.width, ui.spacing().interact_size.y)),
+        )
+        .on_hover_cursor(CursorIcon::PointingHand);
 
-        if props.top_center {
-            let mut tooltip = egui::Tooltip::for_enabled(&response).gap(6.0);
-            tooltip.popup = tooltip
-                .popup
-                .align(egui::RectAlign::TOP)
-                .align_alternatives(&[egui::RectAlign::TOP]);
-            let _ = tooltip.show(|ui| {
-                let _ = ui.add(egui::Label::new(props.text).selectable(false));
+        let hover_started_id = response.id.with("tooltip_hover_started_at");
+        let now = response.ctx.input(|input| input.time);
+        let delay_secs = props.delay_ms as f64 / 1000.0;
+
+        let show_tooltip = if response.enabled() && response.hovered() {
+            let hover_started_at = response.ctx.data_mut(|data| {
+                if let Some(hover_started_at) = data.get_temp::<f64>(hover_started_id) {
+                    hover_started_at
+                } else {
+                    data.insert_temp(hover_started_id, now);
+                    now
+                }
             });
-            response
+
+            let hovered_for = now - hover_started_at;
+            let should_show = hovered_for >= delay_secs;
+
+            if !should_show {
+                response
+                    .ctx
+                    .request_repaint_after_secs((delay_secs - hovered_for) as f32);
+            }
+
+            should_show
         } else {
-            response.on_hover_text(props.text)
+            response
+                .ctx
+                .data_mut(|data| data.remove::<f64>(hover_started_id));
+            false
+        };
+
+        if show_tooltip {
+            let mut tooltip = egui::Tooltip::for_widget(&response).gap(6.0);
+            if props.top_center {
+                tooltip.popup = tooltip
+                    .popup
+                    .align(egui::RectAlign::TOP)
+                    .align_alternatives(&[egui::RectAlign::TOP]);
+            }
+
+            let _ = tooltip.show(|ui| {
+                let _ = label(ui, LabelProps::new(props.text).tone(LabelTone::Secondary));
+            });
         }
+
+        response
     })
     .inner
 }

@@ -17,6 +17,10 @@ pub struct ButtonProps<'a> {
     pub icon_size: f32,
     pub icon_tint: Option<Color32>,
     pub icon_only: bool,
+    pub right_text: Option<&'a str>,
+    pub right_text_weak: bool,
+    pub selected: bool,
+    pub min_size: Option<Vec2>,
 }
 
 impl<'a> ButtonProps<'a> {
@@ -28,6 +32,10 @@ impl<'a> ButtonProps<'a> {
             icon_size: 14.0,
             icon_tint: None,
             icon_only: false,
+            right_text: None,
+            right_text_weak: false,
+            selected: false,
+            min_size: None,
         }
     }
 
@@ -39,6 +47,10 @@ impl<'a> ButtonProps<'a> {
             icon_size: 14.0,
             icon_tint: None,
             icon_only: true,
+            right_text: None,
+            right_text_weak: false,
+            selected: false,
+            min_size: None,
         }
     }
 
@@ -59,6 +71,28 @@ impl<'a> ButtonProps<'a> {
 
     pub fn icon_tint(mut self, icon_tint: Color32) -> Self {
         self.icon_tint = Some(icon_tint);
+        self
+    }
+
+    pub fn right_text(mut self, right_text: &'a str) -> Self {
+        self.right_text = Some(right_text);
+        self.right_text_weak = false;
+        self
+    }
+
+    pub fn right_text_weak(mut self, right_text: &'a str) -> Self {
+        self.right_text = Some(right_text);
+        self.right_text_weak = true;
+        self
+    }
+
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    pub fn min_size(mut self, min_size: Vec2) -> Self {
+        self.min_size = Some(min_size);
         self
     }
 }
@@ -148,11 +182,24 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
             None => egui::Button::new(button_label),
         };
 
+        if let Some(right_text) = props.right_text {
+            if props.right_text_weak {
+                widget = widget.shortcut_text(right_text);
+            } else {
+                widget = widget.right_text(right_text);
+            }
+        }
+
+        widget = widget.selected(props.selected);
+
         if props.variant == ButtonVariant::Link {
             widget = widget.frame(false);
         }
         if props.icon_only || (props.icon.is_some() && !has_label) {
             widget = widget.min_size(Vec2::splat(ui.spacing().interact_size.y));
+        }
+        if let Some(min_size) = props.min_size {
+            widget = widget.min_size(min_size);
         }
 
         let response = ui.add(widget).on_hover_cursor(CursorIcon::PointingHand);

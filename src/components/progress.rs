@@ -26,6 +26,12 @@ impl ProgressProps {
     }
 }
 
+impl Default for ProgressProps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn progress(ui: &mut Ui, value: f32, props: ProgressProps) -> Response {
     ui.scope(|ui| {
         let dark_mode = ui.visuals().dark_mode;
