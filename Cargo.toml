@@ -2,24 +2,14 @@
 name = "egui-component"
 version = "0.1.0"
 edition = "2021"
-default-run = "components"
+default-run = "showcase"
 
 [[bin]]
-name = "components"
-path = "src/components_main.rs"
-
-[[bin]]
-name = "component"
-path = "src/component_main.rs"
+name = "showcase"
+path = "src/showcase_main.rs"
 
 [dependencies]
 thiserror = "2.0.17"
-pollster = "0.4.0"
-wgpu = "27.0.1"
-image = { version = "0.25.0", default-features = false, features = ["png"] }
-ron = "0.11.0"
-serde = { version = "1.0.228", features = ["derive"] }
-egui = { version = "0.33.3", features = ["serde"] }
-egui-wgpu = "0.33.3"
+egui = "0.33.3"
 egui_extras = { version = "0.33.3", default-features = false, features = ["file", "svg"] }
 eframe = "0.33.3"

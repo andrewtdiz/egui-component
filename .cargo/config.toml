@@ -2,5 +2,5 @@
 target-dir = "target"
 
 [alias]
-components = "run -q --bin components --"
-component = "run -q --bin component --"
+showcase = "run -q --bin showcase --"
+story = "run -q --bin story --"
