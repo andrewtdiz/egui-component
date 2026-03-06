@@ -1,7 +1,6 @@
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ComponentKind {
     AlertDialogue,
-    AgentChat,
     Button,
     ButtonGroup,
     Card,
@@ -9,7 +8,6 @@ pub enum ComponentKind {
     Collapsible,
     Combobox,
     Command,
-    ContextMenu,
     Dialogue,
     DropdownMenu,
     Field,
@@ -17,8 +15,6 @@ pub enum ComponentKind {
     Kbd,
     Label,
     Progress,
-    Resizable,
-    ScrollArea,
     Select,
     Separator,
     Slider,
@@ -50,7 +46,7 @@ pub struct ComponentDefinition {
     pub group: ComponentGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
+const COMPONENT_DEFINITIONS: [ComponentDefinition; 21] = [
     ComponentDefinition {
         kind: ComponentKind::Label,
         id: "label",
@@ -136,18 +132,6 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::ScrollArea,
-        id: "scroll-area",
-        label: "Scroll Area",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Resizable,
-        id: "resizable",
-        label: "Resizable",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Tooltip,
         id: "tooltip",
         label: "Tooltip",
@@ -157,12 +141,6 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         kind: ComponentKind::Collapsible,
         id: "collapsible",
         label: "Collapsible",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::ContextMenu,
-        id: "context-menu",
-        label: "Context Menu",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -193,12 +171,6 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         kind: ComponentKind::AlertDialogue,
         id: "alert-dialogue",
         label: "Alert Dialogue",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::AgentChat,
-        id: "agent-chat",
-        label: "Agent Chat",
         group: ComponentGroup::Composed,
     },
 ];
@@ -257,10 +229,10 @@ mod tests {
         let ids = component_definitions()
             .map(|definition| definition.id)
             .collect::<Vec<_>>();
-        assert_eq!(ids.len(), 25);
+        assert_eq!(ids.len(), 21);
         assert!(ids.contains(&"button"));
         assert!(ids.contains(&"kbd"));
-        assert!(ids.contains(&"context-menu"));
+        assert!(ids.contains(&"dropdown-menu"));
         assert!(!ids.contains(&"accordion"));
     }
 
@@ -271,10 +243,6 @@ mod tests {
             Some(ComponentKind::ButtonGroup)
         );
         assert_eq!(
-            parse_component_kind("contextmenu"),
-            Some(ComponentKind::ContextMenu)
-        );
-        assert_eq!(
             parse_component_kind("dialogue"),
             Some(ComponentKind::Dialogue)
         );
@@ -282,10 +250,8 @@ mod tests {
             parse_component_kind("alertdialogue"),
             Some(ComponentKind::AlertDialogue)
         );
-        assert_eq!(
-            parse_component_kind("agentchat"),
-            Some(ComponentKind::AgentChat)
-        );
+        assert_eq!(parse_component_kind("contextmenu"), None);
+        assert_eq!(parse_component_kind("agentchat"), None);
     }
 
     #[test]
@@ -296,7 +262,7 @@ mod tests {
         let composed = component_definitions()
             .filter(|definition| definition.group == ComponentGroup::Composed)
             .count();
-        assert_eq!(primitive, 18);
-        assert_eq!(composed, 7);
+        assert_eq!(primitive, 16);
+        assert_eq!(composed, 5);
     }
 }

@@ -1,8 +1,9 @@
+use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
 use crate::ui::{icons, tokens};
 use egui::{Color32, CursorIcon, RichText, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ButtonVariant {
+pub enum ButtonStyle {
     Primary,
     Secondary,
     Ghost,
@@ -10,9 +11,9 @@ pub enum ButtonVariant {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ButtonProps<'a> {
-    pub label: &'a str,
-    pub variant: ButtonVariant,
+pub struct Button<'a> {
+    pub name: &'a str,
+    pub style: ButtonStyle,
     pub icon: Option<&'a str>,
     pub icon_size: f32,
     pub icon_tint: Option<Color32>,
@@ -23,11 +24,11 @@ pub struct ButtonProps<'a> {
     pub min_size: Option<Vec2>,
 }
 
-impl<'a> ButtonProps<'a> {
-    pub fn new(label: &'a str) -> Self {
+impl<'a> Button<'a> {
+    pub fn new(name: &'a str) -> Self {
         Self {
-            label,
-            variant: ButtonVariant::Primary,
+            name,
+            style: ButtonStyle::Primary,
             icon: None,
             icon_size: 14.0,
             icon_tint: None,
@@ -39,10 +40,14 @@ impl<'a> ButtonProps<'a> {
         }
     }
 
+    pub fn name(name: &'a str) -> Self {
+        Self::new(name)
+    }
+
     pub fn icon_only(icon: &'a str) -> Self {
         Self {
-            label: "",
-            variant: ButtonVariant::Primary,
+            name: "",
+            style: ButtonStyle::Primary,
             icon: Some(icon),
             icon_size: 14.0,
             icon_tint: None,
@@ -54,8 +59,8 @@ impl<'a> ButtonProps<'a> {
         }
     }
 
-    pub fn variant(mut self, variant: ButtonVariant) -> Self {
-        self.variant = variant;
+    pub fn style(mut self, style: ButtonStyle) -> Self {
+        self.style = style;
         self
     }
 
@@ -97,12 +102,140 @@ impl<'a> ButtonProps<'a> {
     }
 }
 
-pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ButtonOverride {
+    pub style: Option<ButtonStyle>,
+    pub icon_size: Option<f32>,
+    pub icon_tint: Option<Color32>,
+    pub icon_only: Option<bool>,
+    pub selected: Option<bool>,
+    pub min_size: Option<Vec2>,
+}
+
+impl ButtonOverride {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn style(mut self, style: ButtonStyle) -> Self {
+        self.style = Some(style);
+        self
+    }
+
+    pub fn icon_size(mut self, icon_size: f32) -> Self {
+        self.icon_size = Some(icon_size.max(1.0));
+        self
+    }
+
+    pub fn icon_tint(mut self, icon_tint: Color32) -> Self {
+        self.icon_tint = Some(icon_tint);
+        self
+    }
+
+    pub fn icon_only(mut self, icon_only: bool) -> Self {
+        self.icon_only = Some(icon_only);
+        self
+    }
+
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = Some(selected);
+        self
+    }
+
+    pub fn min_size(mut self, min_size: Vec2) -> Self {
+        self.min_size = Some(min_size);
+        self
+    }
+
+    fn apply<'a>(self, mut props: Button<'a>) -> Button<'a> {
+        if let Some(style) = self.style {
+            props.style = style;
+        }
+        if let Some(icon_size) = self.icon_size {
+            props.icon_size = icon_size;
+        }
+        if let Some(icon_tint) = self.icon_tint {
+            props.icon_tint = Some(icon_tint);
+        }
+        if let Some(icon_only) = self.icon_only {
+            props.icon_only = icon_only;
+        }
+        if let Some(selected) = self.selected {
+            props.selected = selected;
+        }
+        if let Some(min_size) = self.min_size {
+            props.min_size = Some(min_size);
+        }
+        props
+    }
+}
+
+impl ComponentOverride for ButtonOverride {
+    fn apply_to(self, overrides: &mut ComponentOverrides) {
+        if let Some(style) = self.style {
+            overrides.button.style = Some(style);
+        }
+        if let Some(icon_size) = self.icon_size {
+            overrides.button.icon_size = Some(icon_size);
+        }
+        if let Some(icon_tint) = self.icon_tint {
+            overrides.button.icon_tint = Some(icon_tint);
+        }
+        if let Some(icon_only) = self.icon_only {
+            overrides.button.icon_only = Some(icon_only);
+        }
+        if let Some(selected) = self.selected {
+            overrides.button.selected = Some(selected);
+        }
+        if let Some(min_size) = self.min_size {
+            overrides.button.min_size = Some(min_size);
+        }
+    }
+}
+
+impl<'a> From<&'a str> for Button<'a> {
+    fn from(label: &'a str) -> Self {
+        Self::new(label)
+    }
+}
+
+impl<'a> From<(&'a str, ButtonStyle)> for Button<'a> {
+    fn from((label, style): (&'a str, ButtonStyle)) -> Self {
+        Self::new(label).style(style)
+    }
+}
+
+impl<'a> From<(&'a str, &'a str)> for Button<'a> {
+    fn from((label, icon): (&'a str, &'a str)) -> Self {
+        Self::new(label).icon(icon)
+    }
+}
+
+impl<'a> From<(&'a str, &'a str, ButtonStyle)> for Button<'a> {
+    fn from((label, icon, style): (&'a str, &'a str, ButtonStyle)) -> Self {
+        Self::new(label).icon(icon).style(style)
+    }
+}
+
+impl<'a> From<(&'a str, ButtonStyle, &'a str)> for Button<'a> {
+    fn from((label, style, icon): (&'a str, ButtonStyle, &'a str)) -> Self {
+        Self::new(label).style(style).icon(icon)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn button<'a>(&mut self, props: impl Into<Button<'a>>) -> egui::Response {
+        let props = self.overrides.button.apply(props.into());
+        draw_button(self.raw_mut(), props)
+    }
+}
+
+fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
     ui.scope(|ui| {
         let dark_mode = ui.visuals().dark_mode;
         let visuals = &mut ui.style_mut().visuals.widgets;
-        match props.variant {
-            ButtonVariant::Primary => {
+        match props.style {
+            ButtonStyle::Primary => {
                 visuals.inactive.bg_fill = tokens::primary_bg(dark_mode);
                 visuals.inactive.weak_bg_fill = tokens::primary_bg(dark_mode);
                 visuals.hovered.bg_fill = tokens::primary_hover_bg(dark_mode);
@@ -117,7 +250,7 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
                 visuals.hovered.fg_stroke = fg;
                 visuals.active.fg_stroke = fg;
             }
-            ButtonVariant::Secondary => {
+            ButtonStyle::Secondary => {
                 visuals.inactive.bg_fill = tokens::BUTTON_SECONDARY_BG;
                 visuals.inactive.weak_bg_fill = tokens::BUTTON_SECONDARY_BG;
                 visuals.hovered.bg_fill = tokens::BUTTON_SECONDARY_HOVER_BG;
@@ -128,9 +261,9 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
                 visuals.hovered.bg_stroke = Stroke::new(1.0, tokens::BUTTON_SECONDARY_HOVER_BORDER);
                 visuals.active.bg_stroke = Stroke::new(1.0, tokens::BUTTON_SECONDARY_ACTIVE_BORDER);
             }
-            ButtonVariant::Ghost => {
-                visuals.inactive.bg_fill = Color32::TRANSPARENT;
-                visuals.inactive.weak_bg_fill = Color32::TRANSPARENT;
+            ButtonStyle::Ghost => {
+                visuals.inactive.bg_fill = tokens::TRANSPARENT;
+                visuals.inactive.weak_bg_fill = tokens::TRANSPARENT;
                 visuals.hovered.bg_fill = tokens::BUTTON_SECONDARY_HOVER_BG;
                 visuals.hovered.weak_bg_fill = tokens::BUTTON_SECONDARY_HOVER_BG;
                 visuals.active.bg_fill = tokens::BUTTON_SECONDARY_ACTIVE_BG;
@@ -139,13 +272,13 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
                 visuals.hovered.bg_stroke = Stroke::NONE;
                 visuals.active.bg_stroke = Stroke::NONE;
             }
-            ButtonVariant::Link => {
-                visuals.inactive.bg_fill = Color32::TRANSPARENT;
-                visuals.inactive.weak_bg_fill = Color32::TRANSPARENT;
-                visuals.hovered.bg_fill = Color32::TRANSPARENT;
-                visuals.hovered.weak_bg_fill = Color32::TRANSPARENT;
-                visuals.active.bg_fill = Color32::TRANSPARENT;
-                visuals.active.weak_bg_fill = Color32::TRANSPARENT;
+            ButtonStyle::Link => {
+                visuals.inactive.bg_fill = tokens::TRANSPARENT;
+                visuals.inactive.weak_bg_fill = tokens::TRANSPARENT;
+                visuals.hovered.bg_fill = tokens::TRANSPARENT;
+                visuals.hovered.weak_bg_fill = tokens::TRANSPARENT;
+                visuals.active.bg_fill = tokens::TRANSPARENT;
+                visuals.active.weak_bg_fill = tokens::TRANSPARENT;
                 visuals.inactive.bg_stroke = Stroke::NONE;
                 visuals.hovered.bg_stroke = Stroke::NONE;
                 visuals.active.bg_stroke = Stroke::NONE;
@@ -154,16 +287,14 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
                 visuals.active.fg_stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
             }
         }
-        let button_label = match props.variant {
-            ButtonVariant::Primary => {
-                RichText::new(props.label).color(tokens::primary_fg(dark_mode))
-            }
-            _ => RichText::new(props.label),
+        let button_label = match props.style {
+            ButtonStyle::Primary => RichText::new(props.name).color(tokens::primary_fg(dark_mode)),
+            _ => RichText::new(props.name),
         };
-        let has_label = !props.label.is_empty();
-        let icon_tint = props.icon_tint.unwrap_or(match props.variant {
-            ButtonVariant::Primary => tokens::primary_fg(dark_mode),
-            ButtonVariant::Link => tokens::TEXT_SECONDARY,
+        let has_label = !props.name.is_empty();
+        let icon_tint = props.icon_tint.unwrap_or(match props.style {
+            ButtonStyle::Primary => tokens::primary_fg(dark_mode),
+            ButtonStyle::Link => tokens::TEXT_SECONDARY,
             _ => tokens::TEXT_PRIMARY,
         });
 
@@ -192,7 +323,7 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
 
         widget = widget.selected(props.selected);
 
-        if props.variant == ButtonVariant::Link {
+        if props.style == ButtonStyle::Link {
             widget = widget.frame(false);
         }
         if props.icon_only || (props.icon.is_some() && !has_label) {
@@ -203,7 +334,7 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
         }
 
         let response = ui.add(widget).on_hover_cursor(CursorIcon::PointingHand);
-        if props.variant == ButtonVariant::Link
+        if props.style == ButtonStyle::Link
             && response.hovered()
             && has_label
             && props.icon.is_none()
@@ -212,7 +343,7 @@ pub fn button(ui: &mut Ui, props: ButtonProps<'_>) -> egui::Response {
             let font_id = egui::TextStyle::Button.resolve(ui.style());
             let text_galley =
                 ui.painter()
-                    .layout_no_wrap(props.label.to_owned(), font_id, tokens::TEXT_PRIMARY);
+                    .layout_no_wrap(props.name.to_owned(), font_id, tokens::TEXT_PRIMARY);
             let text_half_width = text_galley.size().x * 0.5;
             let underline_y = response.rect.center().y + text_galley.size().y * 0.36;
             ui.painter().line_segment(

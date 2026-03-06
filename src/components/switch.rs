@@ -1,3 +1,4 @@
+use super::api::ComponentUi;
 use crate::ui::tokens;
 use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
 
@@ -8,12 +9,12 @@ pub enum SwitchSize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SwitchProps<'a> {
+pub struct Switch<'a> {
     pub label: Option<&'a str>,
     pub size: SwitchSize,
 }
 
-impl<'a> SwitchProps<'a> {
+impl<'a> Switch<'a> {
     pub fn new() -> Self {
         Self {
             label: None,
@@ -37,13 +38,43 @@ impl<'a> SwitchProps<'a> {
     }
 }
 
-impl<'a> Default for SwitchProps<'a> {
+impl<'a> Default for Switch<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub fn switch(ui: &mut Ui, value: &mut bool, props: SwitchProps<'_>) -> Response {
+impl<'a> From<()> for Switch<'a> {
+    fn from(_: ()) -> Self {
+        Self::new()
+    }
+}
+
+impl<'a> From<&'a str> for Switch<'a> {
+    fn from(label: &'a str) -> Self {
+        Self::new().label(label)
+    }
+}
+
+impl<'a> From<SwitchSize> for Switch<'a> {
+    fn from(size: SwitchSize) -> Self {
+        Self::new().size(size)
+    }
+}
+
+impl<'a> From<(&'a str, SwitchSize)> for Switch<'a> {
+    fn from((label, size): (&'a str, SwitchSize)) -> Self {
+        Self::new().label(label).size(size)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn switch<'a>(&mut self, value: &mut bool, props: impl Into<Switch<'a>>) -> Response {
+        draw_switch(self.raw_mut(), value, props.into())
+    }
+}
+
+fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
     match props.label {
         Some(label) => {
             ui.horizontal(|ui| {
@@ -96,7 +127,13 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: SwitchSize) -> Respo
     let t = ui.ctx().animate_bool(response.id, *value);
     let on_fill = tokens::primary_bg(dark_mode);
     let fill = tokens::SWITCH_OFF_BG.lerp_to_gamma(on_fill, t);
-    let stroke = Stroke::new(1.0, tokens::SWITCH_BORDER);
+    let stroke = if response.has_focus() {
+        tokens::input_focus_stroke(dark_mode)
+    } else if response.hovered() {
+        Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
+    } else {
+        Stroke::new(1.0, tokens::SWITCH_BORDER)
+    };
     ui.painter().rect(
         rect,
         CornerRadius::same(metrics.corner_radius),

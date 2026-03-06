@@ -1,15 +1,16 @@
+use super::api::ComponentUi;
 use crate::components::chrome::{with_input_chrome, with_slider_chrome};
 use crate::ui::tokens;
 use egui::{Align2, Color32, CursorIcon, FontFamily, FontId, Id, Response, Ui};
 use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
-pub struct SliderProps {
+pub struct Slider {
     pub width: f32,
     pub range: RangeInclusive<f32>,
 }
 
-impl SliderProps {
+impl Slider {
     pub fn new(range: RangeInclusive<f32>) -> Self {
         Self {
             width: 156.0,
@@ -23,7 +24,29 @@ impl SliderProps {
     }
 }
 
-pub fn slider(ui: &mut Ui, value: &mut f32, props: SliderProps) -> Response {
+impl From<RangeInclusive<f32>> for Slider {
+    fn from(range: RangeInclusive<f32>) -> Self {
+        Self::new(range)
+    }
+}
+
+impl From<(RangeInclusive<f32>, f32)> for Slider {
+    fn from((range, width): (RangeInclusive<f32>, f32)) -> Self {
+        Self::new(range).width(width)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn slider(&mut self, value: &mut f32, props: impl Into<Slider>) -> Response {
+        draw_slider(self.raw_mut(), value, props.into())
+    }
+
+    pub fn number_input(&mut self, value: &mut f32, props: impl Into<NumberInput>) -> Response {
+        draw_number_input(self.raw_mut(), value, props.into())
+    }
+}
+
+fn draw_slider(ui: &mut Ui, value: &mut f32, props: Slider) -> Response {
     with_slider_chrome(ui, |ui| {
         ui.scope(|ui| {
             ui.spacing_mut().interact_size.y = 24.0;
@@ -37,7 +60,7 @@ pub fn slider(ui: &mut Ui, value: &mut f32, props: SliderProps) -> Response {
 }
 
 #[derive(Debug, Clone)]
-pub struct NumberInputProps {
+pub struct NumberInput {
     pub id: Id,
     pub width: f32,
     pub range: RangeInclusive<f32>,
@@ -49,7 +72,7 @@ pub struct NumberInputProps {
     pub axis: NumberInputAxis,
 }
 
-impl NumberInputProps {
+impl NumberInput {
     pub fn new(id: Id) -> Self {
         Self {
             id,
@@ -105,7 +128,25 @@ impl NumberInputProps {
     }
 }
 
-pub fn number_input(ui: &mut Ui, value: &mut f32, props: NumberInputProps) -> Response {
+impl From<Id> for NumberInput {
+    fn from(id: Id) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<(Id, RangeInclusive<f32>)> for NumberInput {
+    fn from((id, range): (Id, RangeInclusive<f32>)) -> Self {
+        Self::new(id).range(range)
+    }
+}
+
+impl From<(Id, f32)> for NumberInput {
+    fn from((id, width): (Id, f32)) -> Self {
+        Self::new(id).width(width)
+    }
+}
+
+fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Response {
     with_input_chrome(ui, |ui| {
         let dark_mode = ui.visuals().dark_mode;
         ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(dark_mode);

@@ -1,5 +1,6 @@
 use crate::dev::showcase::{render_component_showcase, ComponentShowcaseState};
-use crate::ui::{icons, style, tokens};
+use crate::theme;
+use crate::ui::tokens;
 use crate::{ComponentLibraryError, Result};
 
 pub(crate) fn run_showcase_window() -> Result {
@@ -16,8 +17,7 @@ pub(crate) fn run_showcase_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            style::setup_showcase_context(&creation_context.egui_ctx);
-            icons::setup(&creation_context.egui_ctx);
+            theme::setup(&creation_context.egui_ctx);
             Ok(Box::new(ShowcaseWindowApp {
                 surface: ShowcaseSurface::new(),
             }))

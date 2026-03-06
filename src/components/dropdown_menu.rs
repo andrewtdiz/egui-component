@@ -1,7 +1,4 @@
-use super::{
-    button::{button, ButtonProps, ButtonVariant},
-    kbd::{kbd, kbd_group, KbdGroupProps, KbdProps},
-};
+use super::{api::ComponentUi, Button, ButtonStyle, Kbd, KbdGroup};
 use egui::{containers::menu::SubMenuButton, Align, CursorIcon, Layout, Rect, Response, Ui};
 
 const MENU_MIN_WIDTH: f32 = 160.0;
@@ -67,22 +64,22 @@ impl<'a> DropdownMenuEntry<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct DropdownMenuProps<'a> {
+pub struct DropdownMenu<'a> {
     pub trigger_label: &'a str,
     pub options: &'a [&'a str],
     pub entries: &'a [DropdownMenuEntry<'a>],
     pub width: f32,
-    pub trigger_variant: ButtonVariant,
+    pub trigger_style: ButtonStyle,
 }
 
-impl<'a> DropdownMenuProps<'a> {
+impl<'a> DropdownMenu<'a> {
     pub fn new(trigger_label: &'a str, options: &'a [&'a str]) -> Self {
         Self {
             trigger_label,
             options,
             entries: &[],
             width: 220.0,
-            trigger_variant: ButtonVariant::Secondary,
+            trigger_style: ButtonStyle::Secondary,
         }
     }
 
@@ -92,7 +89,7 @@ impl<'a> DropdownMenuProps<'a> {
             options: &[],
             entries,
             width: 220.0,
-            trigger_variant: ButtonVariant::Secondary,
+            trigger_style: ButtonStyle::Secondary,
         }
     }
 
@@ -106,9 +103,39 @@ impl<'a> DropdownMenuProps<'a> {
         self
     }
 
-    pub fn trigger_variant(mut self, trigger_variant: ButtonVariant) -> Self {
-        self.trigger_variant = trigger_variant;
+    pub fn trigger_style(mut self, trigger_style: ButtonStyle) -> Self {
+        self.trigger_style = trigger_style;
         self
+    }
+}
+
+impl<'a> From<(&'a str, &'a [&'a str])> for DropdownMenu<'a> {
+    fn from((trigger_label, options): (&'a str, &'a [&'a str])) -> Self {
+        Self::new(trigger_label, options)
+    }
+}
+
+impl<'a> From<&'a str> for DropdownMenu<'a> {
+    fn from(trigger_label: &'a str) -> Self {
+        Self::new(trigger_label, &[])
+    }
+}
+
+impl<'a> From<(&'a str, &'a [DropdownMenuEntry<'a>])> for DropdownMenu<'a> {
+    fn from((trigger_label, entries): (&'a str, &'a [DropdownMenuEntry<'a>])) -> Self {
+        Self::with_entries(trigger_label, entries)
+    }
+}
+
+impl<'a> From<(&'a str, &'a [&'a str], f32)> for DropdownMenu<'a> {
+    fn from((trigger_label, options, width): (&'a str, &'a [&'a str], f32)) -> Self {
+        Self::new(trigger_label, options).width(width)
+    }
+}
+
+impl<'a> From<(&'a str, &'a [DropdownMenuEntry<'a>], f32)> for DropdownMenu<'a> {
+    fn from((trigger_label, entries, width): (&'a str, &'a [DropdownMenuEntry<'a>], f32)) -> Self {
+        Self::with_entries(trigger_label, entries).width(width)
     }
 }
 
@@ -117,46 +144,49 @@ pub struct DropdownMenuState {
     pub action: Option<usize>,
 }
 
-pub fn dropdown_menu(ui: &mut Ui, props: DropdownMenuProps<'_>) -> (Response, DropdownMenuState) {
-    let mut state = DropdownMenuState { action: None };
+impl ComponentUi<'_> {
+    pub fn dropdown_menu<'a>(
+        &mut self,
+        props: impl Into<DropdownMenu<'a>>,
+    ) -> (Response, DropdownMenuState) {
+        let props = props.into();
+        let mut state = DropdownMenuState { action: None };
 
-    if props.options.is_empty() && props.entries.is_empty() {
-        let response = button(
-            ui,
-            ButtonProps::new(props.trigger_label).variant(props.trigger_variant),
-        )
-        .on_hover_cursor(CursorIcon::PointingHand);
+        if props.options.is_empty() && props.entries.is_empty() {
+            let response = self
+                .button((props.trigger_label, props.trigger_style))
+                .on_hover_cursor(CursorIcon::PointingHand);
 
-        return (response, state);
-    }
-
-    let row_width = props.width.max(MENU_MIN_WIDTH);
-    let response = button(
-        ui,
-        ButtonProps::new(props.trigger_label).variant(props.trigger_variant),
-    )
-    .on_hover_cursor(CursorIcon::PointingHand);
-
-    let _ = egui::Popup::menu(&response).show(|ui| {
-        ui.style_mut().spacing.item_spacing.y = 1.0;
-        ui.set_min_width(row_width);
-        ui.set_max_width(row_width);
-
-        if props.entries.is_empty() {
-            for (index, label) in props.options.iter().copied().enumerate() {
-                let action = DropdownMenuAction::new(index, label);
-                draw_action_row(ui, action, &mut state, row_width);
-            }
-        } else {
-            draw_entries(ui, props.entries, &mut state, row_width);
+            return (response, state);
         }
-    });
 
-    (response, state)
+        let row_width = props.width.max(MENU_MIN_WIDTH);
+        let response = self
+            .button((props.trigger_label, props.trigger_style))
+            .on_hover_cursor(CursorIcon::PointingHand);
+
+        let _ = egui::Popup::menu(&response).show(|ui| {
+            let mut ui = ComponentUi::new(ui);
+            ui.style_mut().spacing.item_spacing.y = 1.0;
+            ui.set_min_width(row_width);
+            ui.set_max_width(row_width);
+
+            if props.entries.is_empty() {
+                for (index, label) in props.options.iter().copied().enumerate() {
+                    let action = DropdownMenuAction::new(index, label);
+                    draw_action_row(&mut ui, action, &mut state, row_width);
+                }
+            } else {
+                draw_entries(&mut ui, props.entries, &mut state, row_width);
+            }
+        });
+
+        (response, state)
+    }
 }
 
 fn draw_entries(
-    ui: &mut Ui,
+    ui: &mut ComponentUi<'_>,
     entries: &[DropdownMenuEntry<'_>],
     state: &mut DropdownMenuState,
     row_width: f32,
@@ -172,39 +202,44 @@ fn draw_entries(
                 ui.add_space(2.0);
             }
             DropdownMenuEntry::Submenu(submenu) => {
-                let submenu_button = button(
-                    ui,
-                    ButtonProps::new(submenu.label)
-                        .variant(ButtonVariant::Ghost)
-                        .right_text(SubMenuButton::RIGHT_ARROW)
-                        .min_size(egui::vec2(row_width, MENU_ROW_HEIGHT)),
-                )
-                .on_hover_cursor(CursorIcon::PointingHand);
-                let _ = egui::containers::menu::SubMenu::new().show(ui, &submenu_button, |ui| {
-                    ui.style_mut().spacing.item_spacing.y = 1.0;
-                    ui.set_min_width(row_width);
-                    ui.set_max_width(row_width);
-                    draw_entries(ui, submenu.entries, state, row_width);
-                });
+                let submenu_button = ui
+                    .button(
+                        Button::name(submenu.label)
+                            .style(ButtonStyle::Ghost)
+                            .right_text(SubMenuButton::RIGHT_ARROW)
+                            .min_size(egui::vec2(row_width, MENU_ROW_HEIGHT)),
+                    )
+                    .on_hover_cursor(CursorIcon::PointingHand);
+                let _ = egui::containers::menu::SubMenu::new().show(
+                    ui.raw_mut(),
+                    &submenu_button,
+                    |ui| {
+                        let mut ui = ComponentUi::new(ui);
+                        ui.style_mut().spacing.item_spacing.y = 1.0;
+                        ui.set_min_width(row_width);
+                        ui.set_max_width(row_width);
+                        draw_entries(&mut ui, submenu.entries, state, row_width);
+                    },
+                );
             }
         }
     }
 }
 
 fn draw_action_row(
-    ui: &mut Ui,
+    ui: &mut ComponentUi<'_>,
     action: DropdownMenuAction<'_>,
     state: &mut DropdownMenuState,
     row_width: f32,
 ) {
-    let props = ButtonProps::new(action.label)
-        .variant(ButtonVariant::Ghost)
+    let props = Button::name(action.label)
+        .style(ButtonStyle::Ghost)
         .right_text("")
         .min_size(egui::vec2(row_width, MENU_ROW_HEIGHT));
 
-    let response = button(ui, props).on_hover_cursor(CursorIcon::PointingHand);
+    let response = ui.button(props).on_hover_cursor(CursorIcon::PointingHand);
     if let Some(shortcut) = action.shortcut {
-        draw_shortcut_keycaps(ui, response.rect, shortcut);
+        draw_shortcut_keycaps(ui.raw_mut(), response.rect, shortcut);
     }
     if response.clicked() {
         state.action = Some(action.id);
@@ -223,9 +258,10 @@ fn draw_shortcut_keycaps(ui: &mut Ui, row_rect: Rect, shortcut: &str) {
             .max_rect(row_rect.shrink2(egui::vec2(8.0, 4.0)))
             .layout(Layout::right_to_left(Align::Center)),
         |ui| {
-            let _ = kbd_group(ui, KbdGroupProps::new().gap(3.0), |ui| {
+            let mut ui = ComponentUi::new(ui);
+            let _ = ui.kbd_group(KbdGroup::new().gap(3.0), |ui| {
                 for key in keys {
-                    let _ = kbd(ui, KbdProps::new(key).height(18.0).text_size(9.5));
+                    let _ = ui.kbd(Kbd::new(key).height(18.0).text_size(9.5));
                 }
             });
         },

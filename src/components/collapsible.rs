@@ -1,9 +1,9 @@
-use crate::components::{icon, label, IconProps, LabelProps, LabelTone, LabelWeight};
+use super::{api::ComponentUi, LabelTone, LabelWeight};
 use crate::ui::tokens;
-use egui::{Align, Color32, CornerRadius, Id, Layout, Response, Sense, StrokeKind, Ui};
+use egui::{Align, Color32, CornerRadius, Id, Layout, Response, Sense, StrokeKind};
 
 #[derive(Debug, Clone, Copy)]
-pub struct CollapsibleProps<'a> {
+pub struct Collapsible<'a> {
     pub id: Id,
     pub title: &'a str,
     pub open: bool,
@@ -13,7 +13,7 @@ pub struct CollapsibleProps<'a> {
     pub trailing_icon_tint: Color32,
 }
 
-impl<'a> CollapsibleProps<'a> {
+impl<'a> Collapsible<'a> {
     pub fn new(id: Id, title: &'a str) -> Self {
         Self {
             id,
@@ -52,11 +52,45 @@ impl<'a> CollapsibleProps<'a> {
     }
 }
 
-pub fn collapsible<R>(
-    ui: &mut Ui,
+impl<'a> From<(Id, &'a str)> for Collapsible<'a> {
+    fn from((id, title): (Id, &'a str)) -> Self {
+        Self::new(id, title)
+    }
+}
+
+impl<'a> From<(Id, &'a str, bool)> for Collapsible<'a> {
+    fn from((id, title, open): (Id, &'a str, bool)) -> Self {
+        Self::new(id, title).open(open)
+    }
+}
+
+impl<'a> From<(Id, &'a str, bool, &'a str, &'a str)> for Collapsible<'a> {
+    fn from(
+        (id, title, open, leading_icon, trailing_icon): (Id, &'a str, bool, &'a str, &'a str),
+    ) -> Self {
+        Self::new(id, title)
+            .open(open)
+            .leading_icon(leading_icon)
+            .trailing_icon(trailing_icon)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn collapsible<'a, R>(
+        &mut self,
+        open: &mut bool,
+        props: impl Into<Collapsible<'a>>,
+        add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+    ) -> Response {
+        draw_collapsible(self, open, props.into(), add)
+    }
+}
+
+fn draw_collapsible<R>(
+    ui: &mut ComponentUi<'_>,
     open: &mut bool,
-    props: CollapsibleProps<'_>,
-    add: impl FnOnce(&mut Ui) -> R,
+    props: Collapsible<'_>,
+    add: impl FnOnce(&mut ComponentUi<'_>) -> R,
 ) -> Response {
     if *open != props.open {
         *open = props.open;
@@ -71,10 +105,12 @@ pub fn collapsible<R>(
         header_response.mark_changed();
     }
 
-    let fill = if header_response.hovered() {
-        tokens::INPUT_HOVER_BACKGROUND
+    let fill = if header_response.is_pointer_button_down_on() {
+        tokens::BUTTON_SECONDARY_ACTIVE_BG
+    } else if header_response.hovered() {
+        tokens::BUTTON_SECONDARY_HOVER_BG
     } else {
-        egui::Color32::TRANSPARENT
+        tokens::TRANSPARENT
     };
 
     ui.painter().rect(
@@ -97,37 +133,17 @@ pub fn collapsible<R>(
             } else {
                 "chevron-right"
             };
-            let _ = icon(
-                ui,
-                IconProps::new(expand_icon)
-                    .size(12.0)
-                    .tint(tokens::TEXT_MUTED),
-            );
+            let _ = ui.icon((expand_icon, 12.0, tokens::TEXT_MUTED));
 
             if let Some(leading_icon) = props.leading_icon {
-                let _ = icon(
-                    ui,
-                    IconProps::new(leading_icon)
-                        .size(13.0)
-                        .tint(props.leading_icon_tint),
-                );
+                let _ = ui.icon((leading_icon, 13.0, props.leading_icon_tint));
             }
 
-            let _ = label(
-                ui,
-                LabelProps::new(props.title)
-                    .tone(LabelTone::Primary)
-                    .weight(LabelWeight::Semibold),
-            );
+            let _ = ui.label((props.title, LabelTone::Primary, LabelWeight::Semibold));
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some(trailing_icon) = props.trailing_icon {
-                    let _ = icon(
-                        ui,
-                        IconProps::new(trailing_icon)
-                            .size(13.0)
-                            .tint(props.trailing_icon_tint),
-                    );
+                    let _ = ui.icon((trailing_icon, 13.0, props.trailing_icon_tint));
                 }
             });
         },
@@ -135,7 +151,7 @@ pub fn collapsible<R>(
 
     if *open {
         ui.add_space(6.0);
-        add(ui);
+        let _ = add(ui);
     }
 
     header_response

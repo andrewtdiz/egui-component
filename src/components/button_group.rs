@@ -1,19 +1,36 @@
+use super::api::ComponentUi;
 use crate::ui::tokens;
-use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Id, Sense, Stroke, StrokeKind, Ui};
+use egui::{Align2, CornerRadius, CursorIcon, FontId, Id, Sense, Stroke, StrokeKind, Ui};
 
 #[derive(Debug, Clone, Copy)]
-pub struct ButtonGroupProps<'a> {
+pub struct ButtonGroup<'a> {
     pub id: Id,
     pub options: &'a [&'a str],
 }
 
-impl<'a> ButtonGroupProps<'a> {
+impl<'a> ButtonGroup<'a> {
     pub fn new(id: Id, options: &'a [&'a str]) -> Self {
         Self { id, options }
     }
 }
 
-pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupProps<'_>) {
+impl<'a> From<(Id, &'a [&'a str])> for ButtonGroup<'a> {
+    fn from((id, options): (Id, &'a [&'a str])) -> Self {
+        Self::new(id, options)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn button_group<'a>(
+        &mut self,
+        selected_index: &mut usize,
+        props: impl Into<ButtonGroup<'a>>,
+    ) {
+        draw_button_group(self.raw_mut(), selected_index, props.into());
+    }
+}
+
+fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup<'_>) {
     if props.options.is_empty() {
         *selected_index = 0;
         return;
@@ -21,6 +38,7 @@ pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupP
 
     let clamped_index = (*selected_index).min(props.options.len() - 1);
     *selected_index = clamped_index;
+    let dark_mode = ui.visuals().dark_mode;
 
     ui.push_id(props.id, |ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -31,6 +49,7 @@ pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupP
             let mut segment_rects = Vec::with_capacity(props.options.len());
 
             for (index, label) in props.options.iter().copied().enumerate() {
+                let selected = index == *selected_index;
                 let galley_width = ui.fonts_mut(|fonts| {
                     fonts
                         .layout_no_wrap(label.to_owned(), text_font.clone(), tokens::TEXT_PRIMARY)
@@ -42,12 +61,19 @@ pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupP
                     ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
                 segment_rects.push(rect);
 
-                let fill = if response.is_pointer_button_down_on() {
+                let fill = if selected {
+                    tokens::row_selected_bg(dark_mode)
+                } else if response.is_pointer_button_down_on() {
                     tokens::BUTTON_SECONDARY_ACTIVE_BG
                 } else if response.hovered() {
                     tokens::BUTTON_SECONDARY_HOVER_BG
                 } else {
                     tokens::BUTTON_SECONDARY_BG
+                };
+                let stroke = if selected {
+                    Stroke::new(1.0, tokens::row_selected_border(dark_mode))
+                } else {
+                    Stroke::NONE
                 };
                 let corner = if props.options.len() == 1 {
                     CornerRadius::same(tokens::RADIUS_MD)
@@ -69,13 +95,17 @@ pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupP
                     CornerRadius::ZERO
                 };
                 ui.painter()
-                    .rect(rect, corner, fill, Stroke::NONE, StrokeKind::Outside);
+                    .rect(rect, corner, fill, stroke, StrokeKind::Outside);
                 ui.painter().text(
                     rect.center(),
                     Align2::CENTER_CENTER,
                     label,
                     text_font.clone(),
-                    tokens::TEXT_PRIMARY,
+                    if selected {
+                        tokens::row_selected_text(dark_mode)
+                    } else {
+                        tokens::TEXT_PRIMARY
+                    },
                 );
 
                 if response.clicked() {
@@ -91,7 +121,7 @@ pub fn button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroupP
                 ui.painter().rect(
                     group_rect,
                     CornerRadius::same(tokens::RADIUS_MD),
-                    Color32::TRANSPARENT,
+                    tokens::TRANSPARENT,
                     border,
                     StrokeKind::Outside,
                 );

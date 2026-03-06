@@ -1,17 +1,10 @@
 use crate::components::{
-    agent_chat, button, button_group, card, checkbox, collapsible, combobox, command, context_menu,
-    dialogue_body, dialogue_footer, dialogue_header, dialogue_modal, dropdown_menu, field, icon,
-    kbd, kbd_group, label, number_input, progress, resizable, scroll_area, select, separator,
-    slider, switch, tabs, text_input, tooltip, AgentChatProps, ButtonGroupProps, ButtonProps,
-    ButtonVariant, CardProps, CheckboxProps, CollapsibleProps, ComboboxProps, CommandItem,
-    CommandProps, ContextMenuAction, ContextMenuProps, DialogueHeaderProps, DialogueModalProps,
-    DialogueVariant, DropdownMenuEntry, DropdownMenuProps, FieldProps, IconProps, KbdGroupProps,
-    KbdProps, LabelProps, LabelTone, LabelWeight, NumberInputAxis, NumberInputProps, ProgressProps,
-    ResizableProps, ScrollAreaProps, SelectProps, SliderProps, SwitchProps, SwitchSize, TabOption,
-    TextInputProps, TooltipProps,
+    Button, ButtonStyle, Checkbox, CommandItem, ComponentUi, ComponentUiExt, DialogueStyle,
+    DropdownMenuEntry, Kbd, KbdGroup, Label, LabelTone, LabelWeight, NumberInput, NumberInputAxis,
+    SwitchSize, TabOption,
 };
 use crate::ui::tokens;
-use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Stroke, StrokeKind, Ui};
+use egui::{Align2, CornerRadius, CursorIcon, Id, Layout, Stroke, StrokeKind, Ui};
 
 use egui::containers::scroll_area::ScrollSource;
 
@@ -111,15 +104,11 @@ enum ShowcaseComponentKind {
     Separator,
     Card,
     Progress,
-    ScrollArea,
-    Resizable,
     Tooltip,
     Collapsible,
-    ContextMenu,
     DropdownMenu,
     Combobox,
     Command,
-    AgentChat,
     Dialogue,
     Icon,
 }
@@ -132,7 +121,7 @@ struct ShowcaseComponentDefinition {
     group: ShowcaseGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
+const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 22] = [
     ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Label,
         label: "Label",
@@ -224,18 +213,6 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
         group: ShowcaseGroup::PrimaryPrimitive,
     },
     ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::ScrollArea,
-        label: "Scroll Area",
-        description: "Vertical scrolling container",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Resizable,
-        label: "Resizable",
-        description: "Draggable resize handle container",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Tooltip,
         label: "Tooltip",
         description: "Hover helper text",
@@ -245,12 +222,6 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
         kind: ShowcaseComponentKind::Collapsible,
         label: "Collapsible",
         description: "Expandable content section",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::ContextMenu,
-        label: "Context Menu",
-        description: "Right-click menu actions",
         group: ShowcaseGroup::DerivedComposed,
     },
     ShowcaseComponentDefinition {
@@ -269,12 +240,6 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
         kind: ShowcaseComponentKind::Command,
         label: "Command",
         description: "Searchable command palette",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::AgentChat,
-        label: "Agent Chat",
-        description: "Prompt composer row",
         group: ShowcaseGroup::DerivedComposed,
     },
     ShowcaseComponentDefinition {
@@ -307,14 +272,10 @@ pub struct ComponentShowcaseState {
     tab_index: usize,
     button_group_index: usize,
     collapsible_open: bool,
-    context_menu_toggle: bool,
-    context_menu_action: Option<ContextMenuAction>,
     dropdown_action: Option<usize>,
     combobox_query: String,
     combobox_index: usize,
     command_query: String,
-    agent_chat_add_clicks: usize,
-    agent_chat_send_clicks: usize,
     dialogue_open: bool,
     alert_dialogue_open: bool,
     tooltip_top_center: bool,
@@ -337,14 +298,10 @@ impl Default for ComponentShowcaseState {
             tab_index: 0,
             button_group_index: 0,
             collapsible_open: true,
-            context_menu_toggle: true,
-            context_menu_action: None,
             dropdown_action: None,
             combobox_query: "mat".to_owned(),
             combobox_index: 0,
             command_query: String::new(),
-            agent_chat_add_clicks: 0,
-            agent_chat_send_clicks: 0,
             dialogue_open: false,
             alert_dialogue_open: false,
             tooltip_top_center: true,
@@ -367,7 +324,8 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                 .stroke(Stroke::new(1.0, tokens::SEPARATOR)),
         )
         .show_inside(ui, |ui| {
-            draw_sidebar(ui, state);
+            let mut ui = ui.components();
+            draw_sidebar(&mut ui, state);
         });
 
     let _ = egui::CentralPanel::default()
@@ -377,25 +335,24 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                 .inner_margin(egui::Margin::same(12)),
         )
         .show_inside(ui, |ui| {
-            draw_center_preview(ui, state);
+            let mut ui = ui.components();
+            draw_center_preview(&mut ui, state);
         });
 }
 
-fn draw_sidebar(ui: &mut Ui, state: &mut ComponentShowcaseState) {
-    let _ = label(
-        ui,
-        LabelProps::new("Components")
+fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    let _ = ui.label(
+        Label::new("Components")
             .tone(LabelTone::Primary)
             .weight(LabelWeight::Semibold),
     );
-    let _ = label(
-        ui,
-        LabelProps::new("Select a component to preview")
+    let _ = ui.label(
+        Label::new("Select a component to preview")
             .tone(LabelTone::Muted)
             .size(11.0),
     );
     ui.add_space(8.0);
-    let _ = separator(ui);
+    let _ = ui.separator();
     ui.add_space(8.0);
 
     let dark_mode = ui.visuals().dark_mode;
@@ -407,14 +364,14 @@ fn draw_sidebar(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             ..ScrollSource::default()
         })
         .auto_shrink([false, false])
-        .show(ui, |ui| {
+        .show(ui.raw_mut(), |ui| {
+            let mut ui = ui.components();
             for group in [
                 ShowcaseGroup::PrimaryPrimitive,
                 ShowcaseGroup::DerivedComposed,
             ] {
-                let _ = label(
-                    ui,
-                    LabelProps::new(group.title())
+                let _ = ui.label(
+                    Label::new(group.title())
                         .tone(LabelTone::Muted)
                         .size(11.0)
                         .weight(LabelWeight::Semibold),
@@ -423,8 +380,13 @@ fn draw_sidebar(ui: &mut Ui, state: &mut ComponentShowcaseState) {
 
                 for definition in component_definitions_by_group(group) {
                     let selected = state.selected_component == definition.kind;
-                    if draw_sidebar_component_row(ui, definition.label, selected, dark_mode)
-                        .clicked()
+                    if draw_sidebar_component_row(
+                        ui.raw_mut(),
+                        definition.label,
+                        selected,
+                        dark_mode,
+                    )
+                    .clicked()
                     {
                         state.selected_component = definition.kind;
                     }
@@ -444,19 +406,19 @@ fn draw_sidebar_component_row(
     let desired_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-    let fill = if selected {
-        tokens::row_selected_bg(dark_mode)
-    } else if response.hovered() {
-        tokens::ROW_HOVER_BG
-    } else {
-        Color32::TRANSPARENT
-    };
+    let fill = tokens::row_bg(
+        selected,
+        response.is_pointer_button_down_on(),
+        response.hovered(),
+        dark_mode,
+    );
+    let stroke = tokens::row_stroke(selected, dark_mode);
 
     ui.painter().rect(
         rect,
         CornerRadius::same(tokens::RADIUS_SM),
         fill,
-        Stroke::NONE,
+        stroke,
         StrokeKind::Outside,
     );
 
@@ -475,7 +437,7 @@ fn draw_sidebar_component_row(
     response.on_hover_cursor(CursorIcon::PointingHand)
 }
 
-fn draw_center_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
+fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let definition = component_definition(state.selected_component);
 
     let _ = egui::ScrollArea::vertical()
@@ -485,176 +447,127 @@ fn draw_center_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             ..ScrollSource::default()
         })
         .auto_shrink([false, false])
-        .show(ui, |ui| {
+        .show(ui.raw_mut(), |ui| {
+            let mut ui = ui.components();
             ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
                 let width = ui.available_width().clamp(260.0, 460.0);
 
-                let _ = card(
-                    ui,
-                    CardProps::new()
-                        .fill(tokens::MUTED_SURFACE)
-                        .stroke(Stroke::new(1.0, tokens::SEPARATOR)),
-                    |ui| {
-                        ui.set_width(width);
+                let _ = ui.card((), |ui| {
+                    ui.set_width(width);
 
-                        let _ = label(
-                            ui,
-                            LabelProps::new(definition.label)
-                                .tone(LabelTone::Primary)
-                                .weight(LabelWeight::Semibold),
-                        );
-                        let _ = label(
-                            ui,
-                            LabelProps::new(definition.description)
-                                .tone(LabelTone::Muted)
-                                .size(11.0),
-                        );
-                        ui.add_space(8.0);
-                        let _ = separator(ui);
-                        ui.add_space(10.0);
+                    let _ = ui.label(
+                        Label::new(definition.label)
+                            .tone(LabelTone::Primary)
+                            .weight(LabelWeight::Semibold),
+                    );
+                    let _ = ui.label(
+                        Label::new(definition.description)
+                            .tone(LabelTone::Muted)
+                            .size(11.0),
+                    );
+                    ui.add_space(8.0);
+                    let _ = ui.separator();
+                    ui.add_space(10.0);
 
-                        render_selected_preview(ui, state);
-                    },
-                );
+                    render_selected_preview(ui, state);
+                });
             });
         });
 }
 
-fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
+fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     match state.selected_component {
         ShowcaseComponentKind::Label => {
-            let _ = label(
-                ui,
-                LabelProps::new("Primary label")
+            let _ = ui.label(
+                Label::new("Primary label")
                     .tone(LabelTone::Primary)
                     .weight(LabelWeight::Semibold),
             );
-            let _ = label(
-                ui,
-                LabelProps::new("Secondary label").tone(LabelTone::Secondary),
-            );
-            let _ = label(
-                ui,
-                LabelProps::new("Muted helper text").tone(LabelTone::Muted),
-            );
-            let _ = label(
-                ui,
-                LabelProps::new("Destructive text")
+            let _ = ui.label(Label::new("Secondary label").tone(LabelTone::Secondary));
+            let _ = ui.label(Label::new("Muted helper text").tone(LabelTone::Muted));
+            let _ = ui.label(
+                Label::new("Destructive text")
                     .tone(LabelTone::Destructive)
                     .weight(LabelWeight::Semibold),
             );
         }
         ShowcaseComponentKind::Kbd => {
-            let _ = kbd_group(ui, KbdGroupProps::new(), |ui| {
-                let _ = kbd(ui, KbdProps::new("⌘"));
-                let _ = kbd(ui, KbdProps::new("⇧"));
-                let _ = kbd(ui, KbdProps::new("⌥"));
-                let _ = kbd(ui, KbdProps::new("⌃"));
+            let _ = ui.kbd_group(KbdGroup::new(), |ui| {
+                let _ = ui.kbd(Kbd::new("⌘"));
+                let _ = ui.kbd(Kbd::new("⇧"));
+                let _ = ui.kbd(Kbd::new("⌥"));
+                let _ = ui.kbd(Kbd::new("⌃"));
             });
             ui.add_space(6.0);
-            let _ = kbd_group(ui, KbdGroupProps::new(), |ui| {
-                let _ = kbd(ui, KbdProps::new("Ctrl"));
-                let _ = label(
-                    ui,
-                    LabelProps::new("+")
+            let _ = ui.kbd_group(KbdGroup::new(), |ui| {
+                let _ = ui.kbd(Kbd::new("Ctrl"));
+                let _ = ui.label(
+                    Label::new("+")
                         .tone(LabelTone::Muted)
                         .weight(LabelWeight::Semibold),
                 );
-                let _ = kbd(ui, KbdProps::new("B"));
+                let _ = ui.kbd(Kbd::new("B"));
             });
         }
         ShowcaseComponentKind::Input => {
-            let _ = text_input(
-                ui,
-                &mut state.input_value,
-                TextInputProps::new()
-                    .width(280.0)
-                    .hint_text("Type component name"),
-            );
+            let _ = ui.text_input(&mut state.input_value, (280.0, "Type component name"));
         }
         ShowcaseComponentKind::Field => {
-            let _ = field(
-                ui,
+            let _ = ui.field(
                 &mut state.field_value,
-                FieldProps::new("Material")
-                    .width(280.0)
-                    .helper_text("Assigned material for selected mesh"),
+                ("Material", 280.0, "Assigned material for selected mesh"),
             );
         }
         ShowcaseComponentKind::Button => {
             ui.horizontal(|ui| {
-                let _ = button(ui, ButtonProps::new("Primary"));
-                let _ = button(
-                    ui,
-                    ButtonProps::new("Secondary").variant(ButtonVariant::Secondary),
-                );
-                let _ = button(ui, ButtonProps::new("Ghost").variant(ButtonVariant::Ghost));
-                let _ = button(ui, ButtonProps::new("Link").variant(ButtonVariant::Link));
+                let _ = ui.button(("Primary", ButtonStyle::Primary));
+                let _ = ui.button(("Secondary", ButtonStyle::Secondary));
+                let _ = ui.button(("Ghost", ButtonStyle::Ghost));
+                let _ = ui.button(("Link", ButtonStyle::Link));
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let _ = button(ui, ButtonProps::icon_only("wand-sparkles").icon_size(15.0));
-                let _ = button(
-                    ui,
-                    ButtonProps::icon_only("wand-sparkles")
+                let _ = ui.button(
+                    Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .variant(ButtonVariant::Secondary),
+                        .style(ButtonStyle::Primary),
                 );
-                let _ = button(
-                    ui,
-                    ButtonProps::icon_only("wand-sparkles")
+                let _ = ui.button(
+                    Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .variant(ButtonVariant::Ghost),
+                        .style(ButtonStyle::Secondary),
                 );
-                let _ = button(
-                    ui,
-                    ButtonProps::icon_only("wand-sparkles")
+                let _ = ui.button(
+                    Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .variant(ButtonVariant::Link),
+                        .style(ButtonStyle::Ghost),
+                );
+                let _ = ui.button(
+                    Button::icon_only("wand-sparkles")
+                        .icon_size(15.0)
+                        .style(ButtonStyle::Link),
                 );
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let _ = button(
-                    ui,
-                    ButtonProps::new("Create")
-                        .icon("plus")
-                        .variant(ButtonVariant::Primary),
-                );
-                let _ = button(
-                    ui,
-                    ButtonProps::new("Create")
-                        .icon("plus")
-                        .variant(ButtonVariant::Secondary),
-                );
-                let _ = button(
-                    ui,
-                    ButtonProps::new("Create")
-                        .icon("plus")
-                        .variant(ButtonVariant::Ghost),
-                );
-                let _ = button(
-                    ui,
-                    ButtonProps::new("Create")
-                        .icon("plus")
-                        .variant(ButtonVariant::Link),
-                );
+                let _ = ui.button(("Create", "plus", ButtonStyle::Primary));
+                let _ = ui.button(("Create", "plus", ButtonStyle::Secondary));
+                let _ = ui.button(("Create", "plus", ButtonStyle::Ghost));
+                let _ = ui.button(("Create", "plus", ButtonStyle::Link));
             });
         }
         ShowcaseComponentKind::ButtonGroup => {
-            button_group(
-                ui,
+            ui.button_group(
                 &mut state.button_group_index,
-                ButtonGroupProps::new(
+                (
                     Id::new("component_showcase_button_group"),
-                    &BUTTON_GROUP_OPTIONS,
+                    &BUTTON_GROUP_OPTIONS[..],
                 ),
             );
         }
         ShowcaseComponentKind::Checkbox => {
             ui.horizontal(|ui| {
-                let mut checkbox_response =
-                    checkbox(ui, &mut state.checkbox_value, CheckboxProps::new());
+                let mut checkbox_response = ui.checkbox(&mut state.checkbox_value, Checkbox::new());
                 let base_label_color = if state.checkbox_value {
                     tokens::TEXT_SECONDARY
                 } else {
@@ -681,30 +594,18 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             });
         }
         ShowcaseComponentKind::Switch => {
-            let _ = switch(
-                ui,
-                &mut state.switch_value,
-                SwitchProps::new().label("Enable Post FX"),
-            );
-            let _ = switch(
-                ui,
+            let _ = ui.switch(&mut state.switch_value, "Enable Post FX");
+            let _ = ui.switch(
                 &mut state.small_switch_value,
-                SwitchProps::new()
-                    .label("Use Compact Handles")
-                    .size(SwitchSize::Small),
+                ("Use Compact Handles", SwitchSize::Small),
             );
         }
         ShowcaseComponentKind::Slider => {
             ui.horizontal(|ui| {
-                let _ = slider(
-                    ui,
-                    &mut state.slider_value,
-                    SliderProps::new(0.0..=100.0).width(250.0),
-                );
+                let _ = ui.slider(&mut state.slider_value, (0.0..=100.0, 250.0));
                 let value_label = format!("{:.0}", state.slider_value.round());
-                let _ = label(
-                    ui,
-                    LabelProps::new(value_label.as_str())
+                let _ = ui.label(
+                    Label::new(value_label.as_str())
                         .tone(LabelTone::Secondary)
                         .weight(LabelWeight::Semibold),
                 );
@@ -712,10 +613,9 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
         }
         ShowcaseComponentKind::NumberInput => {
             ui.horizontal(|ui| {
-                let _ = number_input(
-                    ui,
+                let _ = ui.number_input(
                     &mut state.number_x_value,
-                    NumberInputProps::new(Id::new("component_showcase_number_x"))
+                    NumberInput::new(Id::new("component_showcase_number_x"))
                         .width(110.0)
                         .range(0.0..=100.0)
                         .decimals(1)
@@ -724,10 +624,9 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                         .prefix_align_left()
                         .axis(NumberInputAxis::Horizontal),
                 );
-                let _ = number_input(
-                    ui,
+                let _ = ui.number_input(
                     &mut state.number_y_value,
-                    NumberInputProps::new(Id::new("component_showcase_number_y"))
+                    NumberInput::new(Id::new("component_showcase_number_y"))
                         .width(110.0)
                         .range(0.0..=100.0)
                         .decimals(1)
@@ -739,31 +638,23 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             });
         }
         ShowcaseComponentKind::Select => {
-            let _ = select(
-                ui,
+            let _ = ui.select(
                 &mut state.select_index,
-                SelectProps::new(
-                    Id::new("component_showcase_select_trigger"),
-                    Id::new("component_showcase_select_popup"),
-                    &SELECT_OPTIONS,
-                )
-                .width(280.0),
+                (
+                    Id::new("component_showcase_select"),
+                    &SELECT_OPTIONS[..],
+                    280.0,
+                ),
             );
 
             let selected_label = state
                 .select_index
                 .and_then(|index| SELECT_OPTIONS.get(index).copied())
                 .unwrap_or("None");
-            let _ = label(
-                ui,
-                LabelProps::new(selected_label)
-                    .tone(LabelTone::Muted)
-                    .size(11.0),
-            );
+            let _ = ui.label(Label::new(selected_label).tone(LabelTone::Muted).size(11.0));
         }
         ShowcaseComponentKind::Tabs => {
-            tabs(
-                ui,
+            ui.tabs(
                 Id::new("component_showcase_tabs"),
                 &mut state.tab_index,
                 &TAB_OPTIONS,
@@ -774,46 +665,33 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                 .find(|option| option.value == state.tab_index)
                 .map(|option| option.label)
                 .unwrap_or(TAB_OPTIONS[0].label);
-            let _ = label(
-                ui,
-                LabelProps::new(selected_tab)
-                    .tone(LabelTone::Muted)
-                    .size(11.0),
-            );
+            let _ = ui.label(Label::new(selected_tab).tone(LabelTone::Muted).size(11.0));
         }
         ShowcaseComponentKind::Separator => {
-            let _ = label(
-                ui,
-                LabelProps::new("Above separator").tone(LabelTone::Secondary),
-            );
-            let _ = separator(ui);
-            let _ = label(
-                ui,
-                LabelProps::new("Below separator").tone(LabelTone::Secondary),
-            );
+            let _ = ui.label(Label::new("Above separator").tone(LabelTone::Secondary));
+            let _ = ui.separator();
+            let _ = ui.label(Label::new("Below separator").tone(LabelTone::Secondary));
         }
         ShowcaseComponentKind::Card => {
-            let _ = card(
-                ui,
-                CardProps::new()
-                    .fill(tokens::INPUT_BACKGROUND)
-                    .stroke(Stroke::new(1.0, tokens::INPUT_BORDER)),
+            let _ = ui.card(
+                (
+                    tokens::INPUT_BACKGROUND,
+                    Stroke::new(1.0, tokens::INPUT_BORDER),
+                ),
                 |ui| {
                     ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
-                        let _ = label(
-                            ui,
-                            LabelProps::new("Card Title")
+                        let _ = ui.label(
+                            Label::new("Card Title")
                                 .tone(LabelTone::Primary)
                                 .weight(LabelWeight::Semibold)
                                 .size(15.0),
                         );
-                        let _ = label(
-                            ui,
-                            LabelProps::new("Cards wrap related content in a bordered panel.")
+                        let _ = ui.label(
+                            Label::new("Cards wrap related content in a bordered panel.")
                                 .tone(LabelTone::Muted),
                         );
                         ui.add_space(8.0);
-                        let _ = separator(ui);
+                        let _ = ui.separator();
                         ui.add_space(8.0);
                         let footer_size =
                             egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
@@ -821,11 +699,8 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                             footer_size,
                             Layout::right_to_left(egui::Align::Center),
                             |ui| {
-                                let _ = button(ui, ButtonProps::new("Save"));
-                                let _ = button(
-                                    ui,
-                                    ButtonProps::new("Cancel").variant(ButtonVariant::Secondary),
-                                );
+                                let _ = ui.button(("Save", ButtonStyle::Primary));
+                                let _ = ui.button(("Cancel", ButtonStyle::Secondary));
                             },
                         );
                     });
@@ -833,125 +708,49 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             );
         }
         ShowcaseComponentKind::Progress => {
-            let _ = progress(
-                ui,
-                state.progress_value,
-                ProgressProps::new().width(280.0).height(10.0),
-            );
-        }
-        ShowcaseComponentKind::ScrollArea => {
-            let _ = card(
-                ui,
-                CardProps::new()
-                    .fill(tokens::INPUT_BACKGROUND)
-                    .stroke(Stroke::new(1.0, tokens::INPUT_BORDER)),
-                |ui| {
-                    scroll_area(
-                        ui,
-                        ScrollAreaProps::new(Id::new("component_showcase_scroll_area"))
-                            .max_height(110.0),
-                        |ui| {
-                            for index in 0..12 {
-                                let row = format!("Scrollable row {}", index + 1);
-                                let _ = label(ui, LabelProps::new(row.as_str()));
-                            }
-                        },
-                    );
-                },
-            );
-        }
-        ShowcaseComponentKind::Resizable => {
-            let _ = card(
-                ui,
-                CardProps::new()
-                    .fill(tokens::INPUT_BACKGROUND)
-                    .stroke(Stroke::new(1.0, tokens::INPUT_BORDER)),
-                |ui| {
-                    resizable(
-                        ui,
-                        ResizableProps::new(Id::new("component_showcase_resizable")),
-                        |ui| {
-                            let _ = label(
-                                ui,
-                                LabelProps::new("Drag the bottom-right handle")
-                                    .tone(LabelTone::Secondary),
-                            );
-                            let _ = label(
-                                ui,
-                                LabelProps::new("Min/Max size is constrained")
-                                    .tone(LabelTone::Muted),
-                            );
-                        },
-                    );
-                },
-            );
+            let _ = ui.progress(state.progress_value, (280.0, 10.0));
         }
         ShowcaseComponentKind::Tooltip => {
-            let _ = switch(
-                ui,
-                &mut state.tooltip_top_center,
-                SwitchProps::new().label("Top-center placement"),
-            );
+            let _ = ui.switch(&mut state.tooltip_top_center, "Top-center placement");
             ui.add_space(6.0);
-            let _ = tooltip(
-                ui,
-                TooltipProps::new("Hover this trigger", "Tooltip content example")
-                    .width(220.0)
-                    .top_center(state.tooltip_top_center),
-            );
+            let _ = ui.tooltip((
+                "Hover this trigger",
+                "Tooltip content example",
+                220.0,
+                state.tooltip_top_center,
+            ));
         }
         ShowcaseComponentKind::Collapsible => {
             let collapsible_open = state.collapsible_open;
-            let _ = collapsible(
-                ui,
+            let _ = ui.collapsible(
                 &mut state.collapsible_open,
-                CollapsibleProps::new(Id::new("component_showcase_collapsible"), "Transform")
-                    .open(collapsible_open)
-                    .leading_icon("move-3d")
-                    .trailing_icon("ellipsis_vertical"),
+                (
+                    Id::new("component_showcase_collapsible"),
+                    "Transform",
+                    collapsible_open,
+                    "move-3d",
+                    "ellipsis_vertical",
+                ),
                 |ui| {
-                    let _ = label(ui, LabelProps::new("Position").tone(LabelTone::Secondary));
-                    let _ = label(ui, LabelProps::new("Rotation").tone(LabelTone::Secondary));
-                    let _ = label(ui, LabelProps::new("Scale").tone(LabelTone::Secondary));
+                    let _ = ui.label(("Position", LabelTone::Secondary));
+                    let _ = ui.label(("Rotation", LabelTone::Secondary));
+                    let _ = ui.label(("Scale", LabelTone::Secondary));
                 },
             );
         }
-        ShowcaseComponentKind::ContextMenu => {
-            let (_response, menu_state) = context_menu(
-                ui,
-                "Visible",
-                &mut state.context_menu_toggle,
-                ContextMenuProps::new("Right click for menu").width(220.0),
-            );
-            if let Some(action) = menu_state.action {
-                state.context_menu_action = Some(action);
-            }
-
-            let _ = label(
-                ui,
-                LabelProps::new(context_action_label(state.context_menu_action))
-                    .tone(LabelTone::Muted)
-                    .size(11.0),
-            );
-        }
         ShowcaseComponentKind::DropdownMenu => {
-            let (_response, menu_state) = dropdown_menu(
-                ui,
-                DropdownMenuProps::with_entries("Open", &DROPDOWN_ENTRIES).width(220.0),
-            );
+            let (_response, menu_state) = ui.dropdown_menu(("Open", &DROPDOWN_ENTRIES[..], 220.0));
             if let Some(action) = menu_state.action {
                 state.dropdown_action = Some(action);
             }
-            let _ = label(
-                ui,
-                LabelProps::new(dropdown_action_label(state.dropdown_action))
+            let _ = ui.label(
+                Label::new(dropdown_action_label(state.dropdown_action))
                     .tone(LabelTone::Muted)
                     .size(11.0),
             );
             ui.add_space(8.0);
-            let _ = label(
-                ui,
-                LabelProps::new("Shortcut keycaps")
+            let _ = ui.label(
+                Label::new("Shortcut keycaps")
                     .tone(LabelTone::Muted)
                     .size(11.0),
             );
@@ -960,84 +759,57 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
             draw_dropdown_shortcut_row(ui, "Log out", &["⇧", "⌘", "Q"]);
         }
         ShowcaseComponentKind::Combobox => {
-            let _ = combobox(
-                ui,
+            let _ = ui.combobox(
                 &mut state.combobox_query,
                 &mut state.combobox_index,
-                ComboboxProps::new(Id::new("component_showcase_combobox"), &COMBOBOX_OPTIONS)
-                    .width(280.0),
+                (
+                    Id::new("component_showcase_combobox"),
+                    &COMBOBOX_OPTIONS[..],
+                    280.0,
+                ),
             );
-            let _ = label(
-                ui,
-                LabelProps::new(COMBOBOX_OPTIONS[state.combobox_index])
+            let _ = ui.label(
+                Label::new(COMBOBOX_OPTIONS[state.combobox_index])
                     .tone(LabelTone::Muted)
                     .size(11.0),
             );
         }
         ShowcaseComponentKind::Command => {
-            let _ = command(
-                ui,
+            let _ = ui.command(
                 &mut state.command_query,
                 &COMMAND_OPTIONS,
-                CommandProps::new(Id::new("component_showcase_command")).width(280.0),
-            );
-        }
-        ShowcaseComponentKind::AgentChat => {
-            let chat_state = agent_chat(ui, AgentChatProps::new());
-            if chat_state.add_clicked {
-                state.agent_chat_add_clicks = state.agent_chat_add_clicks.saturating_add(1);
-            }
-            if chat_state.send_clicked {
-                state.agent_chat_send_clicks = state.agent_chat_send_clicks.saturating_add(1);
-            }
-
-            let status = format!(
-                "Add clicked: {} | Send clicked: {}",
-                state.agent_chat_add_clicks, state.agent_chat_send_clicks
-            );
-            let _ = label(
-                ui,
-                LabelProps::new(status.as_str())
-                    .tone(LabelTone::Muted)
-                    .size(11.0),
+                (Id::new("component_showcase_command"), 280.0),
             );
         }
         ShowcaseComponentKind::Dialogue => {
             ui.horizontal(|ui| {
-                if button(
-                    ui,
-                    ButtonProps::new("Open Dialogue").variant(ButtonVariant::Secondary),
-                )
-                .clicked()
+                if ui
+                    .button(("Open Dialogue", ButtonStyle::Secondary))
+                    .clicked()
                 {
                     state.dialogue_open = true;
                 }
 
-                if button(
-                    ui,
-                    ButtonProps::new("Open Alert Dialogue").variant(ButtonVariant::Secondary),
-                )
-                .clicked()
+                if ui
+                    .button(("Open Alert Dialogue", ButtonStyle::Secondary))
+                    .clicked()
                 {
                     state.alert_dialogue_open = true;
                 }
             });
 
-            dialogue_modal(
-                ui,
+            ui.dialogue_modal(
                 &mut state.dialogue_open,
-                DialogueModalProps::new(Id::new("component_showcase_dialogue")).width(380.0),
+                (Id::new("component_showcase_dialogue"), 380.0),
                 |ui, close_requested| {
-                    dialogue_header(
-                        ui,
-                        DialogueHeaderProps::new("Create Component")
-                            .description("Adds the selected component to the active object."),
-                    );
+                    ui.dialogue_header((
+                        "Create Component",
+                        "Adds the selected component to the active object.",
+                    ));
                     ui.add_space(10.0);
-                    let _ = dialogue_body(ui, |ui| {
-                        let _ = label(
-                            ui,
-                            LabelProps::new(
+                    let _ = ui.vertical(|ui| {
+                        let _ = ui.label(
+                            Label::new(
                                 "Pick a component from the sidebar and confirm to add it to the object.",
                             )
                             .tone(LabelTone::Muted)
@@ -1045,43 +817,30 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                         );
                     });
                     ui.add_space(10.0);
-                    let _ = dialogue_footer(ui, |ui| {
-                        if button(
-                            ui,
-                            ButtonProps::new("Cancel").variant(ButtonVariant::Secondary),
-                        )
-                        .clicked()
-                        {
+                    let _ = ui.horizontal(|ui| {
+                        if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
                             *close_requested = true;
                         }
-                        if button(
-                            ui,
-                            ButtonProps::new("Create").variant(ButtonVariant::Primary),
-                        )
-                        .clicked()
-                        {
+                        if ui.button(("Create", ButtonStyle::Primary)).clicked() {
                             *close_requested = true;
                         }
                     });
                 },
             );
 
-            dialogue_modal(
-                ui,
+            ui.dialogue_modal(
                 &mut state.alert_dialogue_open,
-                DialogueModalProps::new(Id::new("component_showcase_alert_dialogue")).width(380.0),
+                (Id::new("component_showcase_alert_dialogue"), 380.0),
                 |ui, close_requested| {
-                    dialogue_header(
-                        ui,
-                        DialogueHeaderProps::new("Delete Object")
-                            .description("This action cannot be undone.")
-                            .variant(DialogueVariant::Alert),
-                    );
+                    ui.dialogue_header((
+                        "Delete Object",
+                        "This action cannot be undone.",
+                        DialogueStyle::Alert,
+                    ));
                     ui.add_space(10.0);
-                    let _ = dialogue_body(ui, |ui| {
-                        let _ = label(
-                            ui,
-                            LabelProps::new(
+                    let _ = ui.vertical(|ui| {
+                        let _ = ui.label(
+                            Label::new(
                                 "Deleting removes the object and every child object in this hierarchy.",
                             )
                             .tone(LabelTone::Secondary)
@@ -1089,21 +848,11 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
                         );
                     });
                     ui.add_space(10.0);
-                    let _ = dialogue_footer(ui, |ui| {
-                        if button(
-                            ui,
-                            ButtonProps::new("Cancel").variant(ButtonVariant::Secondary),
-                        )
-                        .clicked()
-                        {
+                    let _ = ui.horizontal(|ui| {
+                        if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
                             *close_requested = true;
                         }
-                        if button(
-                            ui,
-                            ButtonProps::new("Delete").variant(ButtonVariant::Primary),
-                        )
-                        .clicked()
-                        {
+                        if ui.button(("Delete", ButtonStyle::Primary)).clicked() {
                             *close_requested = true;
                         }
                     });
@@ -1112,11 +861,11 @@ fn render_selected_preview(ui: &mut Ui, state: &mut ComponentShowcaseState) {
         }
         ShowcaseComponentKind::Icon => {
             ui.horizontal(|ui| {
-                let _ = icon(ui, IconProps::new("bot").size(16.0));
-                let _ = icon(ui, IconProps::new("settings-2").size(16.0));
-                let _ = icon(ui, IconProps::new("sparkles").size(16.0));
-                let _ = icon(ui, IconProps::new("gamepad-2").size(16.0));
-                let _ = icon(ui, IconProps::new("wand-sparkles").size(16.0));
+                let _ = ui.icon(("bot", 16.0));
+                let _ = ui.icon(("settings-2", 16.0));
+                let _ = ui.icon(("sparkles", 16.0));
+                let _ = ui.icon(("gamepad-2", 16.0));
+                let _ = ui.icon(("wand-sparkles", 16.0));
             });
         }
     }
@@ -1139,15 +888,6 @@ fn component_definition(kind: ShowcaseComponentKind) -> &'static ShowcaseCompone
         .expect("missing showcase component definition")
 }
 
-fn context_action_label(action: Option<ContextMenuAction>) -> &'static str {
-    match action {
-        Some(ContextMenuAction::First) => "Last action: Rename",
-        Some(ContextMenuAction::Second) => "Last action: Duplicate",
-        Some(ContextMenuAction::Third) => "Last action: Delete",
-        None => "Last action: None",
-    }
-}
-
 fn dropdown_action_label(action: Option<usize>) -> &'static str {
     match action.and_then(|id| DROPDOWN_ACTION_LABELS.get(id).copied()) {
         Some(label) => label,
@@ -1155,21 +895,20 @@ fn dropdown_action_label(action: Option<usize>) -> &'static str {
     }
 }
 
-fn draw_dropdown_shortcut_row(ui: &mut Ui, action_label: &str, keys: &[&str]) {
+fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys: &[&str]) {
     ui.horizontal(|ui| {
-        let _ = label(
-            ui,
-            LabelProps::new(action_label)
+        let _ = ui.label(
+            Label::new(action_label)
                 .tone(LabelTone::Secondary)
                 .size(11.0),
         );
         ui.add_space(8.0);
-        let _ = kbd_group(ui, KbdGroupProps::new().gap(3.0), |ui| {
+        let _ = ui.kbd_group(KbdGroup::new().gap(3.0), |ui| {
             for (index, key) in keys.iter().enumerate() {
                 if index > 0 {
-                    let _ = label(ui, LabelProps::new("+").tone(LabelTone::Muted).size(10.0));
+                    let _ = ui.label(Label::new("+").tone(LabelTone::Muted).size(10.0));
                 }
-                let _ = kbd(ui, KbdProps::new(key).height(18.0).text_size(9.5));
+                let _ = ui.kbd(Kbd::new(key).height(18.0).text_size(9.5));
             }
         });
     });

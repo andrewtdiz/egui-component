@@ -1,3 +1,4 @@
+use super::api::ComponentUi;
 use crate::ui::tokens;
 use egui::{CornerRadius, CursorIcon, Response, RichText, Sense, Stroke, StrokeKind, Ui};
 
@@ -5,11 +6,11 @@ const CHECKBOX_CONTROL_SIZE: f32 = 16.0;
 const CHECKBOX_CORNER_RADIUS: u8 = 4;
 
 #[derive(Debug, Clone, Copy)]
-pub struct CheckboxProps<'a> {
+pub struct Checkbox<'a> {
     pub label: Option<&'a str>,
 }
 
-impl<'a> CheckboxProps<'a> {
+impl<'a> Checkbox<'a> {
     pub fn new() -> Self {
         Self { label: None }
     }
@@ -20,13 +21,31 @@ impl<'a> CheckboxProps<'a> {
     }
 }
 
-impl<'a> Default for CheckboxProps<'a> {
+impl<'a> Default for Checkbox<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub fn checkbox(ui: &mut Ui, value: &mut bool, props: CheckboxProps<'_>) -> Response {
+impl<'a> From<()> for Checkbox<'a> {
+    fn from(_: ()) -> Self {
+        Self::new()
+    }
+}
+
+impl<'a> From<&'a str> for Checkbox<'a> {
+    fn from(label: &'a str) -> Self {
+        Self::new().label(label)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn checkbox<'a>(&mut self, value: &mut bool, props: impl Into<Checkbox<'a>>) -> Response {
+        draw_checkbox(self.raw_mut(), value, props.into())
+    }
+}
+
+fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response {
     match props.label {
         Some(label_text) => {
             ui.horizontal(|ui| {
@@ -69,15 +88,23 @@ fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
     }
 
     let hovered = response.hovered();
+    let pressed = response.is_pointer_button_down_on();
     let focused = response.has_focus();
 
     let (fill, mut stroke) = if *value {
-        let checked_fill = if hovered {
+        let checked_fill = if pressed {
+            tokens::primary_active_bg(dark_mode)
+        } else if hovered {
             tokens::primary_hover_bg(dark_mode)
         } else {
             tokens::primary_bg(dark_mode)
         };
         (checked_fill, Stroke::new(1.0, checked_fill))
+    } else if pressed {
+        (
+            tokens::INPUT_FOCUS_BACKGROUND,
+            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER),
+        )
     } else if hovered {
         (
             tokens::INPUT_HOVER_BACKGROUND,

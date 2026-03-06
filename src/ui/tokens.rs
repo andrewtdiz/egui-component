@@ -45,8 +45,12 @@ pub(crate) const APP_BACKGROUND: Color32 = Color32::from_rgb(9, 9, 11);
 pub(crate) const CARD_BACKGROUND: Color32 = Color32::from_rgb(17, 17, 20);
 pub(crate) const MUTED_SURFACE: Color32 = Color32::from_rgb(24, 24, 27);
 pub(crate) const SEPARATOR: Color32 = Color32::from_rgb(39, 39, 42);
+pub(crate) const TRANSPARENT: Color32 = Color32::TRANSPARENT;
 
-pub(crate) const ROW_HOVER_BG: Color32 = Color32::from_rgb(39, 39, 42);
+pub(crate) const ROW_HOVER_BG: Color32 = Color32::from_rgb(31, 31, 35);
+pub(crate) const ROW_ACTIVE_BG: Color32 = Color32::from_rgb(39, 39, 42);
+pub(crate) const TOOLTIP_SHADOW_DARK: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 56);
+pub(crate) const TOOLTIP_SHADOW_LIGHT: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 20);
 
 pub(crate) const TEXT_PRIMARY: Color32 = Color32::from_rgb(244, 244, 245);
 pub(crate) const TEXT_SECONDARY: Color32 = Color32::from_rgb(212, 212, 216);
@@ -143,11 +147,64 @@ pub(crate) const fn row_selected_text(dark_mode: bool) -> Color32 {
     }
 }
 
+pub(crate) const fn tooltip_shadow(dark_mode: bool) -> Color32 {
+    if dark_mode {
+        TOOLTIP_SHADOW_DARK
+    } else {
+        TOOLTIP_SHADOW_LIGHT
+    }
+}
+
 pub(crate) const fn text_selection_bg(dark_mode: bool) -> Color32 {
     if dark_mode {
         Color32::from_rgba_premultiplied(59, 130, 246, 120)
     } else {
         Color32::from_rgba_premultiplied(37, 99, 235, 96)
+    }
+}
+
+pub(crate) const fn input_bg(focused: bool, hovered: bool) -> Color32 {
+    if focused {
+        INPUT_FOCUS_BACKGROUND
+    } else if hovered {
+        INPUT_HOVER_BACKGROUND
+    } else {
+        INPUT_BACKGROUND
+    }
+}
+
+pub(crate) fn input_stroke(dark_mode: bool, focused: bool, hovered: bool) -> Stroke {
+    if focused {
+        input_focus_stroke(dark_mode)
+    } else if hovered {
+        Stroke::new(1.0, INPUT_HOVER_BORDER)
+    } else {
+        Stroke::new(1.0, INPUT_BORDER)
+    }
+}
+
+pub(crate) const fn row_bg(
+    selected: bool,
+    pressed: bool,
+    hovered: bool,
+    dark_mode: bool,
+) -> Color32 {
+    if selected {
+        row_selected_bg(dark_mode)
+    } else if pressed {
+        ROW_ACTIVE_BG
+    } else if hovered {
+        ROW_HOVER_BG
+    } else {
+        TRANSPARENT
+    }
+}
+
+pub(crate) fn row_stroke(selected: bool, dark_mode: bool) -> Stroke {
+    if selected {
+        Stroke::new(1.0, row_selected_border(dark_mode))
+    } else {
+        Stroke::NONE
     }
 }
 

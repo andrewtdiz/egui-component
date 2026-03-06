@@ -1,8 +1,9 @@
+use super::api::ComponentUi;
 use crate::ui::tokens;
 use egui::{Align2, Color32, CornerRadius, FontFamily, FontId, Sense, Stroke, StrokeKind, Ui};
 
 #[derive(Debug, Clone, Copy)]
-pub struct KbdProps<'a> {
+pub struct Kbd<'a> {
     pub text: &'a str,
     pub min_width: f32,
     pub height: f32,
@@ -15,7 +16,7 @@ pub struct KbdProps<'a> {
     pub text_size: f32,
 }
 
-impl<'a> KbdProps<'a> {
+impl<'a> Kbd<'a> {
     pub fn new(text: &'a str) -> Self {
         Self {
             text,
@@ -73,12 +74,24 @@ impl<'a> KbdProps<'a> {
     }
 }
 
+impl<'a> From<&'a str> for Kbd<'a> {
+    fn from(text: &'a str) -> Self {
+        Self::new(text)
+    }
+}
+
+impl<'a> From<(&'a str, f32)> for Kbd<'a> {
+    fn from((text, text_size): (&'a str, f32)) -> Self {
+        Self::new(text).text_size(text_size)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub struct KbdGroupProps {
+pub struct KbdGroup {
     pub gap: f32,
 }
 
-impl KbdGroupProps {
+impl KbdGroup {
     pub fn new() -> Self {
         Self { gap: 4.0 }
     }
@@ -89,13 +102,43 @@ impl KbdGroupProps {
     }
 }
 
-impl Default for KbdGroupProps {
+impl Default for KbdGroup {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub fn kbd(ui: &mut Ui, props: KbdProps<'_>) -> egui::Response {
+impl From<()> for KbdGroup {
+    fn from(_: ()) -> Self {
+        Self::new()
+    }
+}
+
+impl From<f32> for KbdGroup {
+    fn from(gap: f32) -> Self {
+        Self::new().gap(gap)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn kbd<'a>(&mut self, props: impl Into<Kbd<'a>>) -> egui::Response {
+        draw_kbd(self.raw_mut(), props.into())
+    }
+
+    pub fn kbd_group<R>(
+        &mut self,
+        props: impl Into<KbdGroup>,
+        add_contents: impl FnOnce(&mut ComponentUi<'_>) -> R,
+    ) -> egui::InnerResponse<R> {
+        let overrides = self.overrides;
+        draw_kbd_group(self.raw_mut(), props.into(), |ui| {
+            let mut components = ComponentUi::with_overrides(ui, overrides);
+            add_contents(&mut components)
+        })
+    }
+}
+
+fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
     let font_id = FontId::new(props.text_size, FontFamily::Monospace);
     let text_width = ui.fonts_mut(|fonts| {
         fonts
@@ -124,9 +167,9 @@ pub fn kbd(ui: &mut Ui, props: KbdProps<'_>) -> egui::Response {
     response
 }
 
-pub fn kbd_group<R>(
+fn draw_kbd_group<R>(
     ui: &mut Ui,
-    props: KbdGroupProps,
+    props: KbdGroup,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
     ui.scope(|ui| {
@@ -159,9 +202,9 @@ mod tests {
         let context = Context::default();
         let frame_output = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
-                let _ = kbd_group(ui, KbdGroupProps::new(), |ui| {
+                let _ = draw_kbd_group(ui, KbdGroup::new(), |ui| {
                     for text in texts {
-                        let _ = kbd(ui, KbdProps::new(*text));
+                        let _ = draw_kbd(ui, Kbd::new(*text));
                     }
                 });
             });
@@ -194,7 +237,7 @@ mod tests {
 
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
-                rendered_width = kbd(ui, KbdProps::new("A").min_width(36.0)).rect.width();
+                rendered_width = draw_kbd(ui, Kbd::new("A").min_width(36.0)).rect.width();
             });
         });
 

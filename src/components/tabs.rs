@@ -1,5 +1,6 @@
+use super::api::ComponentUi;
 use crate::ui::tokens;
-use egui::{Color32, CornerRadius, CursorIcon, Id, RichText, Stroke, Ui};
+use egui::{CornerRadius, CursorIcon, Id, RichText, Stroke, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TabOption<'a> {
@@ -13,7 +14,13 @@ impl<'a> TabOption<'a> {
     }
 }
 
-pub fn tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
+impl ComponentUi<'_> {
+    pub fn tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
+        draw_tabs(self.raw_mut(), id, current, options);
+    }
+}
+
+fn draw_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
     if options.is_empty() {
         return;
     }
@@ -31,8 +38,8 @@ pub fn tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>])
                         } else {
                             tokens::TEXT_SECONDARY
                         }))
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(1.0, Color32::TRANSPARENT))
+                        .fill(tokens::TRANSPARENT)
+                        .stroke(Stroke::new(1.0, tokens::TRANSPARENT))
                         .corner_radius(CornerRadius::ZERO)
                         .min_size(egui::vec2(0.0, ui.spacing().interact_size.y)),
                     )

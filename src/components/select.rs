@@ -1,12 +1,13 @@
+use super::api::ComponentUi;
 use crate::ui::{icons, tokens};
-use egui::{Color32, CornerRadius, CursorIcon, Id, Stroke, StrokeKind, Ui};
+use egui::{CornerRadius, CursorIcon, Id, StrokeKind, Ui};
 
 const MENU_INNER_PADDING_X: i8 = 3;
 const MENU_INNER_PADDING_Y: i8 = 3;
 const MENU_ROW_HEIGHT: f32 = 32.0;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SelectProps<'a> {
+pub struct Select<'a> {
     pub trigger_id: Id,
     pub popup_id: Id,
     pub options: &'a [&'a str],
@@ -14,7 +15,7 @@ pub struct SelectProps<'a> {
     pub placeholder: &'a str,
 }
 
-impl<'a> SelectProps<'a> {
+impl<'a> Select<'a> {
     pub fn new(trigger_id: Id, popup_id: Id, options: &'a [&'a str]) -> Self {
         Self {
             trigger_id,
@@ -23,6 +24,10 @@ impl<'a> SelectProps<'a> {
             width: 220.0,
             placeholder: "Select an option",
         }
+    }
+
+    pub fn from_id(id: Id, options: &'a [&'a str]) -> Self {
+        Self::new(id.with("trigger"), id.with("popup"), options)
     }
 
     pub fn width(mut self, width: f32) -> Self {
@@ -36,10 +41,38 @@ impl<'a> SelectProps<'a> {
     }
 }
 
-pub fn select(
+impl<'a> From<(Id, Id, &'a [&'a str])> for Select<'a> {
+    fn from((trigger_id, popup_id, options): (Id, Id, &'a [&'a str])) -> Self {
+        Self::new(trigger_id, popup_id, options)
+    }
+}
+
+impl<'a> From<(Id, &'a [&'a str])> for Select<'a> {
+    fn from((id, options): (Id, &'a [&'a str])) -> Self {
+        Self::from_id(id, options)
+    }
+}
+
+impl<'a> From<(Id, &'a [&'a str], f32)> for Select<'a> {
+    fn from((id, options, width): (Id, &'a [&'a str], f32)) -> Self {
+        Self::from_id(id, options).width(width)
+    }
+}
+
+impl ComponentUi<'_> {
+    pub fn select<'a>(
+        &mut self,
+        selected_index: &mut Option<usize>,
+        props: impl Into<Select<'a>>,
+    ) -> egui::Response {
+        draw_select(self.raw_mut(), selected_index, props.into())
+    }
+}
+
+fn draw_select(
     ui: &mut Ui,
     selected_index: &mut Option<usize>,
-    props: SelectProps<'_>,
+    props: Select<'_>,
 ) -> egui::Response {
     let dark_mode = ui.visuals().dark_mode;
     if selected_index.is_some_and(|index| index >= props.options.len()) {
@@ -96,27 +129,14 @@ pub fn select(
     trigger
 }
 
-fn draw_trigger(
-    ui: &mut Ui,
-    props: SelectProps<'_>,
-    selected_text: Option<&str>,
-) -> egui::Response {
+fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> egui::Response {
     ui.push_id(props.trigger_id, |ui| {
         let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
-        let fill = if focused {
-            tokens::INPUT_FOCUS_BACKGROUND
-        } else if response.hovered() {
-            tokens::INPUT_HOVER_BACKGROUND
-        } else {
-            tokens::INPUT_BACKGROUND
-        };
-        let stroke = if focused || response.hovered() {
-            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
-        } else {
-            Stroke::new(1.0, tokens::INPUT_BORDER)
-        };
+        let hovered = response.hovered();
+        let fill = tokens::input_bg(focused, hovered);
+        let stroke = tokens::input_stroke(ui.visuals().dark_mode, focused, hovered);
         ui.painter().rect(
             rect,
             CornerRadius::same(tokens::RADIUS_MD),
@@ -157,18 +177,18 @@ fn draw_option_row(
 ) -> egui::Response {
     let desired_size = egui::vec2(row_width.max(96.0), MENU_ROW_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-    let fill = if selected {
-        tokens::row_selected_bg(dark_mode)
-    } else if response.hovered() {
-        tokens::ROW_HOVER_BG
-    } else {
-        Color32::TRANSPARENT
-    };
+    let fill = tokens::row_bg(
+        selected,
+        response.is_pointer_button_down_on(),
+        response.hovered(),
+        dark_mode,
+    );
+    let stroke = tokens::row_stroke(selected, dark_mode);
     ui.painter().rect(
         rect,
         CornerRadius::same(tokens::RADIUS_SM),
         fill,
-        Stroke::NONE,
+        stroke,
         StrokeKind::Outside,
     );
     ui.painter().text(
