@@ -60,7 +60,7 @@ impl ComponentUi<'_> {
 fn draw_progress(ui: &mut Ui, value: f32, props: Progress) -> Response {
     ui.scope(|ui| {
         let dark_mode = ui.visuals().dark_mode;
-        ui.visuals_mut().extreme_bg_color = tokens::INPUT_BACKGROUND;
+        ui.visuals_mut().extreme_bg_color = tokens::input_background(dark_mode);
         ui.add_sized(
             [props.width, props.height],
             egui::ProgressBar::new(value.clamp(0.0, 1.0))

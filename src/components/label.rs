@@ -3,6 +3,7 @@ use crate::ui::tokens;
 use egui::{Color32, FontFamily, FontId, RichText, Ui};
 
 const SEMIBOLD_FONT: &str = "component-showcase-geist-semibold";
+const BOLD_FONT: &str = "component-showcase-geist-bold";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LabelTone {
@@ -16,6 +17,7 @@ pub enum LabelTone {
 pub enum LabelWeight {
     Regular,
     Semibold,
+    Bold,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -158,19 +160,26 @@ impl ComponentUi<'_> {
 }
 
 fn draw_label(ui: &mut Ui, props: Label<'_>) -> egui::Response {
+    let dark_mode = ui.visuals().dark_mode;
     let color = props.color_override.unwrap_or(match props.tone {
-        LabelTone::Primary => tokens::TEXT_PRIMARY,
-        LabelTone::Secondary => tokens::TEXT_SECONDARY,
-        LabelTone::Muted => tokens::TEXT_MUTED,
-        LabelTone::Destructive => tokens::TEXT_DESTRUCTIVE,
+        LabelTone::Primary => tokens::text_primary(dark_mode),
+        LabelTone::Secondary => tokens::text_secondary(dark_mode),
+        LabelTone::Muted => tokens::text_muted(dark_mode),
+        LabelTone::Destructive => tokens::text_destructive(dark_mode),
     });
 
     let mut text = RichText::new(props.text).size(props.size).color(color);
-    if props.weight == LabelWeight::Semibold {
-        text = text.font(FontId::new(
-            props.size,
-            FontFamily::Name(SEMIBOLD_FONT.into()),
-        ));
+    match props.weight {
+        LabelWeight::Regular => {}
+        LabelWeight::Semibold => {
+            text = text.font(FontId::new(
+                props.size,
+                FontFamily::Name(SEMIBOLD_FONT.into()),
+            ));
+        }
+        LabelWeight::Bold => {
+            text = text.font(FontId::new(props.size, FontFamily::Name(BOLD_FONT.into())));
+        }
     }
 
     ui.add(egui::Label::new(text).selectable(false))

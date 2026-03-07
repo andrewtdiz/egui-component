@@ -124,13 +124,11 @@ fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> 
         response.hovered(),
         dark_mode,
     );
-    let stroke = tokens::row_stroke(selected, dark_mode);
-
     ui.painter().rect(
         rect,
         CornerRadius::same(tokens::RADIUS_SM),
         fill,
-        stroke,
+        egui::Stroke::NONE,
         StrokeKind::Outside,
     );
     ui.painter().text(
@@ -141,7 +139,7 @@ fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> 
         if selected {
             tokens::row_selected_text(dark_mode)
         } else {
-            tokens::TEXT_SECONDARY
+            tokens::text_secondary(dark_mode)
         },
     );
 

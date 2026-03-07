@@ -52,7 +52,11 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                 let selected = index == *selected_index;
                 let galley_width = ui.fonts_mut(|fonts| {
                     fonts
-                        .layout_no_wrap(label.to_owned(), text_font.clone(), tokens::TEXT_PRIMARY)
+                        .layout_no_wrap(
+                            label.to_owned(),
+                            text_font.clone(),
+                            tokens::text_primary(dark_mode),
+                        )
                         .size()
                         .x
                 });
@@ -64,16 +68,11 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                 let fill = if selected {
                     tokens::row_selected_bg(dark_mode)
                 } else if response.is_pointer_button_down_on() {
-                    tokens::BUTTON_SECONDARY_ACTIVE_BG
+                    tokens::button_secondary_active_bg(dark_mode)
                 } else if response.hovered() {
-                    tokens::BUTTON_SECONDARY_HOVER_BG
+                    tokens::button_secondary_hover_bg(dark_mode)
                 } else {
-                    tokens::BUTTON_SECONDARY_BG
-                };
-                let stroke = if selected {
-                    Stroke::new(1.0, tokens::row_selected_border(dark_mode))
-                } else {
-                    Stroke::NONE
+                    tokens::button_secondary_bg(dark_mode)
                 };
                 let corner = if props.options.len() == 1 {
                     CornerRadius::same(tokens::RADIUS_MD)
@@ -94,8 +93,9 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                 } else {
                     CornerRadius::ZERO
                 };
+                let fill_rect = rect;
                 ui.painter()
-                    .rect(rect, corner, fill, stroke, StrokeKind::Outside);
+                    .rect(fill_rect, corner, fill, Stroke::NONE, StrokeKind::Outside);
                 ui.painter().text(
                     rect.center(),
                     Align2::CENTER_CENTER,
@@ -104,7 +104,7 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                     if selected {
                         tokens::row_selected_text(dark_mode)
                     } else {
-                        tokens::TEXT_PRIMARY
+                        tokens::text_primary(dark_mode)
                     },
                 );
 
@@ -117,7 +117,7 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
 
             if let (Some(first), Some(last)) = (segment_rects.first(), segment_rects.last()) {
                 let group_rect = first.union(*last);
-                let border = Stroke::new(1.0, tokens::BUTTON_SECONDARY_BORDER);
+                let border = Stroke::new(1.0, tokens::button_secondary_border(dark_mode));
                 ui.painter().rect(
                     group_rect,
                     CornerRadius::same(tokens::RADIUS_MD),

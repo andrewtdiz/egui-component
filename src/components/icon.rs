@@ -6,7 +6,7 @@ use egui::{Color32, Response, Sense, Ui};
 pub struct Icon<'a> {
     pub name: &'a str,
     pub size: f32,
-    pub tint: Color32,
+    pub tint: Option<Color32>,
 }
 
 impl<'a> Icon<'a> {
@@ -14,7 +14,7 @@ impl<'a> Icon<'a> {
         Self {
             name,
             size: 14.0,
-            tint: tokens::TEXT_SECONDARY,
+            tint: None,
         }
     }
 
@@ -24,7 +24,7 @@ impl<'a> Icon<'a> {
     }
 
     pub fn tint(mut self, tint: Color32) -> Self {
-        self.tint = tint;
+        self.tint = Some(tint);
         self
     }
 }
@@ -55,7 +55,10 @@ impl ComponentUi<'_> {
 
 fn draw_icon(ui: &mut Ui, props: Icon<'_>) -> Response {
     if let Some(image) = icons::image(ui.ctx(), props.name, props.size) {
-        ui.add(image.tint(props.tint))
+        let tint = props
+            .tint
+            .unwrap_or(tokens::text_secondary(ui.visuals().dark_mode));
+        ui.add(image.tint(tint))
     } else {
         let (_rect, response) =
             ui.allocate_exact_size(egui::vec2(props.size, props.size), Sense::hover());

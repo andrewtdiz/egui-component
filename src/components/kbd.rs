@@ -10,9 +10,9 @@ pub struct Kbd<'a> {
     pub padding_x: f32,
     pub padding_y: f32,
     pub corner_radius: u8,
-    pub fill: Color32,
-    pub stroke: Stroke,
-    pub text_color: Color32,
+    pub fill: Option<Color32>,
+    pub stroke: Option<Stroke>,
+    pub text_color: Option<Color32>,
     pub text_size: f32,
 }
 
@@ -25,9 +25,9 @@ impl<'a> Kbd<'a> {
             padding_x: 4.0,
             padding_y: 2.0,
             corner_radius: tokens::RADIUS_SM,
-            fill: tokens::INPUT_BACKGROUND,
-            stroke: Stroke::new(1.0, tokens::INPUT_BORDER),
-            text_color: tokens::TEXT_MUTED,
+            fill: None,
+            stroke: None,
+            text_color: None,
             text_size: 10.0,
         }
     }
@@ -54,17 +54,17 @@ impl<'a> Kbd<'a> {
     }
 
     pub fn fill(mut self, fill: Color32) -> Self {
-        self.fill = fill;
+        self.fill = Some(fill);
         self
     }
 
     pub fn stroke(mut self, stroke: Stroke) -> Self {
-        self.stroke = stroke;
+        self.stroke = Some(stroke);
         self
     }
 
     pub fn text_color(mut self, text_color: Color32) -> Self {
-        self.text_color = text_color;
+        self.text_color = Some(text_color);
         self
     }
 
@@ -139,10 +139,12 @@ impl ComponentUi<'_> {
 }
 
 fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
+    let dark_mode = ui.visuals().dark_mode;
+    let text_color = props.text_color.unwrap_or(tokens::text_muted(dark_mode));
     let font_id = FontId::new(props.text_size, FontFamily::Monospace);
     let text_width = ui.fonts_mut(|fonts| {
         fonts
-            .layout_no_wrap(props.text.to_owned(), font_id.clone(), props.text_color)
+            .layout_no_wrap(props.text.to_owned(), font_id.clone(), text_color)
             .size()
             .x
     });
@@ -152,8 +154,10 @@ fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
     ui.painter().rect(
         rect,
         CornerRadius::same(props.corner_radius),
-        props.fill,
-        props.stroke,
+        props.fill.unwrap_or(tokens::input_background(dark_mode)),
+        props
+            .stroke
+            .unwrap_or(Stroke::new(1.0, tokens::input_border(dark_mode))),
         StrokeKind::Outside,
     );
     ui.painter().text(
@@ -161,7 +165,7 @@ fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
         Align2::CENTER_CENTER,
         props.text,
         font_id,
-        props.text_color,
+        text_color,
     );
 
     response

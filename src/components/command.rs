@@ -94,6 +94,7 @@ impl ComponentUi<'_> {
                 .auto_shrink([false, false])
                 .show(ui.raw_mut(), |ui| {
                     let mut ui = super::api::ComponentUi::new(ui);
+                    let dark_mode = ui.visuals().dark_mode;
                     let query_lower = query.to_ascii_lowercase();
                     let mut shown = 0usize;
 
@@ -110,7 +111,8 @@ impl ComponentUi<'_> {
                             ui.add_space(8.0);
                             let _ = ui.add(
                                 egui::Label::new(
-                                    RichText::new(item.label).color(tokens::TEXT_PRIMARY),
+                                    RichText::new(item.label)
+                                        .color(tokens::text_primary(dark_mode)),
                                 )
                                 .selectable(false),
                             );

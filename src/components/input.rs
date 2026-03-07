@@ -114,7 +114,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
         if let Some(hint_text) = props.hint_text {
             text_edit = text_edit.hint_text(
                 egui::RichText::new(hint_text)
-                    .color(tokens::TEXT_MUTED)
+                    .color(tokens::text_muted(dark_mode))
                     .weak(),
             );
         }
@@ -122,7 +122,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
         let response = ui.add_sized([props.width, ui.spacing().interact_size.y], text_edit);
         let focused = response.has_focus();
         let hovered = response.hovered();
-        let fill = tokens::input_bg(focused, hovered);
+        let fill = tokens::input_bg(dark_mode, focused, hovered);
         let stroke = tokens::input_stroke(dark_mode, focused, hovered);
         ui.painter().set(
             background_slot,

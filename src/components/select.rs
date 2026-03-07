@@ -135,8 +135,9 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
         let hovered = response.hovered();
-        let fill = tokens::input_bg(focused, hovered);
-        let stroke = tokens::input_stroke(ui.visuals().dark_mode, focused, hovered);
+        let dark_mode = ui.visuals().dark_mode;
+        let fill = tokens::input_bg(dark_mode, focused, hovered);
+        let stroke = tokens::input_stroke(dark_mode, focused, hovered);
         ui.painter().rect(
             rect,
             CornerRadius::same(tokens::RADIUS_MD),
@@ -150,9 +151,9 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
             selected_text.unwrap_or(props.placeholder),
             egui::FontId::new(12.0, egui::FontFamily::Proportional),
             if selected_text.is_some() {
-                tokens::TEXT_PRIMARY
+                tokens::text_primary(dark_mode)
             } else {
-                tokens::TEXT_MUTED
+                tokens::text_muted(dark_mode)
             },
         );
         if let Some(image) = icons::image(ui.ctx(), "chevron-down", 12.0) {
@@ -161,7 +162,7 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
                 egui::pos2(rect.right() - 12.0, rect.center().y),
                 egui::vec2(icon_size, icon_size),
             );
-            let _ = ui.put(icon_rect, image.tint(tokens::TEXT_SECONDARY));
+            let _ = ui.put(icon_rect, image.tint(tokens::text_secondary(dark_mode)));
         }
         response.on_hover_cursor(CursorIcon::PointingHand)
     })
@@ -183,12 +184,11 @@ fn draw_option_row(
         response.hovered(),
         dark_mode,
     );
-    let stroke = tokens::row_stroke(selected, dark_mode);
     ui.painter().rect(
         rect,
         CornerRadius::same(tokens::RADIUS_SM),
         fill,
-        stroke,
+        egui::Stroke::NONE,
         StrokeKind::Outside,
     );
     ui.painter().text(
@@ -199,7 +199,7 @@ fn draw_option_row(
         if selected {
             tokens::row_selected_text(dark_mode)
         } else {
-            tokens::TEXT_SECONDARY
+            tokens::text_secondary(dark_mode)
         },
     );
     response.on_hover_cursor(CursorIcon::PointingHand)

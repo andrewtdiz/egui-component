@@ -46,6 +46,7 @@ impl ComponentUi<'_> {
 }
 
 fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response {
+    let dark_mode = ui.visuals().dark_mode;
     match props.label {
         Some(label_text) => {
             ui.horizontal(|ui| {
@@ -56,9 +57,11 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
                     .scope(|ui| {
                         ui.style_mut().interaction.selectable_labels = false;
                         ui.add(
-                            egui::Label::new(RichText::new(label_text).color(tokens::TEXT_PRIMARY))
-                                .selectable(false)
-                                .sense(Sense::click()),
+                            egui::Label::new(
+                                RichText::new(label_text).color(tokens::text_primary(dark_mode)),
+                            )
+                            .selectable(false)
+                            .sense(Sense::click()),
                         )
                     })
                     .inner
@@ -102,18 +105,18 @@ fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
         (checked_fill, Stroke::new(1.0, checked_fill))
     } else if pressed {
         (
-            tokens::INPUT_FOCUS_BACKGROUND,
-            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER),
+            tokens::input_focus_background(dark_mode),
+            Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
         )
     } else if hovered {
         (
-            tokens::INPUT_HOVER_BACKGROUND,
-            Stroke::new(1.0, tokens::INPUT_HOVER_BORDER),
+            tokens::input_hover_background(dark_mode),
+            Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
         )
     } else {
         (
-            tokens::INPUT_BACKGROUND,
-            Stroke::new(1.0, tokens::INPUT_BORDER),
+            tokens::input_background(dark_mode),
+            Stroke::new(1.0, tokens::input_border(dark_mode)),
         )
     };
 

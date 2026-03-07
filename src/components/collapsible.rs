@@ -9,8 +9,8 @@ pub struct Collapsible<'a> {
     pub open: bool,
     pub leading_icon: Option<&'a str>,
     pub trailing_icon: Option<&'a str>,
-    pub leading_icon_tint: Color32,
-    pub trailing_icon_tint: Color32,
+    pub leading_icon_tint: Option<Color32>,
+    pub trailing_icon_tint: Option<Color32>,
 }
 
 impl<'a> Collapsible<'a> {
@@ -21,8 +21,8 @@ impl<'a> Collapsible<'a> {
             open: true,
             leading_icon: None,
             trailing_icon: None,
-            leading_icon_tint: tokens::TEXT_SECONDARY,
-            trailing_icon_tint: tokens::TEXT_MUTED,
+            leading_icon_tint: None,
+            trailing_icon_tint: None,
         }
     }
 
@@ -42,12 +42,12 @@ impl<'a> Collapsible<'a> {
     }
 
     pub fn leading_icon_tint(mut self, tint: Color32) -> Self {
-        self.leading_icon_tint = tint;
+        self.leading_icon_tint = Some(tint);
         self
     }
 
     pub fn trailing_icon_tint(mut self, tint: Color32) -> Self {
-        self.trailing_icon_tint = tint;
+        self.trailing_icon_tint = Some(tint);
         self
     }
 }
@@ -95,6 +95,7 @@ fn draw_collapsible<R>(
     if *open != props.open {
         *open = props.open;
     }
+    let dark_mode = ui.visuals().dark_mode;
 
     let header_height = (ui.spacing().interact_size.y - 2.0).max(30.0);
     let desired_size = egui::vec2(ui.available_width(), header_height);
@@ -106,9 +107,9 @@ fn draw_collapsible<R>(
     }
 
     let fill = if header_response.is_pointer_button_down_on() {
-        tokens::BUTTON_SECONDARY_ACTIVE_BG
+        tokens::button_secondary_active_bg(dark_mode)
     } else if header_response.hovered() {
-        tokens::BUTTON_SECONDARY_HOVER_BG
+        tokens::button_secondary_hover_bg(dark_mode)
     } else {
         tokens::TRANSPARENT
     };
@@ -133,17 +134,29 @@ fn draw_collapsible<R>(
             } else {
                 "chevron-right"
             };
-            let _ = ui.icon((expand_icon, 12.0, tokens::TEXT_MUTED));
+            let _ = ui.icon((expand_icon, 12.0, tokens::text_muted(dark_mode)));
 
             if let Some(leading_icon) = props.leading_icon {
-                let _ = ui.icon((leading_icon, 13.0, props.leading_icon_tint));
+                let _ = ui.icon((
+                    leading_icon,
+                    13.0,
+                    props
+                        .leading_icon_tint
+                        .unwrap_or(tokens::text_secondary(dark_mode)),
+                ));
             }
 
             let _ = ui.label((props.title, LabelTone::Primary, LabelWeight::Semibold));
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some(trailing_icon) = props.trailing_icon {
-                    let _ = ui.icon((trailing_icon, 13.0, props.trailing_icon_tint));
+                    let _ = ui.icon((
+                        trailing_icon,
+                        13.0,
+                        props
+                            .trailing_icon_tint
+                            .unwrap_or(tokens::text_muted(dark_mode)),
+                    ));
                 }
             });
         },

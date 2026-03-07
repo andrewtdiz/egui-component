@@ -1,6 +1,16 @@
 use super::{api::ComponentUi, Button, ButtonStyle, LabelTone};
 use crate::ui::tokens;
-use egui::{CursorIcon, Response, Shadow};
+use egui::CursorIcon;
+use egui::Response;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum TooltipPlacement {
+    Auto,
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tooltip<'a> {
@@ -8,7 +18,7 @@ pub struct Tooltip<'a> {
     pub text: &'a str,
     pub width: f32,
     pub delay_ms: u32,
-    pub top_center: bool,
+    pub placement: TooltipPlacement,
 }
 
 impl<'a> Tooltip<'a> {
@@ -18,7 +28,7 @@ impl<'a> Tooltip<'a> {
             text,
             width: 220.0,
             delay_ms: 0,
-            top_center: true,
+            placement: TooltipPlacement::Top,
         }
     }
 
@@ -32,8 +42,17 @@ impl<'a> Tooltip<'a> {
         self
     }
 
+    pub fn placement(mut self, placement: TooltipPlacement) -> Self {
+        self.placement = placement;
+        self
+    }
+
     pub fn top_center(mut self, top_center: bool) -> Self {
-        self.top_center = top_center;
+        self.placement = if top_center {
+            TooltipPlacement::Top
+        } else {
+            TooltipPlacement::Auto
+        };
         self
     }
 }
@@ -64,13 +83,8 @@ impl ComponentUi<'_> {
         let overrides = self.overrides;
         self.raw_mut()
             .scope(|ui| {
-                let dark_mode = ui.visuals().dark_mode;
-                ui.style_mut().visuals.popup_shadow = Shadow {
-                    offset: [2, 4],
-                    blur: 4,
-                    spread: 0,
-                    color: tokens::tooltip_shadow(dark_mode),
-                };
+                ui.style_mut().visuals.popup_shadow = tokens::tailwind_shadow_sm();
+                ui.style_mut().spacing.menu_margin = egui::Margin::symmetric(6, 4);
 
                 let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let response = ui
@@ -113,11 +127,32 @@ impl ComponentUi<'_> {
 
                 if show_tooltip {
                     let mut tooltip = egui::Tooltip::for_widget(&response).gap(6.0);
-                    if props.top_center {
-                        tooltip.popup = tooltip
-                            .popup
-                            .align(egui::RectAlign::TOP)
-                            .align_alternatives(&[egui::RectAlign::TOP]);
+                    match props.placement {
+                        TooltipPlacement::Auto => {}
+                        TooltipPlacement::Top => {
+                            tooltip.popup = tooltip
+                                .popup
+                                .align(egui::RectAlign::TOP)
+                                .align_alternatives(&[egui::RectAlign::TOP]);
+                        }
+                        TooltipPlacement::Right => {
+                            tooltip.popup = tooltip
+                                .popup
+                                .align(egui::RectAlign::RIGHT)
+                                .align_alternatives(&[egui::RectAlign::RIGHT]);
+                        }
+                        TooltipPlacement::Bottom => {
+                            tooltip.popup = tooltip
+                                .popup
+                                .align(egui::RectAlign::BOTTOM)
+                                .align_alternatives(&[egui::RectAlign::BOTTOM]);
+                        }
+                        TooltipPlacement::Left => {
+                            tooltip.popup = tooltip
+                                .popup
+                                .align(egui::RectAlign::LEFT)
+                                .align_alternatives(&[egui::RectAlign::LEFT]);
+                        }
                     }
 
                     let _ = tooltip.show(|ui| {

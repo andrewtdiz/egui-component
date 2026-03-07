@@ -15,10 +15,11 @@ pub use error::{ComponentLibraryError, Result};
 pub mod prelude {
     pub use crate::components::{
         Button, ButtonGroup, ButtonOverride, ButtonStyle, Card, CardOverride, Checkbox,
-        Collapsible, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt, Dialogue,
+        Collapsible, Color, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt, Dialogue,
         DialogueHeader, DialogueModal, DialogueStyle, DropdownMenu, DropdownMenuAction,
         DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu, Field, Icon, Kbd, KbdGroup,
         Label, LabelOverride, LabelTone, LabelWeight, NumberInput, NumberInputAxis, Progress,
-        Select, Slider, Switch, SwitchSize, TabOption, TextInput, TextInputOverride, Tooltip,
+        Select, Slider, Switch, SwitchSize, TabOption, TextInput, TextInputOverride, Toolbar,
+        Tooltip, TooltipPlacement,
     };
 }

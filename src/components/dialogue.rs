@@ -1,5 +1,6 @@
-use super::{api::ComponentUi, ButtonStyle, LabelTone, LabelWeight};
-use egui::{Id, Response};
+use super::{api::ComponentUi, Button, ButtonStyle, Label, LabelTone, LabelWeight};
+use crate::ui::tokens;
+use egui::{Align, Color32, CornerRadius, Id, Layout, Margin, Response, Sense, Stroke, UiBuilder};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DialogueStyle {
@@ -175,11 +176,22 @@ impl ComponentUi<'_> {
         }
 
         let mut close_requested = false;
-        let dialogue_modal_response = egui::Modal::new(props.id).show(self.ctx(), |ui| {
-            ui.set_min_width(props.width);
-            let mut components = ComponentUi::new(ui);
-            add_contents(&mut components, &mut close_requested);
-        });
+        let dark_mode = self.visuals().dark_mode;
+        let frame = egui::Frame::popup(self.style())
+            .fill(tokens::card_background(dark_mode))
+            .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
+            .corner_radius(CornerRadius::same(tokens::RADIUS_LG))
+            .inner_margin(Margin::symmetric(12, 12))
+            .shadow(tokens::tailwind_shadow_lg());
+        let dialogue_modal_response = egui::Modal::new(props.id)
+            .frame(frame)
+            .backdrop_color(Color32::from_black_alpha(if dark_mode { 160 } else { 96 }))
+            .show(self.ctx(), |ui| {
+                ui.set_min_width(props.width);
+                ui.set_max_width(props.width);
+                let mut components = ComponentUi::new(ui);
+                add_contents(&mut components, &mut close_requested);
+            });
 
         if close_requested || dialogue_modal_response.should_close() {
             *open = false;
@@ -193,16 +205,79 @@ impl ComponentUi<'_> {
             LabelTone::Primary
         };
 
-        self.label((title, tone, LabelWeight::Semibold))
+        self.label(
+            Label::new(title)
+                .tone(tone)
+                .weight(LabelWeight::Bold)
+                .size(16.0),
+        )
     }
 
     pub fn dialogue_description(&mut self, description: &str) -> Response {
-        self.label((description, LabelTone::Secondary, 11.0))
+        self.label((description, LabelTone::Muted, 12.0))
     }
 
     pub fn dialogue_header<'a>(&mut self, props: impl Into<DialogueHeader<'a>>) {
         let props = props.into();
         let _ = self.dialogue_title(props.title, props.style);
+        if !props.description.is_empty() {
+            self.add_space(6.0);
+            let _ = self.dialogue_description(props.description);
+        }
+    }
+
+    pub fn dialogue_header_with_close<'a>(
+        &mut self,
+        props: impl Into<DialogueHeader<'a>>,
+        close_requested: &mut bool,
+    ) {
+        let props = props.into();
+        let close_button_size = 28.0;
+        let header_gap = self.spacing().item_spacing.x;
+        let row_width = self.available_width();
+        let (header_rect, _) =
+            self.allocate_exact_size(egui::vec2(row_width, close_button_size), Sense::hover());
+        let close_rect = egui::Rect::from_min_size(
+            egui::pos2(header_rect.right() - close_button_size, header_rect.top()),
+            egui::vec2(close_button_size, close_button_size),
+        );
+        let title_rect = egui::Rect::from_min_max(
+            header_rect.min,
+            egui::pos2(
+                (close_rect.left() - header_gap).max(header_rect.left()),
+                header_rect.bottom(),
+            ),
+        );
+
+        let _ = self.scope_builder(
+            UiBuilder::new()
+                .max_rect(title_rect)
+                .layout(Layout::top_down(Align::Min)),
+            |ui| {
+                let _ = ui.dialogue_title(props.title, props.style);
+            },
+        );
+
+        if self
+            .scope_builder(
+                UiBuilder::new()
+                    .max_rect(close_rect)
+                    .layout(Layout::centered_and_justified(egui::Direction::LeftToRight)),
+                |ui| {
+                    ui.button(
+                        Button::icon_only("x")
+                            .style(ButtonStyle::Ghost)
+                            .icon_size(14.0)
+                            .min_size(egui::vec2(close_button_size, close_button_size)),
+                    )
+                },
+            )
+            .inner
+            .clicked()
+        {
+            *close_requested = true;
+        }
+
         if !props.description.is_empty() {
             self.add_space(6.0);
             let _ = self.dialogue_description(props.description);
@@ -217,22 +292,30 @@ impl ComponentUi<'_> {
         }
 
         self.dialogue_modal(open, (props.id, props.width), |ui, close_requested| {
-            ui.dialogue_header((props.title, props.description, props.style));
-            ui.add_space(10.0);
-            let _ = ui.horizontal(|ui| {
-                if ui
-                    .button((props.cancel_label, ButtonStyle::Secondary))
-                    .clicked()
-                {
-                    *close_requested = true;
-                }
-                if ui
-                    .button((props.confirm_label, ButtonStyle::Primary))
-                    .clicked()
-                {
-                    *close_requested = true;
-                }
-            });
+            ui.dialogue_header_with_close(
+                (props.title, props.description, props.style),
+                close_requested,
+            );
+            ui.add_space(12.0);
+            let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            let _ = ui.allocate_ui_with_layout(
+                footer_size,
+                Layout::right_to_left(Align::Center),
+                |ui| {
+                    if ui
+                        .button((props.confirm_label, ButtonStyle::Primary))
+                        .clicked()
+                    {
+                        *close_requested = true;
+                    }
+                    if ui
+                        .button((props.cancel_label, ButtonStyle::Secondary))
+                        .clicked()
+                    {
+                        *close_requested = true;
+                    }
+                },
+            );
         });
 
         trigger_response

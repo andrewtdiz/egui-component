@@ -5,6 +5,7 @@ pub enum ComponentKind {
     ButtonGroup,
     Card,
     Checkbox,
+    Color,
     Collapsible,
     Combobox,
     Command,
@@ -20,6 +21,7 @@ pub enum ComponentKind {
     Slider,
     Switch,
     Tabs,
+    Toolbar,
     Tooltip,
 }
 
@@ -46,7 +48,7 @@ pub struct ComponentDefinition {
     pub group: ComponentGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ComponentDefinition; 21] = [
+const COMPONENT_DEFINITIONS: [ComponentDefinition; 23] = [
     ComponentDefinition {
         kind: ComponentKind::Label,
         id: "label",
@@ -87,6 +89,12 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 21] = [
         kind: ComponentKind::Checkbox,
         id: "checkbox",
         label: "Checkbox",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Color,
+        id: "color",
+        label: "Color",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -168,6 +176,12 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 21] = [
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
+        kind: ComponentKind::Toolbar,
+        id: "toolbar",
+        label: "Toolbar",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::AlertDialogue,
         id: "alert-dialogue",
         label: "Alert Dialogue",
@@ -229,10 +243,12 @@ mod tests {
         let ids = component_definitions()
             .map(|definition| definition.id)
             .collect::<Vec<_>>();
-        assert_eq!(ids.len(), 21);
+        assert_eq!(ids.len(), 23);
         assert!(ids.contains(&"button"));
+        assert!(ids.contains(&"color"));
         assert!(ids.contains(&"kbd"));
         assert!(ids.contains(&"dropdown-menu"));
+        assert!(ids.contains(&"toolbar"));
         assert!(!ids.contains(&"accordion"));
     }
 
@@ -250,6 +266,10 @@ mod tests {
             parse_component_kind("alertdialogue"),
             Some(ComponentKind::AlertDialogue)
         );
+        assert_eq!(
+            parse_component_kind("toolbar"),
+            Some(ComponentKind::Toolbar)
+        );
         assert_eq!(parse_component_kind("contextmenu"), None);
         assert_eq!(parse_component_kind("agentchat"), None);
     }
@@ -262,7 +282,7 @@ mod tests {
         let composed = component_definitions()
             .filter(|definition| definition.group == ComponentGroup::Composed)
             .count();
-        assert_eq!(primitive, 16);
-        assert_eq!(composed, 5);
+        assert_eq!(primitive, 17);
+        assert_eq!(composed, 6);
     }
 }

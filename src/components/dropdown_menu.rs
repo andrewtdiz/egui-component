@@ -1,8 +1,21 @@
-use super::{api::ComponentUi, Button, ButtonStyle, Kbd, KbdGroup};
-use egui::{containers::menu::SubMenuButton, Align, CursorIcon, Layout, Rect, Response, Ui};
+use super::{api::ComponentUi, ButtonStyle};
+use crate::ui::{icons, tokens};
+use egui::{
+    Align2, CornerRadius, CursorIcon, FontFamily, FontId, Margin, Rect, Response, Stroke,
+    StrokeKind, Ui,
+};
 
 const MENU_MIN_WIDTH: f32 = 160.0;
-const MENU_ROW_HEIGHT: f32 = 28.0;
+const MENU_INNER_PADDING_X: i8 = 3;
+const MENU_INNER_PADDING_Y: i8 = 3;
+const MENU_ROW_HEIGHT: f32 = 32.0;
+const MENU_ROW_PADDING_X: f32 = 10.0;
+const MENU_TRAILING_GAP: f32 = 10.0;
+const MENU_TEXT_SIZE: f32 = 12.0;
+const MENU_SHORTCUT_GAP: f32 = 3.0;
+const MENU_KEYCAP_HEIGHT: f32 = 16.0;
+const MENU_KEYCAP_MIN_WIDTH: f32 = 18.0;
+const MENU_KEYCAP_TEXT_SIZE: f32 = 9.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DropdownMenuAction<'a> {
@@ -167,18 +180,30 @@ impl ComponentUi<'_> {
 
         let _ = egui::Popup::menu(&response).show(|ui| {
             let mut ui = ComponentUi::new(ui);
-            ui.style_mut().spacing.item_spacing.y = 1.0;
+            ui.style_mut().spacing.item_spacing.y = 0.0;
             ui.set_min_width(row_width);
             ui.set_max_width(row_width);
 
-            if props.entries.is_empty() {
-                for (index, label) in props.options.iter().copied().enumerate() {
-                    let action = DropdownMenuAction::new(index, label);
-                    draw_action_row(&mut ui, action, &mut state, row_width);
-                }
-            } else {
-                draw_entries(&mut ui, props.entries, &mut state, row_width);
-            }
+            egui::Frame::new()
+                .inner_margin(Margin::symmetric(
+                    MENU_INNER_PADDING_X,
+                    MENU_INNER_PADDING_Y,
+                ))
+                .show(ui.raw_mut(), |ui| {
+                    let mut ui = ComponentUi::new(ui);
+                    let inner_width = inner_row_width(row_width);
+                    ui.set_min_width(inner_width);
+                    ui.set_max_width(inner_width);
+
+                    if props.entries.is_empty() {
+                        for (index, label) in props.options.iter().copied().enumerate() {
+                            let action = DropdownMenuAction::new(index, label);
+                            draw_action_row(&mut ui, action, &mut state, row_width);
+                        }
+                    } else {
+                        draw_entries(&mut ui, props.entries, &mut state, row_width);
+                    }
+                });
         });
 
         (response, state)
@@ -202,23 +227,28 @@ fn draw_entries(
                 ui.add_space(2.0);
             }
             DropdownMenuEntry::Submenu(submenu) => {
-                let submenu_button = ui
-                    .button(
-                        Button::name(submenu.label)
-                            .style(ButtonStyle::Ghost)
-                            .right_text(SubMenuButton::RIGHT_ARROW)
-                            .min_size(egui::vec2(row_width, MENU_ROW_HEIGHT)),
-                    )
-                    .on_hover_cursor(CursorIcon::PointingHand);
+                let (submenu_button, _) =
+                    draw_menu_row(ui.raw_mut(), submenu.label, row_width, None, true);
                 let _ = egui::containers::menu::SubMenu::new().show(
                     ui.raw_mut(),
                     &submenu_button,
                     |ui| {
                         let mut ui = ComponentUi::new(ui);
-                        ui.style_mut().spacing.item_spacing.y = 1.0;
+                        ui.style_mut().spacing.item_spacing.y = 0.0;
                         ui.set_min_width(row_width);
                         ui.set_max_width(row_width);
-                        draw_entries(&mut ui, submenu.entries, state, row_width);
+                        egui::Frame::new()
+                            .inner_margin(Margin::symmetric(
+                                MENU_INNER_PADDING_X,
+                                MENU_INNER_PADDING_Y,
+                            ))
+                            .show(ui.raw_mut(), |ui| {
+                                let mut ui = ComponentUi::new(ui);
+                                let inner_width = inner_row_width(row_width);
+                                ui.set_min_width(inner_width);
+                                ui.set_max_width(inner_width);
+                                draw_entries(&mut ui, submenu.entries, state, row_width);
+                            });
                     },
                 );
             }
@@ -232,14 +262,15 @@ fn draw_action_row(
     state: &mut DropdownMenuState,
     row_width: f32,
 ) {
-    let props = Button::name(action.label)
-        .style(ButtonStyle::Ghost)
-        .right_text("")
-        .min_size(egui::vec2(row_width, MENU_ROW_HEIGHT));
-
-    let response = ui.button(props).on_hover_cursor(CursorIcon::PointingHand);
-    if let Some(shortcut) = action.shortcut {
-        draw_shortcut_keycaps(ui.raw_mut(), response.rect, shortcut);
+    let (response, trailing_rect) = draw_menu_row(
+        ui.raw_mut(),
+        action.label,
+        row_width,
+        action.shortcut,
+        false,
+    );
+    if let (Some(shortcut), Some(trailing_rect)) = (action.shortcut, trailing_rect) {
+        draw_shortcut_keycaps(ui.raw_mut(), trailing_rect, shortcut);
     }
     if response.clicked() {
         state.action = Some(action.id);
@@ -247,25 +278,170 @@ fn draw_action_row(
     }
 }
 
-fn draw_shortcut_keycaps(ui: &mut Ui, row_rect: Rect, shortcut: &str) {
-    let keys = parse_shortcut_keys(shortcut);
-    if keys.is_empty() {
+fn draw_menu_row(
+    ui: &mut Ui,
+    label: &str,
+    menu_width: f32,
+    shortcut: Option<&str>,
+    submenu: bool,
+) -> (Response, Option<Rect>) {
+    let dark_mode = ui.visuals().dark_mode;
+    let desired_size = egui::vec2(inner_row_width(menu_width), MENU_ROW_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    let fill = tokens::row_bg(
+        false,
+        response.is_pointer_button_down_on(),
+        response.hovered(),
+        dark_mode,
+    );
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(tokens::RADIUS_SM),
+        fill,
+        egui::Stroke::NONE,
+        StrokeKind::Outside,
+    );
+
+    let label_color = if response.hovered() || response.is_pointer_button_down_on() {
+        tokens::text_primary(dark_mode)
+    } else {
+        tokens::text_secondary(dark_mode)
+    };
+    let trailing_width = if submenu {
+        12.0
+    } else {
+        shortcut
+            .map(|shortcut| shortcut_group_width(ui, shortcut))
+            .unwrap_or(0.0)
+    };
+    let trailing_rect = if trailing_width > 0.0 {
+        Some(Rect::from_min_max(
+            egui::pos2(
+                rect.right() - MENU_ROW_PADDING_X - trailing_width,
+                rect.top(),
+            ),
+            egui::pos2(rect.right() - MENU_ROW_PADDING_X, rect.bottom()),
+        ))
+    } else {
+        None
+    };
+    let label_x = rect.left() + MENU_ROW_PADDING_X;
+    let label_right = trailing_rect
+        .map(|rect| rect.left() - MENU_TRAILING_GAP)
+        .unwrap_or(rect.right() - MENU_ROW_PADDING_X);
+    ui.painter().text(
+        egui::pos2(label_x.min(label_right), rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        FontId::new(MENU_TEXT_SIZE, FontFamily::Proportional),
+        label_color,
+    );
+
+    if submenu {
+        if let (Some(image), Some(trailing_rect)) =
+            (icons::image(ui.ctx(), "chevron-right", 12.0), trailing_rect)
+        {
+            let icon_rect = Rect::from_center_size(trailing_rect.center(), egui::vec2(12.0, 12.0));
+            let _ = ui.put(icon_rect, image.tint(tokens::text_muted(dark_mode)));
+        }
+    }
+
+    (
+        response.on_hover_cursor(CursorIcon::PointingHand),
+        trailing_rect,
+    )
+}
+
+fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
+    let keycaps = measure_shortcut_keycaps(ui, shortcut);
+    if keycaps.is_empty() {
         return;
     }
 
-    let _ = ui.scope_builder(
-        egui::UiBuilder::new()
-            .max_rect(row_rect.shrink2(egui::vec2(8.0, 4.0)))
-            .layout(Layout::right_to_left(Align::Center)),
-        |ui| {
-            let mut ui = ComponentUi::new(ui);
-            let _ = ui.kbd_group(KbdGroup::new().gap(3.0), |ui| {
-                for key in keys {
-                    let _ = ui.kbd(Kbd::new(key).height(18.0).text_size(9.5));
-                }
+    let dark_mode = ui.visuals().dark_mode;
+    let text_color = tokens::text_muted(dark_mode);
+    let font_id = FontId::new(MENU_KEYCAP_TEXT_SIZE, FontFamily::Monospace);
+    let total_width = shortcut_group_width_from_keycaps(&keycaps);
+    let mut left = trailing_rect.right() - total_width;
+    let top = trailing_rect.center().y - (MENU_KEYCAP_HEIGHT * 0.5);
+
+    // Paint keycaps directly so shortcut rows never participate in menu layout.
+    for (index, keycap) in keycaps.iter().enumerate() {
+        let key_rect = Rect::from_min_size(
+            egui::pos2(left, top),
+            egui::vec2(keycap.width, MENU_KEYCAP_HEIGHT),
+        );
+        ui.painter().rect(
+            key_rect,
+            CornerRadius::same(tokens::RADIUS_SM),
+            tokens::input_background(dark_mode),
+            Stroke::new(1.0, tokens::input_border(dark_mode)),
+            StrokeKind::Outside,
+        );
+        ui.painter().text(
+            key_rect.center(),
+            Align2::CENTER_CENTER,
+            keycap.label,
+            font_id.clone(),
+            text_color,
+        );
+
+        left += keycap.width;
+        if index + 1 < keycaps.len() {
+            left += MENU_SHORTCUT_GAP;
+        }
+    }
+}
+
+fn shortcut_group_width(ui: &mut Ui, shortcut: &str) -> f32 {
+    let keycaps = measure_shortcut_keycaps(ui, shortcut);
+    shortcut_group_width_from_keycaps(&keycaps)
+}
+
+fn shortcut_group_width_from_keycaps(keycaps: &[ShortcutKeycap<'_>]) -> f32 {
+    if keycaps.is_empty() {
+        return 0.0;
+    }
+
+    keycaps
+        .iter()
+        .enumerate()
+        .map(|(index, keycap)| {
+            if index == 0 {
+                keycap.width
+            } else {
+                MENU_SHORTCUT_GAP + keycap.width
+            }
+        })
+        .sum()
+}
+
+fn measure_shortcut_keycaps<'a>(ui: &mut Ui, shortcut: &'a str) -> Vec<ShortcutKeycap<'a>> {
+    let keys = parse_shortcut_keys(shortcut);
+    if keys.is_empty() {
+        return Vec::new();
+    }
+
+    let text_color = tokens::text_muted(ui.visuals().dark_mode);
+    let font_id = FontId::new(MENU_KEYCAP_TEXT_SIZE, FontFamily::Monospace);
+    keys.into_iter()
+        .map(|key| {
+            let width = ui.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(key.to_owned(), font_id.clone(), text_color)
+                    .size()
+                    .x
             });
-        },
-    );
+            ShortcutKeycap {
+                label: key,
+                width: (width + 8.0).max(MENU_KEYCAP_MIN_WIDTH),
+            }
+        })
+        .collect()
+}
+
+fn inner_row_width(menu_width: f32) -> f32 {
+    (menu_width - f32::from(MENU_INNER_PADDING_X * 2)).max(MENU_MIN_WIDTH - 8.0)
 }
 
 fn parse_shortcut_keys(shortcut: &str) -> Vec<&str> {
@@ -291,9 +467,16 @@ fn normalize_shortcut_key(key: &str) -> &str {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ShortcutKeycap<'a> {
+    label: &'a str,
+    width: f32,
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_shortcut_keys;
+    use super::{draw_shortcut_keycaps, parse_shortcut_keys, MENU_ROW_HEIGHT};
+    use egui::{pos2, vec2, CentralPanel, Context, RawInput, Rect};
 
     #[test]
     fn parses_and_normalizes_shortcut_segments() {
@@ -305,5 +488,26 @@ mod tests {
     fn drops_empty_shortcut_segments() {
         assert_eq!(parse_shortcut_keys("++Cmd++K++"), vec!["⌘", "K"]);
         assert!(parse_shortcut_keys(" +  + ").is_empty());
+    }
+
+    #[test]
+    fn drawing_shortcut_keycaps_does_not_advance_layout() {
+        let context = Context::default();
+        let mut before = Rect::NOTHING;
+        let mut after = Rect::NOTHING;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                before = ui.min_rect();
+                draw_shortcut_keycaps(
+                    ui,
+                    Rect::from_min_size(pos2(24.0, 24.0), vec2(72.0, MENU_ROW_HEIGHT)),
+                    "Shift+Cmd+Q",
+                );
+                after = ui.min_rect();
+            });
+        });
+
+        assert_eq!(before, after);
     }
 }

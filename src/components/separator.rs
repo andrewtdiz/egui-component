@@ -9,12 +9,13 @@ impl ComponentUi<'_> {
 }
 
 fn draw_separator(ui: &mut Ui) -> Response {
+    let dark_mode = ui.visuals().dark_mode;
     let width = ui.available_width().max(1.0);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 1.0), Sense::hover());
     ui.painter().hline(
         rect.x_range(),
         rect.center().y,
-        Stroke::new(1.0, tokens::SEPARATOR),
+        Stroke::new(1.0, tokens::separator(dark_mode)),
     );
     response
 }

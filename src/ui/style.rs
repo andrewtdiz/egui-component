@@ -17,8 +17,12 @@ const SHOWCASE_FONT_LIGHT_DATA_KEY: &str = "component-showcase-geist-light-data"
 
 pub(crate) fn setup_showcase_context(context: &egui::Context) {
     context.set_fonts(showcase_font_definitions());
+    set_showcase_dark_mode(context, true);
+}
+
+pub(crate) fn set_showcase_dark_mode(context: &egui::Context, dark_mode: bool) {
     let mut style = (*context.style()).clone();
-    style.visuals = neutral_grayscale_visuals();
+    style.visuals = neutral_grayscale_visuals(dark_mode);
     apply_showcase_style_profile(&mut style);
     context.set_style(style);
 }
@@ -32,13 +36,15 @@ pub(crate) fn apply_component_theme(ui: &mut Ui) {
         tokens::SPACING_BUTTON_PADDING_Y,
     );
     spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
+    spacing.menu_margin = egui::Margin::same(4);
 
     let style = ui.style_mut();
     style.interaction.selectable_labels = false;
     style.interaction.multi_widget_text_select = false;
     let visuals = &mut style.visuals;
     visuals.selection.bg_fill = tokens::row_selected_bg(dark_mode);
-    visuals.selection.stroke = Stroke::new(1.0, tokens::row_selected_border(dark_mode));
+    visuals.selection.stroke = Stroke::NONE;
+    visuals.popup_shadow = tokens::tailwind_shadow_md();
     let corner = CornerRadius::same(tokens::RADIUS_MD);
     visuals.widgets.noninteractive.corner_radius = corner;
     visuals.widgets.inactive.corner_radius = corner;
@@ -56,19 +62,19 @@ fn showcase_font_definitions() -> FontDefinitions {
     );
     fonts.font_data.insert(
         SHOWCASE_FONT_SEMIBOLD_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Geist-Regular.ttf")).into(),
+        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Semibold.TTF")).into(),
     );
     fonts.font_data.insert(
         SHOWCASE_FONT_BOLD_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Geist-Regular.ttf")).into(),
+        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Bold.TTF")).into(),
     );
     fonts.font_data.insert(
         SHOWCASE_FONT_ITALIC_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Geist-Regular.ttf")).into(),
+        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Italic.TTF")).into(),
     );
     fonts.font_data.insert(
         SHOWCASE_FONT_LIGHT_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Geist-Regular.ttf")).into(),
+        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Light.TTF")).into(),
     );
 
     fonts.families.insert(
@@ -124,6 +130,7 @@ fn apply_showcase_style_profile(style: &mut Style) {
     );
     style.spacing.slider_width = 176.0;
     style.spacing.combo_width = 220.0;
+    style.spacing.menu_margin = egui::Margin::same(4);
     style.interaction.selectable_labels = false;
     style.interaction.multi_widget_text_select = false;
 
@@ -139,41 +146,45 @@ fn apply_showcase_style_profile(style: &mut Style) {
     style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
 }
 
-fn neutral_grayscale_visuals() -> Visuals {
-    let mut visuals = Visuals::dark();
-    let dark_mode = visuals.dark_mode;
-    visuals.override_text_color = Some(tokens::TEXT_PRIMARY);
-    visuals.hyperlink_color = tokens::TEXT_SECONDARY;
-    visuals.faint_bg_color = tokens::MUTED_SURFACE;
-    visuals.extreme_bg_color = tokens::APP_BACKGROUND;
-    visuals.code_bg_color = tokens::MUTED_SURFACE;
-    visuals.warn_fg_color = tokens::TEXT_PRIMARY;
-    visuals.error_fg_color = tokens::TEXT_DESTRUCTIVE;
-    visuals.window_fill = tokens::CARD_BACKGROUND;
-    visuals.panel_fill = tokens::APP_BACKGROUND;
-    visuals.window_stroke = Stroke::new(1.0, tokens::SEPARATOR);
+fn neutral_grayscale_visuals(dark_mode: bool) -> Visuals {
+    let mut visuals = if dark_mode {
+        Visuals::dark()
+    } else {
+        Visuals::light()
+    };
+    visuals.override_text_color = Some(tokens::text_primary(dark_mode));
+    visuals.hyperlink_color = tokens::text_secondary(dark_mode);
+    visuals.faint_bg_color = tokens::muted_surface(dark_mode);
+    visuals.extreme_bg_color = tokens::app_background(dark_mode);
+    visuals.code_bg_color = tokens::muted_surface(dark_mode);
+    visuals.warn_fg_color = tokens::text_primary(dark_mode);
+    visuals.error_fg_color = tokens::text_destructive(dark_mode);
+    visuals.window_fill = tokens::card_background(dark_mode);
+    visuals.panel_fill = tokens::app_background(dark_mode);
+    visuals.window_stroke = Stroke::new(1.0, tokens::separator(dark_mode));
     visuals.selection.bg_fill = tokens::row_selected_bg(dark_mode);
-    visuals.selection.stroke = Stroke::new(1.0, tokens::row_selected_border(dark_mode));
-    visuals.widgets.noninteractive.bg_fill = tokens::CARD_BACKGROUND;
-    visuals.widgets.noninteractive.weak_bg_fill = tokens::CARD_BACKGROUND;
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tokens::SEPARATOR);
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, tokens::TEXT_SECONDARY);
-    visuals.widgets.inactive.bg_fill = tokens::INPUT_BACKGROUND;
-    visuals.widgets.inactive.weak_bg_fill = tokens::INPUT_BACKGROUND;
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, tokens::INPUT_BORDER);
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
-    visuals.widgets.hovered.bg_fill = tokens::INPUT_HOVER_BACKGROUND;
-    visuals.widgets.hovered.weak_bg_fill = tokens::INPUT_HOVER_BACKGROUND;
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, tokens::INPUT_HOVER_BORDER);
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
-    visuals.widgets.active.bg_fill = tokens::INPUT_FOCUS_BACKGROUND;
-    visuals.widgets.active.weak_bg_fill = tokens::INPUT_FOCUS_BACKGROUND;
+    visuals.selection.stroke = Stroke::NONE;
+    visuals.popup_shadow = tokens::tailwind_shadow_md();
+    visuals.widgets.noninteractive.bg_fill = tokens::card_background(dark_mode);
+    visuals.widgets.noninteractive.weak_bg_fill = tokens::card_background(dark_mode);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tokens::separator(dark_mode));
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, tokens::text_secondary(dark_mode));
+    visuals.widgets.inactive.bg_fill = tokens::input_background(dark_mode);
+    visuals.widgets.inactive.weak_bg_fill = tokens::input_background(dark_mode);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, tokens::input_border(dark_mode));
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
+    visuals.widgets.hovered.bg_fill = tokens::input_hover_background(dark_mode);
+    visuals.widgets.hovered.weak_bg_fill = tokens::input_hover_background(dark_mode);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(dark_mode));
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
+    visuals.widgets.active.bg_fill = tokens::input_focus_background(dark_mode);
+    visuals.widgets.active.weak_bg_fill = tokens::input_focus_background(dark_mode);
     visuals.widgets.active.bg_stroke = tokens::input_focus_stroke(dark_mode);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
-    visuals.widgets.open.bg_fill = tokens::INPUT_FOCUS_BACKGROUND;
-    visuals.widgets.open.weak_bg_fill = tokens::INPUT_FOCUS_BACKGROUND;
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
+    visuals.widgets.open.bg_fill = tokens::input_focus_background(dark_mode);
+    visuals.widgets.open.weak_bg_fill = tokens::input_focus_background(dark_mode);
     visuals.widgets.open.bg_stroke = tokens::input_focus_stroke(dark_mode);
-    visuals.widgets.open.fg_stroke = Stroke::new(1.0, tokens::TEXT_PRIMARY);
+    visuals.widgets.open.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
     visuals.menu_corner_radius = CornerRadius::same(tokens::RADIUS_MD);
     visuals.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.85 };
     visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);

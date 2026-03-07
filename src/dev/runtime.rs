@@ -38,17 +38,19 @@ impl ShowcaseSurface {
     }
 
     pub(crate) fn draw(&mut self, egui_context: &egui::Context) {
+        let dark_mode = self.story.dark_mode();
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
-                    .fill(tokens::APP_BACKGROUND)
+                    .fill(tokens::app_background(dark_mode))
                     .inner_margin(egui::Margin::ZERO)
                     .outer_margin(egui::Margin::ZERO)
                     .stroke(egui::Stroke::NONE),
             )
             .show(egui_context, |ui| {
                 let rect = ui.max_rect();
-                ui.painter().rect_filled(rect, 0.0, tokens::APP_BACKGROUND);
+                ui.painter()
+                    .rect_filled(rect, 0.0, tokens::app_background(dark_mode));
                 ui.set_min_size(rect.size());
                 render_component_showcase(ui, &mut self.story);
             });

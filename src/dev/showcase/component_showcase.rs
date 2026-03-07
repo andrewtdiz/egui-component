@@ -1,19 +1,32 @@
 use crate::components::{
-    Button, ButtonStyle, Checkbox, CommandItem, ComponentUi, ComponentUiExt, DialogueStyle,
-    DropdownMenuEntry, Kbd, KbdGroup, Label, LabelTone, LabelWeight, NumberInput, NumberInputAxis,
-    SwitchSize, TabOption,
+    Button, ButtonOverride, ButtonStyle, Checkbox, Color, CommandItem, ComponentUi, ComponentUiExt,
+    DialogueStyle, DropdownMenuEntry, Kbd, KbdGroup, Label, LabelTone, LabelWeight, NumberInput,
+    NumberInputAxis, SwitchSize, TabOption, Toolbar, Tooltip, TooltipPlacement,
 };
+use crate::theme;
 use crate::ui::tokens;
-use egui::{Align2, CornerRadius, CursorIcon, Id, Layout, Stroke, StrokeKind, Ui};
+use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Sense, Stroke, StrokeKind, Ui};
 
 use egui::containers::scroll_area::ScrollSource;
 
 const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
+const TOOLBAR_ACTION_OPTIONS: [&str; 3] = ["Edit", "BG Remover", "Eraser"];
 const TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::new(0, "Design"),
     TabOption::new(1, "Code"),
     TabOption::new(2, "History"),
 ];
+const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
+    TabOption::with_icon(0, "Templates", "layout-template"),
+    TabOption::with_icon(1, "Layouts", "layout-grid"),
+];
+const TOOLBAR_SWATCHES: [Color32; 4] = [
+    Color32::from_rgb(35, 45, 75),
+    Color32::from_rgb(103, 132, 162),
+    Color32::from_rgb(122, 24, 42),
+    Color32::from_rgb(206, 164, 84),
+];
+const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
 const COMBOBOX_OPTIONS: [&str; 6] = [
     "Material 1",
@@ -39,14 +52,13 @@ const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
     DropdownMenuEntry::separator(),
     DropdownMenuEntry::action(6, "More..."),
 ];
-const DROPDOWN_ENTRIES: [DropdownMenuEntry<'static>; 15] = [
+const DROPDOWN_ENTRIES: [DropdownMenuEntry<'static>; 14] = [
     DropdownMenuEntry::action(0, "My Account"),
     DropdownMenuEntry::action_with_shortcut(1, "Profile", "Shift+Cmd+P"),
     DropdownMenuEntry::action_with_shortcut(2, "Billing", "Cmd+B"),
     DropdownMenuEntry::action_with_shortcut(3, "Settings", "Cmd+S"),
     DropdownMenuEntry::separator(),
     DropdownMenuEntry::submenu("Invite users", &DROPDOWN_INVITE_ENTRIES),
-    DropdownMenuEntry::separator(),
     DropdownMenuEntry::action_with_shortcut(7, "New Team", "Cmd+T"),
     DropdownMenuEntry::separator(),
     DropdownMenuEntry::action(8, "GitHub"),
@@ -76,6 +88,7 @@ const DROPDOWN_ACTION_LABELS: [&str; 13] = [
 enum ShowcaseGroup {
     PrimaryPrimitive,
     DerivedComposed,
+    Examples,
 }
 
 impl ShowcaseGroup {
@@ -83,6 +96,7 @@ impl ShowcaseGroup {
         match self {
             Self::PrimaryPrimitive => "Primary / Primitive",
             Self::DerivedComposed => "Derived / Composed",
+            Self::Examples => "Examples",
         }
     }
 }
@@ -90,6 +104,7 @@ impl ShowcaseGroup {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum ShowcaseComponentKind {
     Label,
+    Color,
     Kbd,
     Input,
     Field,
@@ -111,6 +126,7 @@ enum ShowcaseComponentKind {
     Command,
     Dialogue,
     Icon,
+    Toolbar,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -121,11 +137,17 @@ struct ShowcaseComponentDefinition {
     group: ShowcaseGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 22] = [
+const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
     ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Label,
         label: "Label",
         description: "Text styles and tones",
+        group: ShowcaseGroup::PrimaryPrimitive,
+    },
+    ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::Color,
+        label: "Color",
+        description: "Circular solid color swatches",
         group: ShowcaseGroup::PrimaryPrimitive,
     },
     ShowcaseComponentDefinition {
@@ -254,22 +276,31 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 22] = [
         description: "Lucide icon rendering",
         group: ShowcaseGroup::DerivedComposed,
     },
+    ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::Toolbar,
+        label: "Toolbar",
+        description: "Floating absolute-positioned editing bar",
+        group: ShowcaseGroup::Examples,
+    },
 ];
 
 #[derive(Debug, Clone)]
 pub struct ComponentShowcaseState {
+    dark_mode: bool,
     selected_component: ShowcaseComponentKind,
     input_value: String,
     field_value: String,
     checkbox_value: bool,
     switch_value: bool,
     small_switch_value: bool,
+    toolbar_color_index: usize,
     slider_value: f32,
     number_x_value: f32,
     number_y_value: f32,
     progress_value: f32,
     select_index: Option<usize>,
     tab_index: usize,
+    stacked_tab_index: usize,
     button_group_index: usize,
     collapsible_open: bool,
     dropdown_action: Option<usize>,
@@ -278,24 +309,27 @@ pub struct ComponentShowcaseState {
     command_query: String,
     dialogue_open: bool,
     alert_dialogue_open: bool,
-    tooltip_top_center: bool,
+    tooltip_placement: TooltipPlacement,
 }
 
 impl Default for ComponentShowcaseState {
     fn default() -> Self {
         Self {
+            dark_mode: true,
             selected_component: ShowcaseComponentKind::Button,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             checkbox_value: true,
             switch_value: true,
             small_switch_value: false,
+            toolbar_color_index: 0,
             slider_value: 62.0,
             number_x_value: 42.0,
             number_y_value: 16.0,
             progress_value: 0.58,
             select_index: Some(1),
             tab_index: 0,
+            stacked_tab_index: 0,
             button_group_index: 0,
             collapsible_open: true,
             dropdown_action: None,
@@ -304,34 +338,46 @@ impl Default for ComponentShowcaseState {
             command_query: String::new(),
             dialogue_open: false,
             alert_dialogue_open: false,
-            tooltip_top_center: true,
+            tooltip_placement: TooltipPlacement::Top,
         }
+    }
+}
+
+impl ComponentShowcaseState {
+    pub(crate) fn dark_mode(&self) -> bool {
+        self.dark_mode
     }
 }
 
 pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
     clamp_state(state);
 
-    let _ = egui::SidePanel::left("component_showcase_sidebar")
+    let theme_changed = egui::SidePanel::left("component_showcase_sidebar")
         .default_width(238.0)
         .min_width(200.0)
         .max_width(320.0)
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(tokens::APP_BACKGROUND)
+                .fill(tokens::app_background(state.dark_mode))
                 .inner_margin(egui::Margin::same(8))
-                .stroke(Stroke::new(1.0, tokens::SEPARATOR)),
+                .stroke(Stroke::new(1.0, tokens::separator(state.dark_mode))),
         )
         .show_inside(ui, |ui| {
             let mut ui = ui.components();
-            draw_sidebar(&mut ui, state);
-        });
+            draw_sidebar(&mut ui, state)
+        })
+        .inner;
+
+    if theme_changed {
+        *ui.style_mut() = ui.ctx().style().as_ref().clone();
+        theme::apply_component_theme(ui);
+    }
 
     let _ = egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(tokens::APP_BACKGROUND)
+                .fill(tokens::app_background(state.dark_mode))
                 .inner_margin(egui::Margin::same(12)),
         )
         .show_inside(ui, |ui| {
@@ -340,7 +386,18 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
         });
 }
 
-fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) -> bool {
+    let theme_changed = draw_sidebar_theme_toggle(ui, &mut state.dark_mode);
+    if theme_changed {
+        theme::set_dark_mode(ui.ctx(), state.dark_mode);
+        *ui.style_mut() = ui.ctx().style().as_ref().clone();
+        theme::apply_component_theme(ui.raw_mut());
+        ui.ctx().request_repaint();
+    }
+
+    ui.add_space(2.0);
+    let _ = ui.separator();
+    ui.add_space(8.0);
     let _ = ui.label(
         Label::new("Components")
             .tone(LabelTone::Primary)
@@ -355,7 +412,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let _ = ui.separator();
     ui.add_space(8.0);
 
-    let dark_mode = ui.visuals().dark_mode;
+    let dark_mode = state.dark_mode;
 
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_sidebar_scroll")
@@ -369,6 +426,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
             for group in [
                 ShowcaseGroup::PrimaryPrimitive,
                 ShowcaseGroup::DerivedComposed,
+                ShowcaseGroup::Examples,
             ] {
                 let _ = ui.label(
                     Label::new(group.title())
@@ -395,6 +453,38 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
                 ui.add_space(10.0);
             }
         });
+
+    theme_changed
+}
+
+fn draw_sidebar_theme_toggle(ui: &mut ComponentUi<'_>, dark_mode: &mut bool) -> bool {
+    let mut theme_changed = false;
+    let _ = ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        let _ = ui.label(
+            Label::new("Appearance")
+                .tone(LabelTone::Muted)
+                .size(11.0)
+                .weight(LabelWeight::Semibold),
+        );
+        ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+            let moon_tint = if *dark_mode {
+                tokens::text_primary(*dark_mode)
+            } else {
+                tokens::text_muted(*dark_mode)
+            };
+            let _ = ui.icon(("moon", 13.0, moon_tint));
+            let switch_response = ui.switch(dark_mode, SwitchSize::Small);
+            let sun_tint = if *dark_mode {
+                tokens::text_muted(*dark_mode)
+            } else {
+                tokens::text_primary(*dark_mode)
+            };
+            let _ = ui.icon(("sun", 13.0, sun_tint));
+            theme_changed = switch_response.changed();
+        });
+    });
+    theme_changed
 }
 
 fn draw_sidebar_component_row(
@@ -406,19 +496,19 @@ fn draw_sidebar_component_row(
     let desired_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-    let fill = tokens::row_bg(
-        selected,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-        dark_mode,
-    );
-    let stroke = tokens::row_stroke(selected, dark_mode);
+    let fill = if response.is_pointer_button_down_on() {
+        tokens::row_active_bg(dark_mode)
+    } else if selected || response.hovered() {
+        tokens::row_selected_bg(dark_mode)
+    } else {
+        tokens::TRANSPARENT
+    };
 
     ui.painter().rect(
         rect,
         CornerRadius::same(tokens::RADIUS_SM),
         fill,
-        stroke,
+        Stroke::NONE,
         StrokeKind::Outside,
     );
 
@@ -427,10 +517,10 @@ fn draw_sidebar_component_row(
         Align2::LEFT_CENTER,
         label_text,
         egui::FontId::new(12.0, egui::FontFamily::Proportional),
-        if selected {
+        if selected || response.hovered() {
             tokens::row_selected_text(dark_mode)
         } else {
-            tokens::TEXT_SECONDARY
+            tokens::text_secondary(dark_mode)
         },
     );
 
@@ -450,7 +540,11 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
         .show(ui.raw_mut(), |ui| {
             let mut ui = ui.components();
             ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                let width = ui.available_width().clamp(260.0, 460.0);
+                let width = if state.selected_component == ShowcaseComponentKind::Toolbar {
+                    ui.available_width().min(980.0)
+                } else {
+                    ui.available_width().clamp(260.0, 460.0)
+                };
 
                 let _ = ui.card((), |ui| {
                     ui.set_width(width);
@@ -490,6 +584,43 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .tone(LabelTone::Destructive)
                     .weight(LabelWeight::Semibold),
             );
+        }
+        ShowcaseComponentKind::Color => {
+            let dark_mode = ui.visuals().dark_mode;
+            let border = Stroke::new(1.0, tokens::input_border(dark_mode));
+
+            let _ = ui.label(
+                Label::new("Solid swatches")
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                for fill in TOOLBAR_SWATCHES {
+                    let _ = ui.color(Color::new(fill).size(20.0));
+                }
+            });
+            ui.add_space(10.0);
+            let _ = ui.label(
+                Label::new("Bordered swatches")
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                for fill in TOOLBAR_SWATCHES {
+                    let _ = ui.color(Color::new(fill).size(20.0).stroke(border));
+                }
+            });
+            ui.add_space(10.0);
+            let _ = ui.label(Label::new("Sizes").tone(LabelTone::Muted).size(11.0));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let _ = ui.color(Color::new(TOOLBAR_SWATCHES[0]).size(12.0));
+                let _ = ui.color(Color::new(TOOLBAR_SWATCHES[1]).size(16.0));
+                let _ = ui.color(Color::new(TOOLBAR_SWATCHES[2]).size(20.0));
+                let _ = ui.color(Color::new(TOOLBAR_SWATCHES[3]).size(28.0).stroke(border));
+            });
         }
         ShowcaseComponentKind::Kbd => {
             let _ = ui.kbd_group(KbdGroup::new(), |ui| {
@@ -555,6 +686,21 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.button(("Create", "plus", ButtonStyle::Ghost));
                 let _ = ui.button(("Create", "plus", ButtonStyle::Link));
             });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let dark_mode = ui.visuals().dark_mode;
+                for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
+                    let stroke = if index == 1 {
+                        Stroke::new(1.0, tokens::text_primary(dark_mode))
+                    } else {
+                        Stroke::NONE
+                    };
+                    let _ = ui.button(
+                        Button::color_only(Color::new(fill).size(18.0).stroke(stroke))
+                            .style(ButtonStyle::Ghost),
+                    );
+                }
+            });
         }
         ShowcaseComponentKind::ButtonGroup => {
             ui.button_group(
@@ -568,10 +714,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         ShowcaseComponentKind::Checkbox => {
             ui.horizontal(|ui| {
                 let mut checkbox_response = ui.checkbox(&mut state.checkbox_value, Checkbox::new());
+                let dark_mode = ui.visuals().dark_mode;
                 let base_label_color = if state.checkbox_value {
-                    tokens::TEXT_SECONDARY
+                    tokens::text_secondary(dark_mode)
                 } else {
-                    tokens::TEXT_MUTED
+                    tokens::text_muted(dark_mode)
                 };
                 let label_response = ui
                     .scope(|ui| {
@@ -666,6 +813,24 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .map(|option| option.label)
                 .unwrap_or(TAB_OPTIONS[0].label);
             let _ = ui.label(Label::new(selected_tab).tone(LabelTone::Muted).size(11.0));
+
+            ui.add_space(18.0);
+            ui.stacked_tabs(
+                Id::new("component_showcase_stacked_tabs"),
+                &mut state.stacked_tab_index,
+                &STACKED_TAB_OPTIONS,
+            );
+
+            let selected_stacked_tab = STACKED_TAB_OPTIONS
+                .iter()
+                .find(|option| option.value == state.stacked_tab_index)
+                .map(|option| option.label)
+                .unwrap_or(STACKED_TAB_OPTIONS[0].label);
+            let _ = ui.label(
+                Label::new(selected_stacked_tab)
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
         }
         ShowcaseComponentKind::Separator => {
             let _ = ui.label(Label::new("Above separator").tone(LabelTone::Secondary));
@@ -673,26 +838,27 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(Label::new("Below separator").tone(LabelTone::Secondary));
         }
         ShowcaseComponentKind::Card => {
+            let dark_mode = ui.visuals().dark_mode;
             let _ = ui.card(
                 (
-                    tokens::INPUT_BACKGROUND,
-                    Stroke::new(1.0, tokens::INPUT_BORDER),
+                    tokens::input_background(dark_mode),
+                    Stroke::new(1.0, tokens::input_border(dark_mode)),
                 ),
                 |ui| {
                     ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
                         let _ = ui.label(
                             Label::new("Card Title")
                                 .tone(LabelTone::Primary)
-                                .weight(LabelWeight::Semibold)
-                                .size(15.0),
+                                .weight(LabelWeight::Bold)
+                                .size(16.0),
                         );
                         let _ = ui.label(
                             Label::new("Cards wrap related content in a bordered panel.")
                                 .tone(LabelTone::Muted),
                         );
-                        ui.add_space(8.0);
+                        ui.add_space(6.0);
                         let _ = ui.separator();
-                        ui.add_space(8.0);
+                        ui.add_space(6.0);
                         let footer_size =
                             egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
                         let _ = ui.allocate_ui_with_layout(
@@ -711,14 +877,21 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.progress(state.progress_value, (280.0, 10.0));
         }
         ShowcaseComponentKind::Tooltip => {
-            let _ = ui.switch(&mut state.tooltip_top_center, "Top-center placement");
+            let mut placement_index = tooltip_placement_index(state.tooltip_placement);
+            ui.button_group(
+                &mut placement_index,
+                (
+                    Id::new("component_showcase_tooltip_placement"),
+                    &TOOLTIP_PLACEMENT_OPTIONS[..],
+                ),
+            );
+            state.tooltip_placement = tooltip_placement_from_index(placement_index);
             ui.add_space(6.0);
-            let _ = ui.tooltip((
-                "Hover this trigger",
-                "Tooltip content example",
-                220.0,
-                state.tooltip_top_center,
-            ));
+            let _ = ui.tooltip(
+                Tooltip::new("Hover this trigger", "Tooltip content example")
+                    .width(220.0)
+                    .placement(state.tooltip_placement),
+            );
         }
         ShowcaseComponentKind::Collapsible => {
             let collapsible_open = state.collapsible_open;
@@ -802,29 +975,34 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 &mut state.dialogue_open,
                 (Id::new("component_showcase_dialogue"), 380.0),
                 |ui, close_requested| {
-                    ui.dialogue_header((
+                    ui.dialogue_header_with_close((
                         "Create Component",
                         "Adds the selected component to the active object.",
-                    ));
-                    ui.add_space(10.0);
+                    ), close_requested);
+                    ui.add_space(12.0);
                     let _ = ui.vertical(|ui| {
                         let _ = ui.label(
                             Label::new(
                                 "Pick a component from the sidebar and confirm to add it to the object.",
                             )
                             .tone(LabelTone::Muted)
-                            .size(11.0),
+                            .size(12.0),
                         );
                     });
-                    ui.add_space(10.0);
-                    let _ = ui.horizontal(|ui| {
-                        if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
-                            *close_requested = true;
-                        }
-                        if ui.button(("Create", ButtonStyle::Primary)).clicked() {
-                            *close_requested = true;
-                        }
-                    });
+                    ui.add_space(12.0);
+                    let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                    let _ = ui.allocate_ui_with_layout(
+                        footer_size,
+                        Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui.button(("Create", ButtonStyle::Primary)).clicked() {
+                                *close_requested = true;
+                            }
+                            if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
+                                *close_requested = true;
+                            }
+                        },
+                    );
                 },
             );
 
@@ -832,30 +1010,35 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 &mut state.alert_dialogue_open,
                 (Id::new("component_showcase_alert_dialogue"), 380.0),
                 |ui, close_requested| {
-                    ui.dialogue_header((
+                    ui.dialogue_header_with_close((
                         "Delete Object",
                         "This action cannot be undone.",
                         DialogueStyle::Alert,
-                    ));
-                    ui.add_space(10.0);
+                    ), close_requested);
+                    ui.add_space(12.0);
                     let _ = ui.vertical(|ui| {
                         let _ = ui.label(
                             Label::new(
                                 "Deleting removes the object and every child object in this hierarchy.",
                             )
-                            .tone(LabelTone::Secondary)
-                            .size(11.0),
+                            .tone(LabelTone::Muted)
+                            .size(12.0),
                         );
                     });
-                    ui.add_space(10.0);
-                    let _ = ui.horizontal(|ui| {
-                        if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
-                            *close_requested = true;
-                        }
-                        if ui.button(("Delete", ButtonStyle::Primary)).clicked() {
-                            *close_requested = true;
-                        }
-                    });
+                    ui.add_space(12.0);
+                    let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                    let _ = ui.allocate_ui_with_layout(
+                        footer_size,
+                        Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui.button(("Delete", ButtonStyle::Primary)).clicked() {
+                                *close_requested = true;
+                            }
+                            if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
+                                *close_requested = true;
+                            }
+                        },
+                    );
                 },
             );
         }
@@ -867,6 +1050,9 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.icon(("gamepad-2", 16.0));
                 let _ = ui.icon(("wand-sparkles", 16.0));
             });
+        }
+        ShowcaseComponentKind::Toolbar => {
+            draw_toolbar_preview(ui, state);
         }
     }
 }
@@ -895,6 +1081,25 @@ fn dropdown_action_label(action: Option<usize>) -> &'static str {
     }
 }
 
+fn tooltip_placement_from_index(index: usize) -> TooltipPlacement {
+    match index {
+        1 => TooltipPlacement::Right,
+        2 => TooltipPlacement::Bottom,
+        3 => TooltipPlacement::Left,
+        _ => TooltipPlacement::Top,
+    }
+}
+
+fn tooltip_placement_index(placement: TooltipPlacement) -> usize {
+    match placement {
+        TooltipPlacement::Top => 0,
+        TooltipPlacement::Right => 1,
+        TooltipPlacement::Bottom => 2,
+        TooltipPlacement::Left => 3,
+        TooltipPlacement::Auto => 0,
+    }
+}
+
 fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys: &[&str]) {
     ui.horizontal(|ui| {
         let _ = ui.label(
@@ -914,11 +1119,112 @@ fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys
     });
 }
 
+fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    let dark_mode = ui.visuals().dark_mode;
+    let canvas_fill = if dark_mode {
+        tokens::app_background(dark_mode)
+    } else {
+        tokens::NEUTRAL.c200
+    };
+
+    let _ = egui::Frame::new()
+        .fill(canvas_fill)
+        .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
+        .corner_radius(CornerRadius::same(tokens::RADIUS_MD))
+        .inner_margin(egui::Margin::same(12))
+        .show(ui.raw_mut(), |ui| {
+            let mut ui = ui.components();
+            let canvas_size = egui::vec2(ui.available_width(), 220.0);
+            let (canvas_rect, _) = ui.allocate_exact_size(canvas_size, Sense::hover());
+            let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(canvas_rect), |ui| {
+                let _ = ui.toolbar(
+                    Toolbar::new(Id::new("component_showcase_toolbar"))
+                        .anchor(Align2::CENTER_TOP)
+                        .offset(egui::vec2(0.0, 10.0)),
+                    |ui| {
+                        ui.with_override(
+                            ButtonOverride::new()
+                                .min_size(egui::vec2(28.0, 28.0))
+                                .icon_size(12.0),
+                            |ui| draw_toolbar_contents(ui, state),
+                        )
+                    },
+                );
+            });
+        });
+}
+
+fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
+        let _ = ui.button(Button::new(label).style(ButtonStyle::Ghost));
+        if index == 1 {
+            let _ = ui.button(
+                Button::icon_only("crown")
+                    .style(ButtonStyle::Ghost)
+                    .icon_size(13.0)
+                    .icon_tint(Color32::from_rgb(216, 168, 83)),
+            );
+        }
+        if index + 1 < TOOLBAR_ACTION_OPTIONS.len() {
+            draw_toolbar_divider(ui);
+        }
+    }
+
+    draw_toolbar_divider(ui);
+
+    for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
+        let dark_mode = ui.visuals().dark_mode;
+        let stroke = if state.toolbar_color_index == index {
+            Stroke::new(1.0, tokens::text_primary(dark_mode))
+        } else {
+            Stroke::NONE
+        };
+        if ui
+            .button(Button::color_only(
+                Color::new(fill).size(16.0).stroke(stroke),
+            ))
+            .clicked()
+        {
+            state.toolbar_color_index = index;
+        }
+    }
+
+    draw_toolbar_divider(ui);
+
+    let _ = ui.button(Button::icon_only("square-menu").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::icon_only("rotate-ccw").style(ButtonStyle::Ghost));
+    draw_toolbar_divider(ui);
+    let _ = ui.button(Button::icon_only("crop").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::new("Flip").style(ButtonStyle::Ghost));
+    draw_toolbar_divider(ui);
+    let _ = ui.button(Button::icon_only("grid-3x3").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::new("Animate").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::new("Position").style(ButtonStyle::Ghost));
+    draw_toolbar_divider(ui);
+    let _ = ui.button(Button::icon_only("paint-roller").style(ButtonStyle::Ghost));
+}
+
+fn draw_toolbar_divider(ui: &mut ComponentUi<'_>) {
+    let dark_mode = ui.visuals().dark_mode;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, 16.0), Sense::hover());
+    ui.painter().vline(
+        rect.center().x,
+        rect.y_range(),
+        Stroke::new(1.0, tokens::separator(dark_mode)),
+    );
+}
+
 fn clamp_state(state: &mut ComponentShowcaseState) {
     state.button_group_index = state
         .button_group_index
         .min(BUTTON_GROUP_OPTIONS.len().saturating_sub(1));
+    state.toolbar_color_index = state
+        .toolbar_color_index
+        .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
+    state.stacked_tab_index = state
+        .stacked_tab_index
+        .min(STACKED_TAB_OPTIONS.len().saturating_sub(1));
     state.slider_value = state.slider_value.clamp(0.0, 100.0);
     state.number_x_value = state.number_x_value.clamp(0.0, 100.0);
     state.number_y_value = state.number_y_value.clamp(0.0, 100.0);

@@ -82,7 +82,7 @@ fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
                     egui::Label::new(
                         egui::RichText::new(label)
                             .size(12.0)
-                            .color(tokens::TEXT_PRIMARY),
+                            .color(tokens::text_primary(ui.visuals().dark_mode)),
                     )
                     .selectable(false),
                 );
@@ -126,19 +126,12 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: SwitchSize) -> Respo
 
     let t = ui.ctx().animate_bool(response.id, *value);
     let on_fill = tokens::primary_bg(dark_mode);
-    let fill = tokens::SWITCH_OFF_BG.lerp_to_gamma(on_fill, t);
-    let stroke = if response.has_focus() {
-        tokens::input_focus_stroke(dark_mode)
-    } else if response.hovered() {
-        Stroke::new(1.0, tokens::INPUT_HOVER_BORDER)
-    } else {
-        Stroke::new(1.0, tokens::SWITCH_BORDER)
-    };
+    let fill = tokens::switch_off_bg(dark_mode).lerp_to_gamma(on_fill, t);
     ui.painter().rect(
         rect,
         CornerRadius::same(metrics.corner_radius),
         fill,
-        stroke,
+        Stroke::NONE,
         StrokeKind::Outside,
     );
 
@@ -146,7 +139,8 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: SwitchSize) -> Respo
         (rect.left() + metrics.knob_inset)..=(rect.right() - metrics.knob_inset),
         t,
     );
-    let knob_color = tokens::SWITCH_KNOB_OFF.lerp_to_gamma(tokens::primary_fg(dark_mode), t);
+    let knob_color =
+        tokens::switch_knob_off(dark_mode).lerp_to_gamma(tokens::primary_fg(dark_mode), t);
     ui.painter().circle_filled(
         egui::pos2(knob_x, rect.center().y),
         metrics.knob_radius,
