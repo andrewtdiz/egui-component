@@ -1,49 +1,28 @@
+use crate::theme::ThemeMode;
 use crate::ui::{tokens, typography};
 use egui::{
     CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
 };
 
-pub(crate) fn setup_showcase_context(context: &egui::Context) {
-    context.set_fonts(showcase_font_definitions());
-    set_showcase_dark_mode(context, true);
+pub(crate) fn install(context: &egui::Context, mode: ThemeMode) {
+    context.set_fonts(component_font_definitions());
+    set_mode(context, mode);
 }
 
-pub(crate) fn set_showcase_dark_mode(context: &egui::Context, dark_mode: bool) {
+pub(crate) fn set_mode(context: &egui::Context, mode: ThemeMode) {
     let mut style = (*context.style()).clone();
-    style.visuals = neutral_grayscale_visuals(dark_mode);
-    apply_showcase_style_profile(&mut style);
+    style.visuals = mode_visuals(mode);
+    apply_typography(&mut style);
+    apply_component_style_profile(&mut style);
     context.set_style(style);
 }
 
-pub(crate) fn apply_component_theme(ui: &mut Ui) {
-    let dark_mode = ui.visuals().dark_mode;
-    let spacing = ui.spacing_mut();
-    spacing.item_spacing.y = tokens::SPACING_ITEM_Y;
-    spacing.button_padding = egui::vec2(
-        tokens::SPACING_BUTTON_PADDING_X,
-        tokens::SPACING_BUTTON_PADDING_Y,
-    );
-    spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
-    spacing.menu_margin = egui::Margin::symmetric(0, 2);
-    spacing.menu_spacing = 0.0;
-
+pub(crate) fn apply_component_profile(ui: &mut Ui) {
     let style = ui.style_mut();
-    style.interaction.selectable_labels = false;
-    style.interaction.multi_widget_text_select = false;
-    let visuals = &mut style.visuals;
-    visuals.selection.bg_fill = tokens::row_selected_bg(dark_mode);
-    visuals.selection.stroke = Stroke::NONE;
-    visuals.popup_shadow = tokens::tailwind_shadow_md();
-    let corner = CornerRadius::same(tokens::RADIUS_MD);
-    visuals.widgets.noninteractive.corner_radius = corner;
-    visuals.widgets.inactive.corner_radius = corner;
-    visuals.widgets.hovered.corner_radius = corner;
-    visuals.widgets.active.corner_radius = corner;
-    visuals.widgets.open.corner_radius = corner;
-    visuals.menu_corner_radius = corner;
+    apply_component_style_profile(style);
 }
 
-fn showcase_font_definitions() -> FontDefinitions {
+fn component_font_definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         typography::REGULAR_DATA_KEY.to_owned(),
@@ -86,7 +65,7 @@ fn showcase_font_definitions() -> FontDefinitions {
     fonts
 }
 
-fn apply_showcase_style_profile(style: &mut Style) {
+fn apply_typography(style: &mut Style) {
     style
         .text_styles
         .insert(TextStyle::Body, typography::body_font());
@@ -99,7 +78,9 @@ fn apply_showcase_style_profile(style: &mut Style) {
     style
         .text_styles
         .insert(TextStyle::Small, typography::small_font());
+}
 
+fn apply_component_style_profile(style: &mut Style) {
     style.spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
     style.spacing.item_spacing.y = tokens::SPACING_ITEM_Y;
     style.spacing.button_padding = egui::vec2(
@@ -114,6 +95,9 @@ fn apply_showcase_style_profile(style: &mut Style) {
     style.interaction.multi_widget_text_select = false;
 
     let corner_radius = CornerRadius::same(tokens::RADIUS_MD);
+    style.visuals.selection.bg_fill = tokens::row_selected_bg(style.visuals.dark_mode);
+    style.visuals.selection.stroke = Stroke::NONE;
+    style.visuals.popup_shadow = tokens::tailwind_shadow_md();
     style.visuals.widgets.noninteractive.corner_radius = corner_radius;
     style.visuals.widgets.inactive.corner_radius = corner_radius;
     style.visuals.widgets.hovered.corner_radius = corner_radius;
@@ -121,16 +105,19 @@ fn apply_showcase_style_profile(style: &mut Style) {
     style.visuals.widgets.open.corner_radius = corner_radius;
     style.visuals.widgets.hovered.expansion = 0.0;
     style.visuals.widgets.active.expansion = 0.0;
+    style.visuals.menu_corner_radius = corner_radius;
     style.visuals.handle_shape = egui::style::HandleShape::Circle;
     style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
 }
 
-fn neutral_grayscale_visuals(dark_mode: bool) -> Visuals {
+fn mode_visuals(mode: ThemeMode) -> Visuals {
+    let dark_mode = mode.is_dark();
     let mut visuals = if dark_mode {
         Visuals::dark()
     } else {
         Visuals::light()
     };
+
     visuals.override_text_color = Some(tokens::text_primary(dark_mode));
     visuals.hyperlink_color = tokens::text_secondary(dark_mode);
     visuals.faint_bg_color = tokens::muted_surface(dark_mode);
@@ -172,13 +159,14 @@ fn neutral_grayscale_visuals(dark_mode: bool) -> Visuals {
 
 #[cfg(test)]
 mod tests {
-    use super::{setup_showcase_context, showcase_font_definitions};
-    use crate::ui::typography;
+    use super::{component_font_definitions, install, set_mode};
+    use crate::theme::ThemeMode;
+    use crate::ui::{tokens, typography};
     use egui::{Context, TextStyle};
 
     #[test]
-    fn showcase_fonts_only_register_segoe_proportional_families() {
-        let fonts = showcase_font_definitions();
+    fn component_fonts_only_register_segoe_proportional_families() {
+        let fonts = component_font_definitions();
 
         assert!(fonts.font_data.contains_key(typography::REGULAR_DATA_KEY));
         assert!(fonts.font_data.contains_key(typography::SEMIBOLD_DATA_KEY));
@@ -191,9 +179,9 @@ mod tests {
     }
 
     #[test]
-    fn showcase_style_uses_shared_text_defaults() {
+    fn installed_style_uses_shared_text_defaults() {
         let context = Context::default();
-        setup_showcase_context(&context);
+        install(&context, ThemeMode::Dark);
 
         let style = context.style();
         assert_eq!(style.text_styles[&TextStyle::Body], typography::body_font());
@@ -208,6 +196,24 @@ mod tests {
         assert_eq!(
             style.text_styles[&TextStyle::Small],
             typography::small_font()
+        );
+    }
+
+    #[test]
+    fn switching_theme_mode_updates_context_visuals() {
+        let context = Context::default();
+        install(&context, ThemeMode::Light);
+
+        assert_eq!(
+            context.style().visuals.panel_fill,
+            tokens::app_background(false)
+        );
+
+        set_mode(&context, ThemeMode::Dark);
+
+        assert_eq!(
+            context.style().visuals.panel_fill,
+            tokens::app_background(true)
         );
     }
 }

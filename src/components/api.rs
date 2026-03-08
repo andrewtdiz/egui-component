@@ -1,6 +1,7 @@
 use super::{
     button::ButtonOverride, card::CardOverride, input::TextInputOverride, label::LabelOverride,
 };
+use crate::ui::style;
 use egui::{Id, InnerResponse, Layout, Ui, UiBuilder, Vec2};
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
@@ -79,6 +80,7 @@ pub struct ComponentUi<'ui> {
 
 impl<'ui> ComponentUi<'ui> {
     pub(crate) fn new(ui: &'ui mut Ui) -> Self {
+        style::apply_component_profile(ui);
         let overrides = load_component_overrides(ui);
         Self { ui, overrides }
     }
@@ -251,7 +253,9 @@ mod tests {
         card::CardOverride,
         label::{LabelOverride, LabelTone},
     };
-    use egui::{Color32, Stroke};
+    use crate::theme::{self, ThemeMode};
+    use crate::ui::tokens;
+    use egui::{CentralPanel, Color32, RawInput, Stroke};
 
     #[test]
     fn tuple_override_sets_merge_by_widget_type() {
@@ -283,5 +287,32 @@ mod tests {
         assert_eq!(overrides.button.style, Some(ButtonStyle::Ghost));
         assert_eq!(overrides.button.icon_size, Some(18.0));
         assert_eq!(overrides.card.stroke, Some(Stroke::NONE));
+    }
+
+    #[test]
+    fn components_wrapper_applies_component_style_profile() {
+        let context = egui::Context::default();
+        theme::install(&context, ThemeMode::Light);
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let components = ui.components();
+                assert_eq!(components.spacing().item_spacing.y, tokens::SPACING_ITEM_Y);
+                assert_eq!(
+                    components.spacing().button_padding.x,
+                    tokens::SPACING_BUTTON_PADDING_X
+                );
+                assert_eq!(
+                    components.spacing().button_padding.y,
+                    tokens::SPACING_BUTTON_PADDING_Y
+                );
+                assert_eq!(
+                    components.spacing().interact_size.y,
+                    tokens::SPACING_INTERACT_HEIGHT
+                );
+                assert_eq!(components.spacing().menu_spacing, 0.0);
+                assert_eq!(components.visuals().selection.stroke, Stroke::NONE);
+            });
+        });
     }
 }

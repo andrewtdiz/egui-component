@@ -40,8 +40,9 @@ Supported override types:
 
 ### Theme Helpers
 
-- `theme::setup(&Context)` installs style and icon loading
-- `theme::apply_component_theme(ui)` applies component spacing/selection/radius rules inside one region
+- `theme::install(&Context, ThemeMode)` installs style and icon loading
+- `theme::set_mode(&Context, ThemeMode)` swaps between light and dark modes
+- `ui.components()` already applies the component spacing/selection/radius profile
 
 ## Label
 

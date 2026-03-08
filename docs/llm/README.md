@@ -20,7 +20,7 @@ Read these files in order:
 
 The public surface is built around three ideas:
 
-- `theme::setup(&Context)` installs the shared fonts, visuals, and icon loading.
+- `theme::install(&Context, ThemeMode)` installs the shared fonts, visuals, and icon loading.
 - `ui.components()` wraps an `egui::Ui` in `ComponentUi`.
 - Each component method accepts a typed builder and usually a few `Into<Builder>` shorthand forms.
 

@@ -25,9 +25,11 @@ In this repo that means:
 
 Use these APIs instead of rolling your own setup path:
 
-- `egui_component::theme::setup(&Context)`
-- `egui_component::theme::apply_component_theme(ui)`
+- `egui_component::theme::install(&Context, ThemeMode)`
+- `egui_component::theme::set_mode(&Context, ThemeMode)` when a caller swaps themes at runtime
 - `ComponentUiExt::components()`
+
+`ui.components()` already applies the component profile to the current `Ui`.
 
 Do not create a parallel wrapper abstraction unless the user explicitly wants a redesign.
 

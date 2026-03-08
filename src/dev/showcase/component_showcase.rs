@@ -4,7 +4,7 @@ use crate::components::{
     MenuBarItem, NumberInput, NumberInputAxis, SwitchSize, TabOption, Toolbar, Tooltip,
     TooltipPlacement,
 };
-use crate::theme;
+use crate::theme::{self, ThemeMode};
 use crate::ui::{tokens, typography};
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Sense, Stroke, StrokeKind, Ui};
 
@@ -27,6 +27,7 @@ const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(122, 24, 42),
     Color32::from_rgb(206, 164, 84),
 ];
+const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
 const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
 const COMBOBOX_OPTIONS: [&str; 6] = [
@@ -462,7 +463,12 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
 fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) -> bool {
     let theme_changed = draw_sidebar_theme_toggle(ui, &mut state.dark_mode);
     if theme_changed {
-        theme::set_dark_mode(ui.ctx(), state.dark_mode);
+        let mode = if state.dark_mode {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        };
+        theme::set_mode(ui.ctx(), mode);
         *ui.style_mut() = ui.ctx().style().as_ref().clone();
         theme::apply_component_theme(ui.raw_mut());
         ui.ctx().request_repaint();
@@ -496,6 +502,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
         .auto_shrink([false, false])
         .show(ui.raw_mut(), |ui| {
             let mut ui = ui.components();
+            ui.spacing_mut().item_spacing.y = 1.0;
             for group in [
                 ShowcaseGroup::PrimaryPrimitive,
                 ShowcaseGroup::DerivedComposed,
@@ -523,7 +530,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
                     }
                 }
 
-                ui.add_space(10.0);
+                ui.add_space(1.0);
             }
         });
 
@@ -1286,7 +1293,7 @@ fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseS
     let canvas_fill = if dark_mode {
         tokens::app_background(dark_mode)
     } else {
-        tokens::NEUTRAL.c200
+        TOOLBAR_CANVAS_LIGHT_FILL
     };
 
     let _ = egui::Frame::new()

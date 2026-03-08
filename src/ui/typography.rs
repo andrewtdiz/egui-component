@@ -1,14 +1,14 @@
 use egui::{FontFamily, FontId};
 
-pub(crate) const REGULAR_FAMILY: &str = "component-showcase-segoe-regular";
-pub(crate) const SEMIBOLD_FAMILY: &str = "component-showcase-segoe-semibold";
-pub(crate) const BOLD_FAMILY: &str = "component-showcase-segoe-bold";
-pub(crate) const ITALIC_FAMILY: &str = "component-showcase-segoe-italic";
+pub(crate) const REGULAR_FAMILY: &str = "egui-component-segoe-regular";
+pub(crate) const SEMIBOLD_FAMILY: &str = "egui-component-segoe-semibold";
+pub(crate) const BOLD_FAMILY: &str = "egui-component-segoe-bold";
+pub(crate) const ITALIC_FAMILY: &str = "egui-component-segoe-italic";
 
-pub(crate) const REGULAR_DATA_KEY: &str = "component-showcase-segoe-regular-data";
-pub(crate) const SEMIBOLD_DATA_KEY: &str = "component-showcase-segoe-semibold-data";
-pub(crate) const BOLD_DATA_KEY: &str = "component-showcase-segoe-bold-data";
-pub(crate) const ITALIC_DATA_KEY: &str = "component-showcase-segoe-italic-data";
+pub(crate) const REGULAR_DATA_KEY: &str = "egui-component-segoe-regular-data";
+pub(crate) const SEMIBOLD_DATA_KEY: &str = "egui-component-segoe-semibold-data";
+pub(crate) const BOLD_DATA_KEY: &str = "egui-component-segoe-bold-data";
+pub(crate) const ITALIC_DATA_KEY: &str = "egui-component-segoe-italic-data";
 
 pub(crate) const BODY_SIZE: f32 = 14.0;
 pub(crate) const HEADING_SIZE: f32 = 16.0;

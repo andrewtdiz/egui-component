@@ -7,8 +7,8 @@ The default component typography uses Segoe UI.
 
 - `egui_component::catalog::*` exposes the component catalog and parser helpers.
 - `egui_component::components::*` exposes the typed builder structs, typed scoped overrides, and the `ui.components()` wrapper entry point.
-- `egui_component::prelude::*` re-exports `ComponentUiExt` and the component builder types for concise UI code.
-- `egui_component::theme::*` exposes setup helpers for style, icon loading, and per-`Ui` component theme application.
+- `egui_component::prelude::*` re-exports `ComponentUiExt`, `ThemeMode`, and the component builder types for concise UI code.
+- `egui_component::theme::*` exposes install and theme-swap helpers for shared fonts, visuals, and icon loading.
 - `egui_component::dev::showcase::render_component_showcase` renders the component gallery showcase.
 - `egui_component::dev` includes the showcase runtime.
 
@@ -26,14 +26,22 @@ egui-component = { path = "../egui-component" }
 Initialize the theme once in your app startup:
 
 ```rust
+use egui_component::ThemeMode;
+
 eframe::run_native(
     "App",
     eframe::NativeOptions::default(),
     Box::new(|cc| {
-        egui_component::theme::setup(&cc.egui_ctx);
+        egui_component::theme::install(&cc.egui_ctx, ThemeMode::Dark);
         Ok(Box::new(MyApp::default()))
     }),
 )?;
+```
+
+Swap themes later with:
+
+```rust
+egui_component::theme::set_mode(ctx, ThemeMode::Light);
 ```
 
 Then use components from the prelude in your UI code:
@@ -95,11 +103,7 @@ ui.with_override(
 );
 ```
 
-If you only want component spacing/interaction styling inside one region, wrap with:
-
-```rust
-egui_component::theme::apply_component_theme(ui);
-```
+`ui.components()` now applies the component spacing, radius, and interaction profile automatically.
 
 ## Commands
 

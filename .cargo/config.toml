@@ -2,5 +2,5 @@
 target-dir = "target"
 
 [alias]
-showcase = "run -q --bin showcase --"
+showcase = "run -q --features showcase --bin showcase --"
 story = "run -q --bin story --"

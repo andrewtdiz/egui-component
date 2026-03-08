@@ -2,15 +2,19 @@
 name = "egui-component"
 version = "0.1.0"
 edition = "2021"
-default-run = "showcase"
+
+[features]
+default = []
+showcase = ["dep:eframe", "dep:thiserror"]
 
 [[bin]]
 name = "showcase"
 path = "src/showcase_main.rs"
+required-features = ["showcase"]
 
 [dependencies]
-thiserror = "2.0.17"
+thiserror = { version = "2.0.17", optional = true }
 egui = "0.33.3"
 egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
-eframe = "0.33.3"
+eframe = { version = "0.33.3", optional = true }
 image = { version = "0.25.6", default-features = false, features = ["png"] }

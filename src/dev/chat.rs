@@ -1,5 +1,5 @@
 use crate::components::{Button, ButtonStyle, ComponentUiExt, Select};
-use crate::theme;
+use crate::theme::{self, ThemeMode};
 use crate::ui::{icons, tokens, typography};
 use crate::{ComponentLibraryError, Result};
 use egui::{
@@ -37,8 +37,7 @@ pub(crate) fn run_chat_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            theme::setup(&creation_context.egui_ctx);
-            theme::set_dark_mode(&creation_context.egui_ctx, true);
+            theme::install(&creation_context.egui_ctx, ThemeMode::Dark);
             Ok(Box::new(ChatWindowApp {
                 state: ChatExampleState::default(),
             }))

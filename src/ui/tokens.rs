@@ -1,99 +1,11 @@
 use egui::{Color32, Shadow, Stroke};
 
-#[derive(Clone, Copy)]
-pub(crate) struct ColorScale {
-    pub(crate) c100: Color32,
-    pub(crate) c200: Color32,
-    pub(crate) c300: Color32,
-    pub(crate) c400: Color32,
-    pub(crate) c600: Color32,
-    pub(crate) c700: Color32,
-    pub(crate) c800: Color32,
-    pub(crate) c900: Color32,
-}
-
-pub(crate) const NEUTRAL: ColorScale = ColorScale {
-    c100: Color32::from_rgb(250, 250, 250),
-    c200: Color32::from_rgb(228, 228, 231),
-    c300: Color32::from_rgb(212, 212, 216),
-    c400: Color32::from_rgb(161, 161, 170),
-    c600: Color32::from_rgb(82, 82, 91),
-    c700: Color32::from_rgb(63, 63, 70),
-    c800: Color32::from_rgb(39, 39, 42),
-    c900: Color32::from_rgb(24, 24, 27),
-};
-
 pub(crate) const TRANSPARENT: Color32 = Color32::TRANSPARENT;
-
-pub(crate) const TEXT_DESTRUCTIVE: Color32 = Color32::from_rgb(248, 113, 113);
+const TEXT_DESTRUCTIVE: Color32 = Color32::from_rgb(248, 113, 113);
+#[cfg(feature = "showcase")]
 pub(crate) const GAME_ENGINE_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
+#[cfg(feature = "showcase")]
 pub(crate) const GAME_ENGINE_RED: Color32 = Color32::from_rgb(239, 68, 68);
-
-const APP_BACKGROUND_DARK: Color32 = Color32::from_rgb(9, 9, 11);
-const APP_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(248, 248, 249);
-const CARD_BACKGROUND_DARK: Color32 = Color32::from_rgb(17, 17, 20);
-const CARD_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const MUTED_SURFACE_DARK: Color32 = Color32::from_rgb(24, 24, 27);
-const MUTED_SURFACE_LIGHT: Color32 = Color32::from_rgb(250, 250, 250);
-const SEPARATOR_DARK: Color32 = Color32::from_rgb(39, 39, 42);
-const SEPARATOR_LIGHT: Color32 = Color32::from_rgb(212, 212, 216);
-
-const ROW_HOVER_BG_DARK: Color32 = Color32::from_rgb(31, 31, 35);
-const ROW_HOVER_BG_LIGHT: Color32 = Color32::from_rgb(244, 244, 245);
-const ROW_ACTIVE_BG_DARK: Color32 = Color32::from_rgb(39, 39, 42);
-const ROW_ACTIVE_BG_LIGHT: Color32 = Color32::from_rgb(228, 228, 231);
-
-const TEXT_PRIMARY_DARK: Color32 = Color32::from_rgb(244, 244, 245);
-const TEXT_PRIMARY_LIGHT: Color32 = Color32::from_rgb(24, 24, 27);
-const TEXT_SECONDARY_DARK: Color32 = Color32::from_rgb(212, 212, 216);
-const TEXT_SECONDARY_LIGHT: Color32 = Color32::from_rgb(63, 63, 70);
-const TEXT_MUTED_DARK: Color32 = Color32::from_rgb(161, 161, 170);
-const TEXT_MUTED_LIGHT: Color32 = Color32::from_rgb(113, 113, 122);
-
-const INPUT_BACKGROUND_DARK: Color32 = Color32::from_rgb(24, 24, 27);
-const INPUT_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const INPUT_HOVER_BACKGROUND_DARK: Color32 = Color32::from_rgb(31, 31, 35);
-const INPUT_HOVER_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(250, 250, 250);
-const INPUT_FOCUS_BACKGROUND_DARK: Color32 = Color32::from_rgb(14, 14, 17);
-const INPUT_FOCUS_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const INPUT_BORDER_DARK: Color32 = Color32::from_rgb(63, 63, 70);
-const INPUT_BORDER_LIGHT: Color32 = Color32::from_rgb(212, 212, 216);
-const INPUT_HOVER_BORDER_DARK: Color32 = Color32::from_rgb(82, 82, 91);
-const INPUT_HOVER_BORDER_LIGHT: Color32 = Color32::from_rgb(161, 161, 170);
-
-const BUTTON_SECONDARY_BG_DARK: Color32 = Color32::from_rgb(24, 24, 27);
-const BUTTON_SECONDARY_BG_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const BUTTON_SECONDARY_HOVER_BG_DARK: Color32 = Color32::from_rgb(31, 31, 35);
-const BUTTON_SECONDARY_HOVER_BG_LIGHT: Color32 = Color32::from_rgb(250, 250, 250);
-const BUTTON_SECONDARY_ACTIVE_BG_DARK: Color32 = Color32::from_rgb(39, 39, 42);
-const BUTTON_SECONDARY_ACTIVE_BG_LIGHT: Color32 = Color32::from_rgb(244, 244, 245);
-const BUTTON_SECONDARY_BORDER_DARK: Color32 = Color32::from_rgb(63, 63, 70);
-const BUTTON_SECONDARY_BORDER_LIGHT: Color32 = Color32::from_rgb(212, 212, 216);
-const BUTTON_SECONDARY_HOVER_BORDER_DARK: Color32 = Color32::from_rgb(82, 82, 91);
-const BUTTON_SECONDARY_HOVER_BORDER_LIGHT: Color32 = Color32::from_rgb(161, 161, 170);
-const BUTTON_SECONDARY_ACTIVE_BORDER_DARK: Color32 = Color32::from_rgb(113, 113, 122);
-const BUTTON_SECONDARY_ACTIVE_BORDER_LIGHT: Color32 = Color32::from_rgb(82, 82, 91);
-
-const SWITCH_OFF_BG_DARK: Color32 = Color32::from_rgb(82, 82, 91);
-const SWITCH_OFF_BG_LIGHT: Color32 = Color32::from_rgb(212, 212, 216);
-const SWITCH_KNOB_OFF_DARK: Color32 = Color32::from_rgb(244, 244, 245);
-const SWITCH_KNOB_OFF_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const SLIDER_TRACK_INACTIVE_DARK: Color32 = Color32::from_rgb(55, 55, 61);
-const SLIDER_TRACK_INACTIVE_LIGHT: Color32 = Color32::from_rgb(221, 221, 226);
-const SLIDER_TRACK_ACTIVE_DARK: Color32 = Color32::from_rgb(133, 133, 144);
-const SLIDER_TRACK_ACTIVE_LIGHT: Color32 = Color32::from_rgb(145, 145, 154);
-const SLIDER_THUMB_FILL_DARK: Color32 = Color32::from_rgb(232, 232, 236);
-const SLIDER_THUMB_FILL_LIGHT: Color32 = Color32::from_rgb(246, 246, 248);
-const SLIDER_THUMB_HOVER_FILL_DARK: Color32 = Color32::from_rgb(242, 242, 244);
-const SLIDER_THUMB_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(251, 251, 252);
-const SLIDER_THUMB_ACTIVE_FILL_DARK: Color32 = Color32::from_rgb(250, 250, 250);
-const SLIDER_THUMB_ACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const SLIDER_THUMB_BORDER_DARK: Color32 = Color32::from_rgb(74, 74, 82);
-const SLIDER_THUMB_BORDER_LIGHT: Color32 = Color32::from_rgb(182, 182, 190);
-const SLIDER_THUMB_HOVER_BORDER_DARK: Color32 = Color32::from_rgb(92, 92, 101);
-const SLIDER_THUMB_HOVER_BORDER_LIGHT: Color32 = Color32::from_rgb(161, 161, 170);
-const SLIDER_THUMB_ACTIVE_BORDER_DARK: Color32 = Color32::from_rgb(113, 113, 122);
-const SLIDER_THUMB_ACTIVE_BORDER_LIGHT: Color32 = Color32::from_rgb(140, 140, 149);
 
 pub(crate) const SPACING_ITEM_Y: f32 = 8.0;
 pub(crate) const SPACING_BUTTON_PADDING_X: f32 = 12.0;
@@ -106,232 +18,238 @@ pub(crate) const RADIUS_SM: u8 = 6;
 pub(crate) const RADIUS_MD: u8 = 8;
 pub(crate) const RADIUS_LG: u8 = 10;
 
-pub(crate) const fn app_background(dark_mode: bool) -> Color32 {
+const LIGHT_APP_BACKGROUND: Color32 = Color32::from_rgb(248, 248, 249);
+const LIGHT_CARD_BACKGROUND: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_MUTED_SURFACE: Color32 = Color32::from_rgb(250, 250, 250);
+const LIGHT_SEPARATOR: Color32 = Color32::from_rgb(212, 212, 216);
+const LIGHT_ROW_HOVER_BG: Color32 = Color32::from_rgb(244, 244, 245);
+const LIGHT_ROW_ACTIVE_BG: Color32 = Color32::from_rgb(228, 228, 231);
+const LIGHT_TEXT_PRIMARY: Color32 = Color32::from_rgb(24, 24, 27);
+const LIGHT_TEXT_SECONDARY: Color32 = Color32::from_rgb(63, 63, 70);
+const LIGHT_TEXT_MUTED: Color32 = Color32::from_rgb(113, 113, 122);
+const LIGHT_INPUT_BACKGROUND: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_INPUT_HOVER_BACKGROUND: Color32 = Color32::from_rgb(250, 250, 250);
+const LIGHT_INPUT_FOCUS_BACKGROUND: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_INPUT_BORDER: Color32 = Color32::from_rgb(212, 212, 216);
+const LIGHT_INPUT_HOVER_BORDER: Color32 = Color32::from_rgb(161, 161, 170);
+const LIGHT_BUTTON_SECONDARY_BG: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_BUTTON_SECONDARY_HOVER_BG: Color32 = Color32::from_rgb(250, 250, 250);
+const LIGHT_BUTTON_SECONDARY_ACTIVE_BG: Color32 = Color32::from_rgb(244, 244, 245);
+const LIGHT_BUTTON_SECONDARY_BORDER: Color32 = Color32::from_rgb(212, 212, 216);
+const LIGHT_BUTTON_SECONDARY_HOVER_BORDER: Color32 = Color32::from_rgb(161, 161, 170);
+const LIGHT_BUTTON_SECONDARY_ACTIVE_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
+const LIGHT_SWITCH_OFF_BG: Color32 = Color32::from_rgb(212, 212, 216);
+const LIGHT_SWITCH_KNOB_OFF: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_PRIMARY_BG: Color32 = Color32::from_rgb(24, 24, 27);
+const LIGHT_PRIMARY_HOVER_BG: Color32 = Color32::from_rgb(39, 39, 42);
+const LIGHT_PRIMARY_ACTIVE_BG: Color32 = Color32::from_rgb(63, 63, 70);
+const LIGHT_PRIMARY_FG: Color32 = Color32::from_rgb(250, 250, 250);
+const LIGHT_ROW_SELECTED_BG: Color32 = Color32::from_rgb(228, 228, 231);
+const LIGHT_ROW_SELECTED_TEXT: Color32 = Color32::from_rgb(24, 24, 27);
+const LIGHT_SLIDER_TRACK_INACTIVE: Color32 = Color32::from_rgb(221, 221, 226);
+const LIGHT_SLIDER_TRACK_ACTIVE: Color32 = Color32::from_rgb(145, 145, 154);
+const LIGHT_SLIDER_THUMB_FILL: Color32 = Color32::from_rgb(246, 246, 248);
+const LIGHT_SLIDER_THUMB_HOVER_FILL: Color32 = Color32::from_rgb(251, 251, 252);
+const LIGHT_SLIDER_THUMB_ACTIVE_FILL: Color32 = Color32::from_rgb(255, 255, 255);
+const LIGHT_SLIDER_THUMB_BORDER: Color32 = Color32::from_rgb(182, 182, 190);
+const LIGHT_SLIDER_THUMB_HOVER_BORDER: Color32 = Color32::from_rgb(161, 161, 170);
+const LIGHT_SLIDER_THUMB_ACTIVE_BORDER: Color32 = Color32::from_rgb(140, 140, 149);
+const LIGHT_INPUT_FOCUS_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
+const LIGHT_TEXT_SELECTION_BG: Color32 = Color32::from_rgba_premultiplied(37, 99, 235, 96);
+
+const DARK_APP_BACKGROUND: Color32 = Color32::from_rgb(9, 9, 11);
+const DARK_CARD_BACKGROUND: Color32 = Color32::from_rgb(17, 17, 20);
+const DARK_MUTED_SURFACE: Color32 = Color32::from_rgb(24, 24, 27);
+const DARK_SEPARATOR: Color32 = Color32::from_rgb(39, 39, 42);
+const DARK_ROW_HOVER_BG: Color32 = Color32::from_rgb(31, 31, 35);
+const DARK_ROW_ACTIVE_BG: Color32 = Color32::from_rgb(39, 39, 42);
+const DARK_TEXT_PRIMARY: Color32 = Color32::from_rgb(244, 244, 245);
+const DARK_TEXT_SECONDARY: Color32 = Color32::from_rgb(212, 212, 216);
+const DARK_TEXT_MUTED: Color32 = Color32::from_rgb(161, 161, 170);
+const DARK_INPUT_BACKGROUND: Color32 = Color32::from_rgb(24, 24, 27);
+const DARK_INPUT_HOVER_BACKGROUND: Color32 = Color32::from_rgb(31, 31, 35);
+const DARK_INPUT_FOCUS_BACKGROUND: Color32 = Color32::from_rgb(14, 14, 17);
+const DARK_INPUT_BORDER: Color32 = Color32::from_rgb(63, 63, 70);
+const DARK_INPUT_HOVER_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
+const DARK_BUTTON_SECONDARY_BG: Color32 = Color32::from_rgb(24, 24, 27);
+const DARK_BUTTON_SECONDARY_HOVER_BG: Color32 = Color32::from_rgb(31, 31, 35);
+const DARK_BUTTON_SECONDARY_ACTIVE_BG: Color32 = Color32::from_rgb(39, 39, 42);
+const DARK_BUTTON_SECONDARY_BORDER: Color32 = Color32::from_rgb(63, 63, 70);
+const DARK_BUTTON_SECONDARY_HOVER_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
+const DARK_BUTTON_SECONDARY_ACTIVE_BORDER: Color32 = Color32::from_rgb(113, 113, 122);
+const DARK_SWITCH_OFF_BG: Color32 = Color32::from_rgb(82, 82, 91);
+const DARK_SWITCH_KNOB_OFF: Color32 = Color32::from_rgb(244, 244, 245);
+const DARK_PRIMARY_BG: Color32 = Color32::from_rgb(250, 250, 250);
+const DARK_PRIMARY_HOVER_BG: Color32 = Color32::from_rgb(228, 228, 231);
+const DARK_PRIMARY_ACTIVE_BG: Color32 = Color32::from_rgb(212, 212, 216);
+const DARK_PRIMARY_FG: Color32 = Color32::from_rgb(24, 24, 27);
+const DARK_ROW_SELECTED_BG: Color32 = Color32::from_rgb(63, 63, 70);
+const DARK_ROW_SELECTED_TEXT: Color32 = Color32::from_rgb(250, 250, 250);
+const DARK_SLIDER_TRACK_INACTIVE: Color32 = Color32::from_rgb(55, 55, 61);
+const DARK_SLIDER_TRACK_ACTIVE: Color32 = Color32::from_rgb(133, 133, 144);
+const DARK_SLIDER_THUMB_FILL: Color32 = Color32::from_rgb(232, 232, 236);
+const DARK_SLIDER_THUMB_HOVER_FILL: Color32 = Color32::from_rgb(242, 242, 244);
+const DARK_SLIDER_THUMB_ACTIVE_FILL: Color32 = Color32::from_rgb(250, 250, 250);
+const DARK_SLIDER_THUMB_BORDER: Color32 = Color32::from_rgb(74, 74, 82);
+const DARK_SLIDER_THUMB_HOVER_BORDER: Color32 = Color32::from_rgb(92, 92, 101);
+const DARK_SLIDER_THUMB_ACTIVE_BORDER: Color32 = Color32::from_rgb(113, 113, 122);
+const DARK_INPUT_FOCUS_BORDER: Color32 = Color32::from_rgb(161, 161, 170);
+const DARK_TEXT_SELECTION_BG: Color32 = Color32::from_rgba_premultiplied(59, 130, 246, 120);
+
+const fn mode_color(dark_mode: bool, light: Color32, dark: Color32) -> Color32 {
     if dark_mode {
-        APP_BACKGROUND_DARK
+        dark
     } else {
-        APP_BACKGROUND_LIGHT
+        light
     }
 }
 
-pub(crate) const fn card_background(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        CARD_BACKGROUND_DARK
-    } else {
-        CARD_BACKGROUND_LIGHT
-    }
+pub(crate) fn app_background(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_APP_BACKGROUND, DARK_APP_BACKGROUND)
 }
 
-pub(crate) const fn muted_surface(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        MUTED_SURFACE_DARK
-    } else {
-        MUTED_SURFACE_LIGHT
-    }
+pub(crate) fn card_background(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_CARD_BACKGROUND, DARK_CARD_BACKGROUND)
 }
 
-pub(crate) const fn separator(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SEPARATOR_DARK
-    } else {
-        SEPARATOR_LIGHT
-    }
+pub(crate) fn muted_surface(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_MUTED_SURFACE, DARK_MUTED_SURFACE)
 }
 
-pub(crate) const fn row_hover_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        ROW_HOVER_BG_DARK
-    } else {
-        ROW_HOVER_BG_LIGHT
-    }
+pub(crate) fn separator(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_SEPARATOR, DARK_SEPARATOR)
 }
 
-pub(crate) const fn row_active_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        ROW_ACTIVE_BG_DARK
-    } else {
-        ROW_ACTIVE_BG_LIGHT
-    }
+pub(crate) fn row_hover_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_ROW_HOVER_BG, DARK_ROW_HOVER_BG)
 }
 
-pub(crate) const fn text_primary(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        TEXT_PRIMARY_DARK
-    } else {
-        TEXT_PRIMARY_LIGHT
-    }
+pub(crate) fn row_active_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_ROW_ACTIVE_BG, DARK_ROW_ACTIVE_BG)
 }
 
-pub(crate) const fn text_secondary(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        TEXT_SECONDARY_DARK
-    } else {
-        TEXT_SECONDARY_LIGHT
-    }
+pub(crate) fn text_primary(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_TEXT_PRIMARY, DARK_TEXT_PRIMARY)
 }
 
-pub(crate) const fn text_muted(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        TEXT_MUTED_DARK
-    } else {
-        TEXT_MUTED_LIGHT
-    }
+pub(crate) fn text_secondary(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_TEXT_SECONDARY, DARK_TEXT_SECONDARY)
 }
 
-pub(crate) const fn text_destructive(_: bool) -> Color32 {
+pub(crate) fn text_muted(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_TEXT_MUTED, DARK_TEXT_MUTED)
+}
+
+pub(crate) fn text_destructive(_: bool) -> Color32 {
     TEXT_DESTRUCTIVE
 }
 
-pub(crate) const fn input_background(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        INPUT_BACKGROUND_DARK
-    } else {
-        INPUT_BACKGROUND_LIGHT
-    }
+pub(crate) fn input_background(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_INPUT_BACKGROUND, DARK_INPUT_BACKGROUND)
 }
 
-pub(crate) const fn input_hover_background(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        INPUT_HOVER_BACKGROUND_DARK
-    } else {
-        INPUT_HOVER_BACKGROUND_LIGHT
-    }
+pub(crate) fn input_hover_background(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_INPUT_HOVER_BACKGROUND,
+        DARK_INPUT_HOVER_BACKGROUND,
+    )
 }
 
-pub(crate) const fn input_focus_background(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        INPUT_FOCUS_BACKGROUND_DARK
-    } else {
-        INPUT_FOCUS_BACKGROUND_LIGHT
-    }
+pub(crate) fn input_focus_background(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_INPUT_FOCUS_BACKGROUND,
+        DARK_INPUT_FOCUS_BACKGROUND,
+    )
 }
 
-pub(crate) const fn input_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        INPUT_BORDER_DARK
-    } else {
-        INPUT_BORDER_LIGHT
-    }
+pub(crate) fn input_border(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_INPUT_BORDER, DARK_INPUT_BORDER)
 }
 
-pub(crate) const fn input_hover_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        INPUT_HOVER_BORDER_DARK
-    } else {
-        INPUT_HOVER_BORDER_LIGHT
-    }
+pub(crate) fn input_hover_border(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_INPUT_HOVER_BORDER, DARK_INPUT_HOVER_BORDER)
 }
 
-pub(crate) const fn button_secondary_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_BG_DARK
-    } else {
-        BUTTON_SECONDARY_BG_LIGHT
-    }
+pub(crate) fn button_secondary_bg(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_BG,
+        DARK_BUTTON_SECONDARY_BG,
+    )
 }
 
-pub(crate) const fn button_secondary_hover_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_HOVER_BG_DARK
-    } else {
-        BUTTON_SECONDARY_HOVER_BG_LIGHT
-    }
+pub(crate) fn button_secondary_hover_bg(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_HOVER_BG,
+        DARK_BUTTON_SECONDARY_HOVER_BG,
+    )
 }
 
-pub(crate) const fn button_secondary_active_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_ACTIVE_BG_DARK
-    } else {
-        BUTTON_SECONDARY_ACTIVE_BG_LIGHT
-    }
+pub(crate) fn button_secondary_active_bg(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_ACTIVE_BG,
+        DARK_BUTTON_SECONDARY_ACTIVE_BG,
+    )
 }
 
-pub(crate) const fn button_secondary_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_BORDER_DARK
-    } else {
-        BUTTON_SECONDARY_BORDER_LIGHT
-    }
+pub(crate) fn button_secondary_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_BORDER,
+        DARK_BUTTON_SECONDARY_BORDER,
+    )
 }
 
-pub(crate) const fn button_secondary_hover_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_HOVER_BORDER_DARK
-    } else {
-        BUTTON_SECONDARY_HOVER_BORDER_LIGHT
-    }
+pub(crate) fn button_secondary_hover_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_HOVER_BORDER,
+        DARK_BUTTON_SECONDARY_HOVER_BORDER,
+    )
 }
 
-pub(crate) const fn button_secondary_active_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        BUTTON_SECONDARY_ACTIVE_BORDER_DARK
-    } else {
-        BUTTON_SECONDARY_ACTIVE_BORDER_LIGHT
-    }
+pub(crate) fn button_secondary_active_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_BUTTON_SECONDARY_ACTIVE_BORDER,
+        DARK_BUTTON_SECONDARY_ACTIVE_BORDER,
+    )
 }
 
-pub(crate) const fn switch_off_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SWITCH_OFF_BG_DARK
-    } else {
-        SWITCH_OFF_BG_LIGHT
-    }
+pub(crate) fn switch_off_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_SWITCH_OFF_BG, DARK_SWITCH_OFF_BG)
 }
 
-pub(crate) const fn switch_knob_off(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SWITCH_KNOB_OFF_DARK
-    } else {
-        SWITCH_KNOB_OFF_LIGHT
-    }
+pub(crate) fn switch_knob_off(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_SWITCH_KNOB_OFF, DARK_SWITCH_KNOB_OFF)
 }
 
-pub(crate) const fn primary_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c100
-    } else {
-        NEUTRAL.c900
-    }
+pub(crate) fn primary_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_PRIMARY_BG, DARK_PRIMARY_BG)
 }
 
-pub(crate) const fn primary_hover_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c200
-    } else {
-        NEUTRAL.c800
-    }
+pub(crate) fn primary_hover_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_PRIMARY_HOVER_BG, DARK_PRIMARY_HOVER_BG)
 }
 
-pub(crate) const fn primary_active_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c300
-    } else {
-        NEUTRAL.c700
-    }
+pub(crate) fn primary_active_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_PRIMARY_ACTIVE_BG, DARK_PRIMARY_ACTIVE_BG)
 }
 
-pub(crate) const fn primary_fg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c900
-    } else {
-        NEUTRAL.c100
-    }
+pub(crate) fn primary_fg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_PRIMARY_FG, DARK_PRIMARY_FG)
 }
 
-pub(crate) const fn row_selected_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c700
-    } else {
-        NEUTRAL.c200
-    }
+pub(crate) fn row_selected_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_ROW_SELECTED_BG, DARK_ROW_SELECTED_BG)
 }
 
-pub(crate) const fn row_selected_text(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c100
-    } else {
-        NEUTRAL.c900
-    }
+pub(crate) fn row_selected_text(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_ROW_SELECTED_TEXT, DARK_ROW_SELECTED_TEXT)
 }
 
 pub(crate) const fn tailwind_shadow_sm() -> Shadow {
@@ -361,15 +279,11 @@ pub(crate) const fn tailwind_shadow_lg() -> Shadow {
     }
 }
 
-pub(crate) const fn text_selection_bg(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        Color32::from_rgba_premultiplied(59, 130, 246, 120)
-    } else {
-        Color32::from_rgba_premultiplied(37, 99, 235, 96)
-    }
+pub(crate) fn text_selection_bg(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_TEXT_SELECTION_BG, DARK_TEXT_SELECTION_BG)
 }
 
-pub(crate) const fn input_bg(dark_mode: bool, focused: bool, hovered: bool) -> Color32 {
+pub(crate) fn input_bg(dark_mode: bool, focused: bool, hovered: bool) -> Color32 {
     if focused {
         input_focus_background(dark_mode)
     } else if hovered {
@@ -389,12 +303,7 @@ pub(crate) fn input_stroke(dark_mode: bool, focused: bool, hovered: bool) -> Str
     }
 }
 
-pub(crate) const fn row_bg(
-    selected: bool,
-    pressed: bool,
-    hovered: bool,
-    dark_mode: bool,
-) -> Color32 {
+pub(crate) fn row_bg(selected: bool, pressed: bool, hovered: bool, dark_mode: bool) -> Color32 {
     if selected {
         row_selected_bg(dark_mode)
     } else if pressed {
@@ -406,76 +315,68 @@ pub(crate) const fn row_bg(
     }
 }
 
-pub(crate) const fn slider_track_inactive(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_TRACK_INACTIVE_DARK
-    } else {
-        SLIDER_TRACK_INACTIVE_LIGHT
-    }
+pub(crate) fn slider_track_inactive(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_TRACK_INACTIVE,
+        DARK_SLIDER_TRACK_INACTIVE,
+    )
 }
 
-pub(crate) const fn slider_track_active(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_TRACK_ACTIVE_DARK
-    } else {
-        SLIDER_TRACK_ACTIVE_LIGHT
-    }
+pub(crate) fn slider_track_active(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_TRACK_ACTIVE,
+        DARK_SLIDER_TRACK_ACTIVE,
+    )
 }
 
-pub(crate) const fn slider_thumb_fill(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_FILL_DARK
-    } else {
-        SLIDER_THUMB_FILL_LIGHT
-    }
+pub(crate) fn slider_thumb_fill(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_SLIDER_THUMB_FILL, DARK_SLIDER_THUMB_FILL)
 }
 
-pub(crate) const fn slider_thumb_hover_fill(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_HOVER_FILL_DARK
-    } else {
-        SLIDER_THUMB_HOVER_FILL_LIGHT
-    }
+pub(crate) fn slider_thumb_hover_fill(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_THUMB_HOVER_FILL,
+        DARK_SLIDER_THUMB_HOVER_FILL,
+    )
 }
 
-pub(crate) const fn slider_thumb_active_fill(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_ACTIVE_FILL_DARK
-    } else {
-        SLIDER_THUMB_ACTIVE_FILL_LIGHT
-    }
+pub(crate) fn slider_thumb_active_fill(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_THUMB_ACTIVE_FILL,
+        DARK_SLIDER_THUMB_ACTIVE_FILL,
+    )
 }
 
-pub(crate) const fn slider_thumb_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_BORDER_DARK
-    } else {
-        SLIDER_THUMB_BORDER_LIGHT
-    }
+pub(crate) fn slider_thumb_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_THUMB_BORDER,
+        DARK_SLIDER_THUMB_BORDER,
+    )
 }
 
-pub(crate) const fn slider_thumb_hover_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_HOVER_BORDER_DARK
-    } else {
-        SLIDER_THUMB_HOVER_BORDER_LIGHT
-    }
+pub(crate) fn slider_thumb_hover_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_THUMB_HOVER_BORDER,
+        DARK_SLIDER_THUMB_HOVER_BORDER,
+    )
 }
 
-pub(crate) const fn slider_thumb_active_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        SLIDER_THUMB_ACTIVE_BORDER_DARK
-    } else {
-        SLIDER_THUMB_ACTIVE_BORDER_LIGHT
-    }
+pub(crate) fn slider_thumb_active_border(dark_mode: bool) -> Color32 {
+    mode_color(
+        dark_mode,
+        LIGHT_SLIDER_THUMB_ACTIVE_BORDER,
+        DARK_SLIDER_THUMB_ACTIVE_BORDER,
+    )
 }
 
-pub(crate) const fn input_focus_border(dark_mode: bool) -> Color32 {
-    if dark_mode {
-        NEUTRAL.c400
-    } else {
-        NEUTRAL.c600
-    }
+pub(crate) fn input_focus_border(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_INPUT_FOCUS_BORDER, DARK_INPUT_FOCUS_BORDER)
 }
 
 pub(crate) fn input_focus_stroke(dark_mode: bool) -> Stroke {

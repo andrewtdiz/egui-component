@@ -1,5 +1,5 @@
 use crate::dev::showcase::{render_component_showcase, ComponentShowcaseState};
-use crate::theme;
+use crate::theme::{self, ThemeMode};
 use crate::ui::tokens;
 use crate::{ComponentLibraryError, Result};
 
@@ -17,7 +17,7 @@ pub(crate) fn run_showcase_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            theme::setup(&creation_context.egui_ctx);
+            theme::install(&creation_context.egui_ctx, ThemeMode::Dark);
             Ok(Box::new(ShowcaseWindowApp {
                 surface: ShowcaseSurface::new(),
             }))

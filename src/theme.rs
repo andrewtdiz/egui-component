@@ -1,22 +1,28 @@
 use crate::ui::{icons, style};
 
-pub fn setup(context: &egui::Context) {
-    setup_style(context);
-    setup_icon_loader(context);
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum ThemeMode {
+    Light,
+    #[default]
+    Dark,
 }
 
-pub fn setup_style(context: &egui::Context) {
-    style::setup_showcase_context(context);
+impl ThemeMode {
+    pub const fn is_dark(self) -> bool {
+        matches!(self, Self::Dark)
+    }
 }
 
-pub fn set_dark_mode(context: &egui::Context, dark_mode: bool) {
-    style::set_showcase_dark_mode(context, dark_mode);
-}
-
-pub fn setup_icon_loader(context: &egui::Context) {
+pub fn install(context: &egui::Context, mode: ThemeMode) {
+    style::install(context, mode);
     icons::setup(context);
 }
 
-pub fn apply_component_theme(ui: &mut egui::Ui) {
-    style::apply_component_theme(ui);
+pub fn set_mode(context: &egui::Context, mode: ThemeMode) {
+    style::set_mode(context, mode);
+}
+
+#[cfg(feature = "showcase")]
+pub(crate) fn apply_component_theme(ui: &mut egui::Ui) {
+    style::apply_component_profile(ui);
 }
