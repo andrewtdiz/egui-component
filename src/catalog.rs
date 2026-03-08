@@ -12,9 +12,11 @@ pub enum ComponentKind {
     Dialogue,
     DropdownMenu,
     Field,
+    Image,
     Input,
     Kbd,
     Label,
+    MenuBar,
     Progress,
     Select,
     Separator,
@@ -48,7 +50,7 @@ pub struct ComponentDefinition {
     pub group: ComponentGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ComponentDefinition; 23] = [
+const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
     ComponentDefinition {
         kind: ComponentKind::Label,
         id: "label",
@@ -71,6 +73,12 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 23] = [
         kind: ComponentKind::Field,
         id: "field",
         label: "Field",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Image,
+        id: "image",
+        label: "Image",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -144,6 +152,12 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 23] = [
         id: "tooltip",
         label: "Tooltip",
         group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::MenuBar,
+        id: "menu-bar",
+        label: "Menu Bar",
+        group: ComponentGroup::Composed,
     },
     ComponentDefinition {
         kind: ComponentKind::Collapsible,
@@ -243,11 +257,13 @@ mod tests {
         let ids = component_definitions()
             .map(|definition| definition.id)
             .collect::<Vec<_>>();
-        assert_eq!(ids.len(), 23);
+        assert_eq!(ids.len(), 25);
         assert!(ids.contains(&"button"));
         assert!(ids.contains(&"color"));
+        assert!(ids.contains(&"image"));
         assert!(ids.contains(&"kbd"));
         assert!(ids.contains(&"dropdown-menu"));
+        assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"toolbar"));
         assert!(!ids.contains(&"accordion"));
     }
@@ -270,6 +286,11 @@ mod tests {
             parse_component_kind("toolbar"),
             Some(ComponentKind::Toolbar)
         );
+        assert_eq!(parse_component_kind("image"), Some(ComponentKind::Image));
+        assert_eq!(
+            parse_component_kind("menu_bar"),
+            Some(ComponentKind::MenuBar)
+        );
         assert_eq!(parse_component_kind("contextmenu"), None);
         assert_eq!(parse_component_kind("agentchat"), None);
     }
@@ -282,7 +303,7 @@ mod tests {
         let composed = component_definitions()
             .filter(|definition| definition.group == ComponentGroup::Composed)
             .count();
-        assert_eq!(primitive, 17);
-        assert_eq!(composed, 6);
+        assert_eq!(primitive, 18);
+        assert_eq!(composed, 7);
     }
 }

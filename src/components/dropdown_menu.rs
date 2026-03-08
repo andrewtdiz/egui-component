@@ -5,17 +5,17 @@ use egui::{
     StrokeKind, Ui,
 };
 
-const MENU_MIN_WIDTH: f32 = 160.0;
-const MENU_INNER_PADDING_X: i8 = 3;
-const MENU_INNER_PADDING_Y: i8 = 3;
-const MENU_ROW_HEIGHT: f32 = 32.0;
-const MENU_ROW_PADDING_X: f32 = 10.0;
-const MENU_TRAILING_GAP: f32 = 10.0;
+const MENU_MIN_WIDTH: f32 = 148.0;
+const MENU_INNER_PADDING_X: i8 = 2;
+const MENU_INNER_PADDING_Y: i8 = 2;
+const MENU_ROW_HEIGHT: f32 = 28.0;
+const MENU_ROW_PADDING_X: f32 = 8.0;
+const MENU_TRAILING_GAP: f32 = 8.0;
 const MENU_TEXT_SIZE: f32 = 12.0;
-const MENU_SHORTCUT_GAP: f32 = 3.0;
-const MENU_KEYCAP_HEIGHT: f32 = 16.0;
-const MENU_KEYCAP_MIN_WIDTH: f32 = 18.0;
-const MENU_KEYCAP_TEXT_SIZE: f32 = 9.0;
+const MENU_SHORTCUT_GAP: f32 = 2.0;
+const MENU_KEYCAP_HEIGHT: f32 = 14.0;
+const MENU_KEYCAP_MIN_WIDTH: f32 = 16.0;
+const MENU_KEYCAP_TEXT_SIZE: f32 = 8.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DropdownMenuAction<'a> {
@@ -179,47 +179,61 @@ impl ComponentUi<'_> {
             .on_hover_cursor(CursorIcon::PointingHand);
 
         let _ = egui::Popup::menu(&response).show(|ui| {
-            let mut ui = ComponentUi::new(ui);
-            ui.style_mut().spacing.item_spacing.y = 0.0;
-            ui.set_min_width(row_width);
-            ui.set_max_width(row_width);
-
-            egui::Frame::new()
-                .inner_margin(Margin::symmetric(
-                    MENU_INNER_PADDING_X,
-                    MENU_INNER_PADDING_Y,
-                ))
-                .show(ui.raw_mut(), |ui| {
-                    let mut ui = ComponentUi::new(ui);
-                    let inner_width = inner_row_width(row_width);
-                    ui.set_min_width(inner_width);
-                    ui.set_max_width(inner_width);
-
-                    if props.entries.is_empty() {
-                        for (index, label) in props.options.iter().copied().enumerate() {
-                            let action = DropdownMenuAction::new(index, label);
-                            draw_action_row(&mut ui, action, &mut state, row_width);
-                        }
-                    } else {
-                        draw_entries(&mut ui, props.entries, &mut state, row_width);
-                    }
-                });
+            if props.entries.is_empty() {
+                let entries = props
+                    .options
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, label)| {
+                        DropdownMenuEntry::Action(DropdownMenuAction::new(index, label))
+                    })
+                    .collect::<Vec<_>>();
+                show_menu_entries_surface(ui, &entries, &mut state.action, row_width);
+            } else {
+                show_menu_entries_surface(ui, props.entries, &mut state.action, row_width);
+            }
         });
 
         (response, state)
     }
 }
 
+pub(crate) fn show_menu_entries_surface(
+    ui: &mut Ui,
+    entries: &[DropdownMenuEntry<'_>],
+    action: &mut Option<usize>,
+    row_width: f32,
+) {
+    let mut ui = ComponentUi::new(ui);
+    ui.style_mut().spacing.item_spacing.y = 0.0;
+    ui.set_min_width(row_width);
+    ui.set_max_width(row_width);
+
+    egui::Frame::new()
+        .inner_margin(Margin::symmetric(
+            MENU_INNER_PADDING_X,
+            MENU_INNER_PADDING_Y,
+        ))
+        .show(ui.raw_mut(), |ui| {
+            let mut ui = ComponentUi::new(ui);
+            let inner_width = inner_row_width(row_width);
+            ui.set_min_width(inner_width);
+            ui.set_max_width(inner_width);
+            draw_entries(&mut ui, entries, action, row_width);
+        });
+}
+
 fn draw_entries(
     ui: &mut ComponentUi<'_>,
     entries: &[DropdownMenuEntry<'_>],
-    state: &mut DropdownMenuState,
+    selected_action: &mut Option<usize>,
     row_width: f32,
 ) {
     for entry in entries {
         match entry {
-            DropdownMenuEntry::Action(action) => {
-                draw_action_row(ui, *action, state, row_width);
+            DropdownMenuEntry::Action(menu_action) => {
+                draw_action_row(ui, *menu_action, selected_action, row_width);
             }
             DropdownMenuEntry::Separator => {
                 ui.add_space(2.0);
@@ -247,7 +261,7 @@ fn draw_entries(
                                 let inner_width = inner_row_width(row_width);
                                 ui.set_min_width(inner_width);
                                 ui.set_max_width(inner_width);
-                                draw_entries(&mut ui, submenu.entries, state, row_width);
+                                draw_entries(&mut ui, submenu.entries, selected_action, row_width);
                             });
                     },
                 );
@@ -259,7 +273,7 @@ fn draw_entries(
 fn draw_action_row(
     ui: &mut ComponentUi<'_>,
     action: DropdownMenuAction<'_>,
-    state: &mut DropdownMenuState,
+    selected_action: &mut Option<usize>,
     row_width: f32,
 ) {
     let (response, trailing_rect) = draw_menu_row(
@@ -273,7 +287,7 @@ fn draw_action_row(
         draw_shortcut_keycaps(ui.raw_mut(), trailing_rect, shortcut);
     }
     if response.clicked() {
-        state.action = Some(action.id);
+        *selected_action = Some(action.id);
         ui.close();
     }
 }

@@ -1,7 +1,8 @@
 use crate::components::{
     Button, ButtonOverride, ButtonStyle, Checkbox, Color, CommandItem, ComponentUi, ComponentUiExt,
-    DialogueStyle, DropdownMenuEntry, Kbd, KbdGroup, Label, LabelTone, LabelWeight, NumberInput,
-    NumberInputAxis, SwitchSize, TabOption, Toolbar, Tooltip, TooltipPlacement,
+    DialogueStyle, DropdownMenuEntry, Image, Kbd, KbdGroup, Label, LabelTone, LabelWeight, MenuBar,
+    MenuBarItem, NumberInput, NumberInputAxis, SwitchSize, TabOption, Toolbar, Tooltip,
+    TooltipPlacement,
 };
 use crate::theme;
 use crate::ui::tokens;
@@ -83,6 +84,60 @@ const DROPDOWN_ACTION_LABELS: [&str; 13] = [
     "Log out",
     "Delete",
 ];
+const MENU_BAR_RECENT_ENTRIES: [DropdownMenuEntry<'static>; 3] = [
+    DropdownMenuEntry::action(3, "Design Tokens.fig"),
+    DropdownMenuEntry::action(4, "Toolbar Draft.rs"),
+    DropdownMenuEntry::action(5, "App Shell.md"),
+];
+const MENU_BAR_FILE_ENTRIES: [DropdownMenuEntry<'static>; 7] = [
+    DropdownMenuEntry::action(0, "New File"),
+    DropdownMenuEntry::action(1, "Open..."),
+    DropdownMenuEntry::submenu("Open Recent", &MENU_BAR_RECENT_ENTRIES),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(6, "Save"),
+    DropdownMenuEntry::action(7, "Save As..."),
+    DropdownMenuEntry::action(8, "Export"),
+];
+const MENU_BAR_EDIT_ENTRIES: [DropdownMenuEntry<'static>; 5] = [
+    DropdownMenuEntry::action(9, "Undo"),
+    DropdownMenuEntry::action(10, "Redo"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(11, "Cut"),
+    DropdownMenuEntry::action(12, "Paste"),
+];
+const MENU_BAR_VIEW_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action(13, "Zoom In"),
+    DropdownMenuEntry::action(14, "Zoom Out"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(15, "Toggle Guides"),
+];
+const MENU_BAR_OBJECT_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action(16, "Group"),
+    DropdownMenuEntry::action(17, "Ungroup"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(18, "Bring to Front"),
+];
+const MENU_BAR_ACTION_LABELS: [&str; 19] = [
+    "New File",
+    "Open...",
+    "Open Recent",
+    "Design Tokens.fig",
+    "Toolbar Draft.rs",
+    "App Shell.md",
+    "Save",
+    "Save As...",
+    "Export",
+    "Undo",
+    "Redo",
+    "Cut",
+    "Paste",
+    "Zoom In",
+    "Zoom Out",
+    "Toggle Guides",
+    "Group",
+    "Ungroup",
+    "Bring to Front",
+];
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum ShowcaseGroup {
@@ -105,6 +160,7 @@ impl ShowcaseGroup {
 enum ShowcaseComponentKind {
     Label,
     Color,
+    Image,
     Kbd,
     Input,
     Field,
@@ -126,6 +182,7 @@ enum ShowcaseComponentKind {
     Command,
     Dialogue,
     Icon,
+    MenuBar,
     Toolbar,
 }
 
@@ -137,7 +194,7 @@ struct ShowcaseComponentDefinition {
     group: ShowcaseGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
+const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
     ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Label,
         label: "Label",
@@ -148,6 +205,12 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
         kind: ShowcaseComponentKind::Color,
         label: "Color",
         description: "Circular solid color swatches",
+        group: ShowcaseGroup::PrimaryPrimitive,
+    },
+    ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::Image,
+        label: "Image",
+        description: "PNG-backed raster image rendering",
         group: ShowcaseGroup::PrimaryPrimitive,
     },
     ShowcaseComponentDefinition {
@@ -277,6 +340,12 @@ const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 24] = [
         group: ShowcaseGroup::DerivedComposed,
     },
     ShowcaseComponentDefinition {
+        kind: ShowcaseComponentKind::MenuBar,
+        label: "Menu Bar",
+        description: "Top-level menu strip with hover switching",
+        group: ShowcaseGroup::Examples,
+    },
+    ShowcaseComponentDefinition {
         kind: ShowcaseComponentKind::Toolbar,
         label: "Toolbar",
         description: "Floating absolute-positioned editing bar",
@@ -294,6 +363,7 @@ pub struct ComponentShowcaseState {
     switch_value: bool,
     small_switch_value: bool,
     toolbar_color_index: usize,
+    image_rotation_degrees: f32,
     slider_value: f32,
     number_x_value: f32,
     number_y_value: f32,
@@ -309,6 +379,7 @@ pub struct ComponentShowcaseState {
     command_query: String,
     dialogue_open: bool,
     alert_dialogue_open: bool,
+    menu_bar_action: Option<usize>,
     tooltip_placement: TooltipPlacement,
 }
 
@@ -323,6 +394,7 @@ impl Default for ComponentShowcaseState {
             switch_value: true,
             small_switch_value: false,
             toolbar_color_index: 0,
+            image_rotation_degrees: 18.0,
             slider_value: 62.0,
             number_x_value: 42.0,
             number_y_value: 16.0,
@@ -338,6 +410,7 @@ impl Default for ComponentShowcaseState {
             command_query: String::new(),
             dialogue_open: false,
             alert_dialogue_open: false,
+            menu_bar_action: None,
             tooltip_placement: TooltipPlacement::Top,
         }
     }
@@ -540,7 +613,10 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
         .show(ui.raw_mut(), |ui| {
             let mut ui = ui.components();
             ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                let width = if state.selected_component == ShowcaseComponentKind::Toolbar {
+                let width = if matches!(
+                    state.selected_component,
+                    ShowcaseComponentKind::Toolbar | ShowcaseComponentKind::MenuBar
+                ) {
                     ui.available_width().min(980.0)
                 } else {
                     ui.available_width().clamp(260.0, 460.0)
@@ -621,6 +697,65 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[2]).size(20.0));
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[3]).size(28.0).stroke(border));
             });
+        }
+        ShowcaseComponentKind::Image => {
+            let dark_mode = ui.visuals().dark_mode;
+            let sample_png = egui::include_image!("../../../assets/images/clay_logo_large.png");
+
+            let _ = ui.label(Label::new("Embedded PNG").tone(LabelTone::Muted).size(11.0));
+            ui.add_space(6.0);
+            let _ = ui.image(
+                Image::new(sample_png.clone())
+                    .fit_to_exact_size(egui::vec2(180.0, 180.0))
+                    .corner_radius(tokens::RADIUS_MD)
+                    .bg_fill(tokens::input_background(dark_mode)),
+            );
+
+            ui.add_space(10.0);
+            let _ = ui.label(
+                Label::new("bytes:// source")
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
+            ui.add_space(6.0);
+            let _ = ui.image(
+                Image::from_bytes(
+                    "bytes://component-showcase/clay-logo-large.png",
+                    include_bytes!("../../../assets/images/clay_logo_large.png"),
+                )
+                .fit_to_exact_size(egui::vec2(96.0, 96.0))
+                .corner_radius(tokens::RADIUS_SM),
+            );
+
+            ui.add_space(10.0);
+            let _ = ui.label(Label::new("Rotation").tone(LabelTone::Muted).size(11.0));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let _ = ui.slider(&mut state.image_rotation_degrees, (-180.0..=180.0, 220.0));
+                let rotation_label = format!("{:.0}deg", state.image_rotation_degrees.round());
+                let _ = ui.label(
+                    Label::new(rotation_label.as_str())
+                        .tone(LabelTone::Secondary)
+                        .weight(LabelWeight::Semibold),
+                );
+            });
+            ui.add_space(6.0);
+            let _ = ui.image(
+                Image::new(sample_png)
+                    .fit_to_exact_size(egui::vec2(96.0, 96.0))
+                    .rotate(
+                        state.image_rotation_degrees.to_radians(),
+                        egui::vec2(0.5, 0.5),
+                    )
+                    .bg_fill(tokens::input_background(dark_mode)),
+            );
+
+            ui.add_space(8.0);
+            let _ = ui.label(
+                Label::new("Supports include_image!, bytes://, and file:// PNG sources.")
+                    .tone(LabelTone::Muted)
+                    .size(11.0),
+            );
         }
         ShowcaseComponentKind::Kbd => {
             let _ = ui.kbd_group(KbdGroup::new(), |ui| {
@@ -1051,6 +1186,9 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.icon(("wand-sparkles", 16.0));
             });
         }
+        ShowcaseComponentKind::MenuBar => {
+            draw_menu_bar_preview(ui, state);
+        }
         ShowcaseComponentKind::Toolbar => {
             draw_toolbar_preview(ui, state);
         }
@@ -1154,6 +1292,41 @@ fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseS
         });
 }
 
+fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    let dark_mode = ui.visuals().dark_mode;
+    let menu_items = [
+        MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(188.0),
+        MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(156.0),
+        MenuBarItem::new("View", &MENU_BAR_VIEW_ENTRIES).width(156.0),
+        MenuBarItem::new("Object", &MENU_BAR_OBJECT_ENTRIES).width(180.0),
+    ];
+
+    let menu_state = egui::Frame::new()
+        .fill(tokens::app_background(dark_mode))
+        .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
+        .corner_radius(CornerRadius::same(tokens::RADIUS_MD))
+        .inner_margin(egui::Margin::same(12))
+        .show(ui.raw_mut(), |ui| {
+            let mut ui = ui.components();
+            ui.menu_bar(MenuBar::new(
+                Id::new("component_showcase_menu_bar"),
+                &menu_items,
+            ))
+            .1
+        })
+        .inner;
+
+    if let Some(action) = menu_state.action {
+        state.menu_bar_action = Some(action);
+    }
+    ui.add_space(8.0);
+    let _ = ui.label(
+        Label::new(menu_bar_action_label(state.menu_bar_action))
+            .tone(LabelTone::Muted)
+            .size(11.0),
+    );
+}
+
 fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
         let _ = ui.button(Button::new(label).style(ButtonStyle::Ghost));
@@ -1221,6 +1394,7 @@ fn clamp_state(state: &mut ComponentShowcaseState) {
     state.toolbar_color_index = state
         .toolbar_color_index
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
+    state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
     state.stacked_tab_index = state
         .stacked_tab_index
@@ -1243,7 +1417,20 @@ fn clamp_state(state: &mut ComponentShowcaseState) {
     {
         state.dropdown_action = None;
     }
+    if state
+        .menu_bar_action
+        .is_some_and(|id| id >= MENU_BAR_ACTION_LABELS.len())
+    {
+        state.menu_bar_action = None;
+    }
     state.combobox_index = state
         .combobox_index
         .min(COMBOBOX_OPTIONS.len().saturating_sub(1));
+}
+
+fn menu_bar_action_label(action: Option<usize>) -> &'static str {
+    match action.and_then(|id| MENU_BAR_ACTION_LABELS.get(id).copied()) {
+        Some(label) => label,
+        None => "No menu action triggered",
+    }
 }

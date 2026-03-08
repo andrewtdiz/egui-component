@@ -858,6 +858,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_extras",
+ "image",
  "thiserror 2.0.18",
 ]
 
@@ -919,6 +920,7 @@ dependencies = [
  "ahash",
  "egui",
  "enum-map",
+ "image",
  "log",
  "mime_guess2",
  "profiling",
