@@ -1,26 +1,31 @@
 use super::{api::ComponentUi, ButtonStyle};
-use crate::ui::{icons, tokens};
+use crate::ui::{icons, tokens, typography};
 use egui::{
-    Align2, CornerRadius, CursorIcon, FontFamily, FontId, Margin, Rect, Response, Stroke,
+    Align2, CornerRadius, CursorIcon, FontFamily, FontId, Margin, Popup, Rect, Response, Stroke,
     StrokeKind, Ui,
 };
 
-const MENU_MIN_WIDTH: f32 = 148.0;
-const MENU_INNER_PADDING_X: i8 = 2;
-const MENU_INNER_PADDING_Y: i8 = 2;
-const MENU_ROW_HEIGHT: f32 = 28.0;
-const MENU_ROW_PADDING_X: f32 = 8.0;
-const MENU_TRAILING_GAP: f32 = 8.0;
-const MENU_TEXT_SIZE: f32 = 12.0;
+const MENU_MIN_WIDTH: f32 = 176.0;
+const MENU_INNER_PADDING_X: i8 = 0;
+const MENU_INNER_PADDING_Y: i8 = 0;
+const MENU_ROW_HEIGHT: f32 = 40.0;
+const MENU_ROW_PADDING_X: f32 = 10.0;
+const MENU_LEADING_ICON_SIZE: f32 = 16.0;
+const MENU_LEADING_ICON_GAP: f32 = 8.0;
+const MENU_TRAILING_ICON_SIZE: f32 = 15.0;
+const MENU_TRAILING_GAP: f32 = 6.0;
+const MENU_SEPARATOR_MARGIN_Y: f32 = 4.0;
+const MENU_TEXT_SIZE: f32 = 15.0;
 const MENU_SHORTCUT_GAP: f32 = 2.0;
-const MENU_KEYCAP_HEIGHT: f32 = 14.0;
-const MENU_KEYCAP_MIN_WIDTH: f32 = 16.0;
-const MENU_KEYCAP_TEXT_SIZE: f32 = 8.0;
+const MENU_KEYCAP_HEIGHT: f32 = 15.0;
+const MENU_KEYCAP_MIN_WIDTH: f32 = 17.0;
+const MENU_KEYCAP_TEXT_SIZE: f32 = 9.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DropdownMenuAction<'a> {
     pub id: usize,
     pub label: &'a str,
+    pub icon: Option<&'a str>,
     pub shortcut: Option<&'a str>,
 }
 
@@ -29,8 +34,14 @@ impl<'a> DropdownMenuAction<'a> {
         Self {
             id,
             label,
+            icon: None,
             shortcut: None,
         }
+    }
+
+    pub const fn icon(mut self, icon: &'a str) -> Self {
+        self.icon = Some(icon);
+        self
     }
 
     pub const fn shortcut(mut self, shortcut: &'a str) -> Self {
@@ -42,12 +53,22 @@ impl<'a> DropdownMenuAction<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct DropdownMenuSubmenu<'a> {
     pub label: &'a str,
+    pub icon: Option<&'a str>,
     pub entries: &'a [DropdownMenuEntry<'a>],
 }
 
 impl<'a> DropdownMenuSubmenu<'a> {
     pub const fn new(label: &'a str, entries: &'a [DropdownMenuEntry<'a>]) -> Self {
-        Self { label, entries }
+        Self {
+            label,
+            icon: None,
+            entries,
+        }
+    }
+
+    pub const fn icon(mut self, icon: &'a str) -> Self {
+        self.icon = Some(icon);
+        self
     }
 }
 
@@ -67,12 +88,37 @@ impl<'a> DropdownMenuEntry<'a> {
         Self::Action(DropdownMenuAction::new(id, label).shortcut(shortcut))
     }
 
+    pub const fn action_with_icon(id: usize, label: &'a str, icon: &'a str) -> Self {
+        Self::Action(DropdownMenuAction::new(id, label).icon(icon))
+    }
+
+    pub const fn action_with_icon_and_shortcut(
+        id: usize,
+        label: &'a str,
+        icon: &'a str,
+        shortcut: &'a str,
+    ) -> Self {
+        Self::Action(
+            DropdownMenuAction::new(id, label)
+                .icon(icon)
+                .shortcut(shortcut),
+        )
+    }
+
     pub const fn separator() -> Self {
         Self::Separator
     }
 
     pub const fn submenu(label: &'a str, entries: &'a [DropdownMenuEntry<'a>]) -> Self {
         Self::Submenu(DropdownMenuSubmenu::new(label, entries))
+    }
+
+    pub const fn submenu_with_icon(
+        label: &'a str,
+        icon: &'a str,
+        entries: &'a [DropdownMenuEntry<'a>],
+    ) -> Self {
+        Self::Submenu(DropdownMenuSubmenu::new(label, entries).icon(icon))
     }
 }
 
@@ -178,21 +224,24 @@ impl ComponentUi<'_> {
             .button((props.trigger_label, props.trigger_style))
             .on_hover_cursor(CursorIcon::PointingHand);
 
-        let _ = egui::Popup::menu(&response).show(|ui| {
-            if props.entries.is_empty() {
-                let entries = props
-                    .options
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .map(|(index, label)| {
-                        DropdownMenuEntry::Action(DropdownMenuAction::new(index, label))
-                    })
-                    .collect::<Vec<_>>();
-                show_menu_entries_surface(ui, &entries, &mut state.action, row_width);
-            } else {
-                show_menu_entries_surface(ui, props.entries, &mut state.action, row_width);
-            }
+        let _ = self.raw_mut().scope(|ui| {
+            ui.style_mut().spacing.menu_margin = Margin::symmetric(0, 2);
+            Popup::menu(&response).show(|ui| {
+                if props.entries.is_empty() {
+                    let entries = props
+                        .options
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .map(|(index, label)| {
+                            DropdownMenuEntry::Action(DropdownMenuAction::new(index, label))
+                        })
+                        .collect::<Vec<_>>();
+                    show_menu_entries_surface(ui, &entries, &mut state.action, row_width);
+                } else {
+                    show_menu_entries_surface(ui, props.entries, &mut state.action, row_width);
+                }
+            })
         });
 
         (response, state)
@@ -236,13 +285,19 @@ fn draw_entries(
                 draw_action_row(ui, *menu_action, selected_action, row_width);
             }
             DropdownMenuEntry::Separator => {
-                ui.add_space(2.0);
+                ui.add_space(MENU_SEPARATOR_MARGIN_Y);
                 let _ = ui.separator();
-                ui.add_space(2.0);
+                ui.add_space(MENU_SEPARATOR_MARGIN_Y);
             }
             DropdownMenuEntry::Submenu(submenu) => {
-                let (submenu_button, _) =
-                    draw_menu_row(ui.raw_mut(), submenu.label, row_width, None, true);
+                let (submenu_button, _) = draw_menu_row(
+                    ui.raw_mut(),
+                    submenu.label,
+                    submenu.icon,
+                    row_width,
+                    None,
+                    true,
+                );
                 let _ = egui::containers::menu::SubMenu::new().show(
                     ui.raw_mut(),
                     &submenu_button,
@@ -279,6 +334,7 @@ fn draw_action_row(
     let (response, trailing_rect) = draw_menu_row(
         ui.raw_mut(),
         action.label,
+        action.icon,
         row_width,
         action.shortcut,
         false,
@@ -295,6 +351,7 @@ fn draw_action_row(
 fn draw_menu_row(
     ui: &mut Ui,
     label: &str,
+    icon: Option<&str>,
     menu_width: f32,
     shortcut: Option<&str>,
     submenu: bool,
@@ -310,7 +367,7 @@ fn draw_menu_row(
     );
     ui.painter().rect(
         rect,
-        CornerRadius::same(tokens::RADIUS_SM),
+        CornerRadius::ZERO,
         fill,
         egui::Stroke::NONE,
         StrokeKind::Outside,
@@ -322,7 +379,7 @@ fn draw_menu_row(
         tokens::text_secondary(dark_mode)
     };
     let trailing_width = if submenu {
-        12.0
+        MENU_TRAILING_ICON_SIZE
     } else {
         shortcut
             .map(|shortcut| shortcut_group_width(ui, shortcut))
@@ -339,24 +396,42 @@ fn draw_menu_row(
     } else {
         None
     };
-    let label_x = rect.left() + MENU_ROW_PADDING_X;
+    let leading_width = if icon.is_some() {
+        MENU_LEADING_ICON_SIZE + MENU_LEADING_ICON_GAP
+    } else {
+        0.0
+    };
+    let label_x = rect.left() + MENU_ROW_PADDING_X + leading_width;
     let label_right = trailing_rect
         .map(|rect| rect.left() - MENU_TRAILING_GAP)
         .unwrap_or(rect.right() - MENU_ROW_PADDING_X);
+
+    if let Some(icon) = icon {
+        draw_menu_icon(
+            ui,
+            Rect::from_center_size(
+                egui::pos2(
+                    rect.left() + MENU_ROW_PADDING_X + (MENU_LEADING_ICON_SIZE * 0.5),
+                    rect.center().y,
+                ),
+                egui::vec2(MENU_LEADING_ICON_SIZE, MENU_LEADING_ICON_SIZE),
+            ),
+            icon,
+            label_color,
+        );
+    }
+
     ui.painter().text(
         egui::pos2(label_x.min(label_right), rect.center().y),
         Align2::LEFT_CENTER,
         label,
-        FontId::new(MENU_TEXT_SIZE, FontFamily::Proportional),
+        typography::proportional(MENU_TEXT_SIZE),
         label_color,
     );
 
     if submenu {
-        if let (Some(image), Some(trailing_rect)) =
-            (icons::image(ui.ctx(), "chevron-right", 12.0), trailing_rect)
-        {
-            let icon_rect = Rect::from_center_size(trailing_rect.center(), egui::vec2(12.0, 12.0));
-            let _ = ui.put(icon_rect, image.tint(tokens::text_muted(dark_mode)));
+        if let Some(trailing_rect) = trailing_rect {
+            draw_submenu_indicator(ui, trailing_rect);
         }
     }
 
@@ -404,6 +479,27 @@ fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
         if index + 1 < keycaps.len() {
             left += MENU_SHORTCUT_GAP;
         }
+    }
+}
+
+fn draw_menu_icon(ui: &mut Ui, icon_rect: Rect, icon: &str, tint: egui::Color32) {
+    if let Some(image) = icons::image(ui.ctx(), icon, MENU_LEADING_ICON_SIZE) {
+        image.tint(tint).paint_at(ui, icon_rect);
+    }
+}
+
+fn draw_submenu_indicator(ui: &mut Ui, trailing_rect: Rect) {
+    let dark_mode = ui.visuals().dark_mode;
+    if let Some(image) = icons::image(ui.ctx(), "chevron-right", MENU_TRAILING_ICON_SIZE) {
+        let icon_rect = Rect::from_center_size(
+            trailing_rect.center(),
+            egui::vec2(MENU_TRAILING_ICON_SIZE, MENU_TRAILING_ICON_SIZE),
+        );
+        // Paint directly so the submenu indicator never participates in layout after the row
+        // itself has already been allocated.
+        image
+            .tint(tokens::text_muted(dark_mode))
+            .paint_at(ui, icon_rect);
     }
 }
 
@@ -489,7 +585,9 @@ struct ShortcutKeycap<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{draw_shortcut_keycaps, parse_shortcut_keys, MENU_ROW_HEIGHT};
+    use super::{
+        draw_shortcut_keycaps, draw_submenu_indicator, parse_shortcut_keys, MENU_ROW_HEIGHT,
+    };
     use egui::{pos2, vec2, CentralPanel, Context, RawInput, Rect};
 
     #[test]
@@ -517,6 +615,27 @@ mod tests {
                     ui,
                     Rect::from_min_size(pos2(24.0, 24.0), vec2(72.0, MENU_ROW_HEIGHT)),
                     "Shift+Cmd+Q",
+                );
+                after = ui.min_rect();
+            });
+        });
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn drawing_submenu_indicator_does_not_advance_layout() {
+        let context = Context::default();
+        let mut before = Rect::NOTHING;
+        let mut after = Rect::NOTHING;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                crate::ui::icons::setup(context);
+                before = ui.min_rect();
+                draw_submenu_indicator(
+                    ui,
+                    Rect::from_min_size(pos2(24.0, 24.0), vec2(16.0, MENU_ROW_HEIGHT)),
                 );
                 after = ui.min_rect();
             });

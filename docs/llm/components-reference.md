@@ -60,7 +60,7 @@ Supported override types:
   - color override: `None`
 - Notes:
   - tones are `Primary`, `Secondary`, `Muted`, `Destructive`
-  - semibold labels use the named semibold font family from the theme
+  - semibold labels use the Segoe UI semibold family from the theme
 
 ```rust
 let _ = ui.label("Material");
@@ -176,7 +176,7 @@ let _ = ui.text_input(&mut name, (280.0, "Name"));
 - Notes:
   - composed from `label` + `text_input` + optional helper text
   - label uses secondary semibold styling
-  - helper text uses muted `11.0` text
+  - helper text uses muted `12.0` text
 
 ```rust
 let _ = ui.field(&mut material, ("Material", 280.0, "Assigned asset"));

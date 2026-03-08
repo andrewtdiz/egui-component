@@ -1,5 +1,5 @@
 use super::api::ComponentUi;
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{Align2, CornerRadius, CursorIcon, FontId, Id, Sense, Stroke, StrokeKind, Ui};
 
 #[derive(Debug, Clone, Copy)]
@@ -44,7 +44,7 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal(|ui| {
             let button_padding_x = ui.spacing().button_padding.x;
-            let text_font = FontId::new(12.0, egui::FontFamily::Proportional);
+            let text_font: FontId = typography::label_font();
             let height = (ui.spacing().interact_size.y - 4.0).max(24.0);
             let mut segment_rects = Vec::with_capacity(props.options.len());
 

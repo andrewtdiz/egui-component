@@ -1,19 +1,7 @@
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{
-    CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle, Ui,
-    Visuals,
+    CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
 };
-
-const SHOWCASE_FONT_REGULAR_FAMILY: &str = "component-showcase-geist-regular";
-const SHOWCASE_FONT_SEMIBOLD_FAMILY: &str = "component-showcase-geist-semibold";
-const SHOWCASE_FONT_BOLD_FAMILY: &str = "component-showcase-geist-bold";
-const SHOWCASE_FONT_ITALIC_FAMILY: &str = "component-showcase-geist-italic";
-const SHOWCASE_FONT_LIGHT_FAMILY: &str = "component-showcase-geist-light";
-const SHOWCASE_FONT_REGULAR_DATA_KEY: &str = "component-showcase-geist-regular-data";
-const SHOWCASE_FONT_SEMIBOLD_DATA_KEY: &str = "component-showcase-geist-semibold-data";
-const SHOWCASE_FONT_BOLD_DATA_KEY: &str = "component-showcase-geist-bold-data";
-const SHOWCASE_FONT_ITALIC_DATA_KEY: &str = "component-showcase-geist-italic-data";
-const SHOWCASE_FONT_LIGHT_DATA_KEY: &str = "component-showcase-geist-light-data";
 
 pub(crate) fn setup_showcase_context(context: &egui::Context) {
     context.set_fonts(showcase_font_definitions());
@@ -36,7 +24,8 @@ pub(crate) fn apply_component_theme(ui: &mut Ui) {
         tokens::SPACING_BUTTON_PADDING_Y,
     );
     spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
-    spacing.menu_margin = egui::Margin::same(4);
+    spacing.menu_margin = egui::Margin::symmetric(0, 2);
+    spacing.menu_spacing = 0.0;
 
     let style = ui.style_mut();
     style.interaction.selectable_labels = false;
@@ -57,49 +46,41 @@ pub(crate) fn apply_component_theme(ui: &mut Ui) {
 fn showcase_font_definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
-        SHOWCASE_FONT_REGULAR_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Geist-Regular.ttf")).into(),
+        typography::REGULAR_DATA_KEY.to_owned(),
+        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI.TTF")).into(),
     );
     fonts.font_data.insert(
-        SHOWCASE_FONT_SEMIBOLD_DATA_KEY.to_owned(),
+        typography::SEMIBOLD_DATA_KEY.to_owned(),
         FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Semibold.TTF")).into(),
     );
     fonts.font_data.insert(
-        SHOWCASE_FONT_BOLD_DATA_KEY.to_owned(),
+        typography::BOLD_DATA_KEY.to_owned(),
         FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Bold.TTF")).into(),
     );
     fonts.font_data.insert(
-        SHOWCASE_FONT_ITALIC_DATA_KEY.to_owned(),
+        typography::ITALIC_DATA_KEY.to_owned(),
         FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Italic.TTF")).into(),
-    );
-    fonts.font_data.insert(
-        SHOWCASE_FONT_LIGHT_DATA_KEY.to_owned(),
-        FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI-Light.TTF")).into(),
     );
 
     fonts.families.insert(
-        FontFamily::Name(SHOWCASE_FONT_REGULAR_FAMILY.into()),
-        vec![SHOWCASE_FONT_REGULAR_DATA_KEY.to_owned()],
+        FontFamily::Name(typography::REGULAR_FAMILY.into()),
+        vec![typography::REGULAR_DATA_KEY.to_owned()],
     );
     fonts.families.insert(
-        FontFamily::Name(SHOWCASE_FONT_SEMIBOLD_FAMILY.into()),
-        vec![SHOWCASE_FONT_SEMIBOLD_DATA_KEY.to_owned()],
+        FontFamily::Name(typography::SEMIBOLD_FAMILY.into()),
+        vec![typography::SEMIBOLD_DATA_KEY.to_owned()],
     );
     fonts.families.insert(
-        FontFamily::Name(SHOWCASE_FONT_BOLD_FAMILY.into()),
-        vec![SHOWCASE_FONT_BOLD_DATA_KEY.to_owned()],
+        FontFamily::Name(typography::BOLD_FAMILY.into()),
+        vec![typography::BOLD_DATA_KEY.to_owned()],
     );
     fonts.families.insert(
-        FontFamily::Name(SHOWCASE_FONT_ITALIC_FAMILY.into()),
-        vec![SHOWCASE_FONT_ITALIC_DATA_KEY.to_owned()],
-    );
-    fonts.families.insert(
-        FontFamily::Name(SHOWCASE_FONT_LIGHT_FAMILY.into()),
-        vec![SHOWCASE_FONT_LIGHT_DATA_KEY.to_owned()],
+        FontFamily::Name(typography::ITALIC_FAMILY.into()),
+        vec![typography::ITALIC_DATA_KEY.to_owned()],
     );
 
     if let Some(proportional) = fonts.families.get_mut(&FontFamily::Proportional) {
-        proportional.insert(0, SHOWCASE_FONT_REGULAR_DATA_KEY.to_owned());
+        proportional.insert(0, typography::REGULAR_DATA_KEY.to_owned());
     }
 
     fonts
@@ -108,19 +89,16 @@ fn showcase_font_definitions() -> FontDefinitions {
 fn apply_showcase_style_profile(style: &mut Style) {
     style
         .text_styles
-        .insert(TextStyle::Body, FontId::new(14.0, FontFamily::Proportional));
-    style.text_styles.insert(
-        TextStyle::Button,
-        FontId::new(14.0, FontFamily::Proportional),
-    );
-    style.text_styles.insert(
-        TextStyle::Heading,
-        FontId::new(16.0, FontFamily::Name(SHOWCASE_FONT_BOLD_FAMILY.into())),
-    );
-    style.text_styles.insert(
-        TextStyle::Small,
-        FontId::new(12.0, FontFamily::Name(SHOWCASE_FONT_LIGHT_FAMILY.into())),
-    );
+        .insert(TextStyle::Body, typography::body_font());
+    style
+        .text_styles
+        .insert(TextStyle::Button, typography::body_font());
+    style
+        .text_styles
+        .insert(TextStyle::Heading, typography::heading_font());
+    style
+        .text_styles
+        .insert(TextStyle::Small, typography::small_font());
 
     style.spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
     style.spacing.item_spacing.y = tokens::SPACING_ITEM_Y;
@@ -130,7 +108,8 @@ fn apply_showcase_style_profile(style: &mut Style) {
     );
     style.spacing.slider_width = 176.0;
     style.spacing.combo_width = 220.0;
-    style.spacing.menu_margin = egui::Margin::same(4);
+    style.spacing.menu_margin = egui::Margin::symmetric(0, 2);
+    style.spacing.menu_spacing = 0.0;
     style.interaction.selectable_labels = false;
     style.interaction.multi_widget_text_select = false;
 
@@ -189,4 +168,46 @@ fn neutral_grayscale_visuals(dark_mode: bool) -> Visuals {
     visuals.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.85 };
     visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     visuals
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{setup_showcase_context, showcase_font_definitions};
+    use crate::ui::typography;
+    use egui::{Context, TextStyle};
+
+    #[test]
+    fn showcase_fonts_only_register_segoe_proportional_families() {
+        let fonts = showcase_font_definitions();
+
+        assert!(fonts.font_data.contains_key(typography::REGULAR_DATA_KEY));
+        assert!(fonts.font_data.contains_key(typography::SEMIBOLD_DATA_KEY));
+        assert!(fonts.font_data.contains_key(typography::BOLD_DATA_KEY));
+        assert!(fonts.font_data.contains_key(typography::ITALIC_DATA_KEY));
+        assert!(!fonts
+            .font_data
+            .keys()
+            .any(|key| key.contains("geist") || key.contains("light")));
+    }
+
+    #[test]
+    fn showcase_style_uses_shared_text_defaults() {
+        let context = Context::default();
+        setup_showcase_context(&context);
+
+        let style = context.style();
+        assert_eq!(style.text_styles[&TextStyle::Body], typography::body_font());
+        assert_eq!(
+            style.text_styles[&TextStyle::Button],
+            typography::body_font()
+        );
+        assert_eq!(
+            style.text_styles[&TextStyle::Heading],
+            typography::heading_font()
+        );
+        assert_eq!(
+            style.text_styles[&TextStyle::Small],
+            typography::small_font()
+        );
+    }
 }

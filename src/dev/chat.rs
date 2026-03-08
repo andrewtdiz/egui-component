@@ -1,9 +1,9 @@
 use crate::components::{Button, ButtonStyle, ComponentUiExt, Select};
 use crate::theme;
-use crate::ui::{icons, tokens};
+use crate::ui::{icons, tokens, typography};
 use crate::{ComponentLibraryError, Result};
 use egui::{
-    Align, Align2, CentralPanel, Context, CornerRadius, FontFamily, FontId, Frame, Layout, Margin,
+    Align, Align2, CentralPanel, Context, CornerRadius, FontFamily, Frame, Layout, Margin,
     RichText, ScrollArea, Sense, SidePanel, Stroke, StrokeKind, TopBottomPanel, Ui, Vec2,
 };
 use std::time::{Duration, Instant};
@@ -187,7 +187,7 @@ impl ChatExampleState {
         ui.add_space(6.0);
         ui.label(
             RichText::new("Recent chats")
-                .size(10.0)
+                .size(typography::SMALL_SIZE)
                 .color(tokens::text_muted(true))
                 .family(FontFamily::Proportional),
         );
@@ -290,7 +290,7 @@ impl ChatExampleState {
                     RichText::new("Ask for follow-up changes").color(tokens::text_muted(true)),
                 )
                 .frame(false)
-                .font(FontId::new(13.0, FontFamily::Proportional))
+                .font(typography::body_font())
                 .desired_width(f32::INFINITY)
                 .desired_rows(3);
             let _ = ui.add_sized([ui.available_width(), COMPOSER_HEIGHT], text_edit);
@@ -649,21 +649,21 @@ fn draw_thread_row(
         title_pos,
         Align2::LEFT_TOP,
         thread.title.as_str(),
-        FontId::new(12.5, FontFamily::Proportional),
+        typography::semibold_font(typography::LABEL_SIZE),
         tokens::text_primary(true),
     );
     ui.painter().text(
         preview_pos,
         Align2::LEFT_TOP,
         preview_text,
-        FontId::new(10.5, FontFamily::Proportional),
+        typography::small_font(),
         tokens::text_muted(true),
     );
     ui.painter().text(
         time_pos,
         Align2::RIGHT_TOP,
         thread.updated_at.as_str(),
-        FontId::new(11.0, FontFamily::Proportional),
+        typography::small_font(),
         tokens::text_muted(true),
     );
 
@@ -711,7 +711,7 @@ fn draw_assistant_message(ui: &mut Ui, message: &ChatMessage) {
         ui.add_space(4.0);
         ui.label(
             RichText::new("Mock commands")
-                .size(11.0)
+                .size(typography::SMALL_SIZE)
                 .color(tokens::text_muted(true)),
         );
 

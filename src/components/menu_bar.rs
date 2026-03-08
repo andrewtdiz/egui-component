@@ -2,16 +2,16 @@ use super::{
     api::ComponentUi,
     dropdown_menu::{show_menu_entries_surface, DropdownMenuEntry},
 };
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{
-    Align2, Color32, CornerRadius, CursorIcon, FontFamily, FontId, Id, Margin, Popup, Response,
-    Stroke, StrokeKind, Ui,
+    Align2, Color32, CornerRadius, CursorIcon, FontId, Id, Margin, Popup, Response, Stroke,
+    StrokeKind, Ui,
 };
 
-const MENU_BAR_ITEM_HEIGHT: f32 = 24.0;
-const MENU_BAR_ITEM_PADDING_X: f32 = 8.0;
-const MENU_BAR_TEXT_SIZE: f32 = 12.0;
-const MENU_BAR_MIN_MENU_WIDTH: f32 = 148.0;
+const MENU_BAR_ITEM_HEIGHT: f32 = 28.0;
+const MENU_BAR_ITEM_PADDING_X: f32 = 10.0;
+const MENU_BAR_TEXT_SIZE: f32 = 13.0;
+const MENU_BAR_MIN_MENU_WIDTH: f32 = 176.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MenuBarItem<'a> {
@@ -25,7 +25,7 @@ impl<'a> MenuBarItem<'a> {
         Self {
             label,
             entries,
-            width: 184.0,
+            width: 208.0,
         }
     }
 
@@ -181,18 +181,23 @@ fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
 
     if let Some(active_index) = active_menu {
         let mut popup_open = true;
-        let popup_response = Popup::menu(&trigger_responses[active_index])
-            .id(props.id.with("popup"))
-            .open_bool(&mut popup_open)
-            .gap(0.0)
-            .show(|ui| {
-                show_menu_entries_surface(
-                    ui,
-                    props.items[active_index].entries,
-                    &mut state.action,
-                    props.items[active_index].width.max(MENU_BAR_MIN_MENU_WIDTH),
-                );
-            });
+        let popup_response = ui
+            .scope(|ui| {
+                ui.style_mut().spacing.menu_margin = Margin::symmetric(0, 2);
+                Popup::menu(&trigger_responses[active_index])
+                    .id(props.id.with("popup"))
+                    .open_bool(&mut popup_open)
+                    .gap(0.0)
+                    .show(|ui| {
+                        show_menu_entries_surface(
+                            ui,
+                            props.items[active_index].entries,
+                            &mut state.action,
+                            props.items[active_index].width.max(MENU_BAR_MIN_MENU_WIDTH),
+                        );
+                    })
+            })
+            .inner;
 
         if popup_response.is_none() || !popup_open || state.action.is_some() {
             active_menu = None;
@@ -211,7 +216,7 @@ fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
 
 fn draw_menu_bar_trigger(ui: &mut Ui, label: &str, active: bool) -> Response {
     let dark_mode = ui.visuals().dark_mode;
-    let font_id = FontId::new(MENU_BAR_TEXT_SIZE, FontFamily::Proportional);
+    let font_id: FontId = typography::proportional(MENU_BAR_TEXT_SIZE);
     let text_width = ui.fonts_mut(|fonts| {
         fonts
             .layout_no_wrap(

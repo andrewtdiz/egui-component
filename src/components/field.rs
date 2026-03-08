@@ -1,4 +1,5 @@
 use super::{api::ComponentUi, LabelTone, LabelWeight, TextInput};
+use crate::ui::typography;
 use egui::{Align, Response};
 
 #[derive(Debug, Clone, Copy)]
@@ -73,7 +74,8 @@ impl ComponentUi<'_> {
             response = response.union(input_response);
 
             if let Some(helper_text) = props.helper_text {
-                let helper_response = ui.label((helper_text, LabelTone::Muted, 11.0));
+                let helper_response =
+                    ui.label((helper_text, LabelTone::Muted, typography::SMALL_SIZE));
                 response = response.union(helper_response);
             }
 

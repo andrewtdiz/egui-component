@@ -82,14 +82,18 @@ const SLIDER_TRACK_INACTIVE_DARK: Color32 = Color32::from_rgb(55, 55, 61);
 const SLIDER_TRACK_INACTIVE_LIGHT: Color32 = Color32::from_rgb(221, 221, 226);
 const SLIDER_TRACK_ACTIVE_DARK: Color32 = Color32::from_rgb(133, 133, 144);
 const SLIDER_TRACK_ACTIVE_LIGHT: Color32 = Color32::from_rgb(145, 145, 154);
-const SLIDER_THUMB_FILL_DARK: Color32 = Color32::from_rgb(250, 250, 250);
-const SLIDER_THUMB_FILL_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
-const SLIDER_THUMB_HOVER_FILL_DARK: Color32 = Color32::from_rgb(244, 244, 245);
-const SLIDER_THUMB_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(252, 252, 253);
-const SLIDER_THUMB_BORDER_DARK: Color32 = Color32::from_rgb(82, 82, 91);
-const SLIDER_THUMB_BORDER_LIGHT: Color32 = Color32::from_rgb(161, 161, 170);
-const SLIDER_THUMB_HOVER_BORDER_DARK: Color32 = Color32::from_rgb(113, 113, 122);
-const SLIDER_THUMB_HOVER_BORDER_LIGHT: Color32 = Color32::from_rgb(140, 140, 149);
+const SLIDER_THUMB_FILL_DARK: Color32 = Color32::from_rgb(232, 232, 236);
+const SLIDER_THUMB_FILL_LIGHT: Color32 = Color32::from_rgb(246, 246, 248);
+const SLIDER_THUMB_HOVER_FILL_DARK: Color32 = Color32::from_rgb(242, 242, 244);
+const SLIDER_THUMB_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(251, 251, 252);
+const SLIDER_THUMB_ACTIVE_FILL_DARK: Color32 = Color32::from_rgb(250, 250, 250);
+const SLIDER_THUMB_ACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
+const SLIDER_THUMB_BORDER_DARK: Color32 = Color32::from_rgb(74, 74, 82);
+const SLIDER_THUMB_BORDER_LIGHT: Color32 = Color32::from_rgb(182, 182, 190);
+const SLIDER_THUMB_HOVER_BORDER_DARK: Color32 = Color32::from_rgb(92, 92, 101);
+const SLIDER_THUMB_HOVER_BORDER_LIGHT: Color32 = Color32::from_rgb(161, 161, 170);
+const SLIDER_THUMB_ACTIVE_BORDER_DARK: Color32 = Color32::from_rgb(113, 113, 122);
+const SLIDER_THUMB_ACTIVE_BORDER_LIGHT: Color32 = Color32::from_rgb(140, 140, 149);
 
 pub(crate) const SPACING_ITEM_Y: f32 = 8.0;
 pub(crate) const SPACING_BUTTON_PADDING_X: f32 = 12.0;
@@ -434,6 +438,14 @@ pub(crate) const fn slider_thumb_hover_fill(dark_mode: bool) -> Color32 {
     }
 }
 
+pub(crate) const fn slider_thumb_active_fill(dark_mode: bool) -> Color32 {
+    if dark_mode {
+        SLIDER_THUMB_ACTIVE_FILL_DARK
+    } else {
+        SLIDER_THUMB_ACTIVE_FILL_LIGHT
+    }
+}
+
 pub(crate) const fn slider_thumb_border(dark_mode: bool) -> Color32 {
     if dark_mode {
         SLIDER_THUMB_BORDER_DARK
@@ -447,6 +459,14 @@ pub(crate) const fn slider_thumb_hover_border(dark_mode: bool) -> Color32 {
         SLIDER_THUMB_HOVER_BORDER_DARK
     } else {
         SLIDER_THUMB_HOVER_BORDER_LIGHT
+    }
+}
+
+pub(crate) const fn slider_thumb_active_border(dark_mode: bool) -> Color32 {
+    if dark_mode {
+        SLIDER_THUMB_ACTIVE_BORDER_DARK
+    } else {
+        SLIDER_THUMB_ACTIVE_BORDER_LIGHT
     }
 }
 

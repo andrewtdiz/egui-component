@@ -1,9 +1,6 @@
 use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
-use crate::ui::tokens;
-use egui::{Color32, FontFamily, FontId, RichText, Ui};
-
-const SEMIBOLD_FONT: &str = "component-showcase-geist-semibold";
-const BOLD_FONT: &str = "component-showcase-geist-bold";
+use crate::ui::{tokens, typography};
+use egui::{Color32, RichText, Ui};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LabelTone {
@@ -168,19 +165,59 @@ fn draw_label(ui: &mut Ui, props: Label<'_>) -> egui::Response {
         LabelTone::Destructive => tokens::text_destructive(dark_mode),
     });
 
-    let mut text = RichText::new(props.text).size(props.size).color(color);
-    match props.weight {
-        LabelWeight::Regular => {}
-        LabelWeight::Semibold => {
-            text = text.font(FontId::new(
-                props.size,
-                FontFamily::Name(SEMIBOLD_FONT.into()),
-            ));
-        }
-        LabelWeight::Bold => {
-            text = text.font(FontId::new(props.size, FontFamily::Name(BOLD_FONT.into())));
+    let font_id = match props.weight {
+        LabelWeight::Regular => typography::proportional(props.size),
+        LabelWeight::Semibold => typography::semibold_font(props.size),
+        LabelWeight::Bold => typography::bold_font(props.size),
+    };
+    let text = RichText::new(props.text).font(font_id).color(color);
+
+    ui.add(egui::Label::new(text).selectable(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{draw_label, Label, LabelTone, LabelWeight};
+    use egui::{CentralPanel, Context, RawInput, Shape};
+
+    fn collect_text_shapes(shape: &Shape, rendered_texts: &mut Vec<String>) {
+        match shape {
+            Shape::Text(text_shape) => {
+                rendered_texts.push(text_shape.galley.job.text.clone());
+            }
+            Shape::Vec(shapes) => {
+                for nested_shape in shapes {
+                    collect_text_shapes(nested_shape, rendered_texts);
+                }
+            }
+            _ => {}
         }
     }
 
-    ui.add(egui::Label::new(text).selectable(false))
+    #[test]
+    fn theme_setup_supports_weighted_labels_and_helper_text() {
+        let context = Context::default();
+        crate::theme::setup(&context);
+
+        let frame_output = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = draw_label(
+                    ui,
+                    Label::new("Section label").weight(LabelWeight::Semibold),
+                );
+                let _ = draw_label(
+                    ui,
+                    Label::new("Helper copy").tone(LabelTone::Muted).size(12.0),
+                );
+            });
+        });
+
+        let mut rendered_texts = Vec::new();
+        for clipped_shape in frame_output.shapes {
+            collect_text_shapes(&clipped_shape.shape, &mut rendered_texts);
+        }
+
+        assert!(rendered_texts.iter().any(|text| text == "Section label"));
+        assert!(rendered_texts.iter().any(|text| text == "Helper copy"));
+    }
 }

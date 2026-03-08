@@ -1,5 +1,5 @@
 use super::{api::ComponentUi, LabelTone, TextInput};
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{
     containers::scroll_area::ScrollSource, CornerRadius, CursorIcon, Id, Response, StrokeKind, Ui,
 };
@@ -135,7 +135,7 @@ fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> 
         egui::pos2(rect.left() + 10.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         text,
-        egui::FontId::new(12.0, egui::FontFamily::Proportional),
+        typography::label_font(),
         if selected {
             tokens::row_selected_text(dark_mode)
         } else {

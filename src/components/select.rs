@@ -1,5 +1,5 @@
 use super::api::ComponentUi;
-use crate::ui::{icons, tokens};
+use crate::ui::{icons, tokens, typography};
 use egui::{CornerRadius, CursorIcon, Id, StrokeKind, Ui};
 
 const MENU_INNER_PADDING_X: i8 = 3;
@@ -149,7 +149,7 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
             egui::pos2(rect.left() + 10.0, rect.center().y),
             egui::Align2::LEFT_CENTER,
             selected_text.unwrap_or(props.placeholder),
-            egui::FontId::new(12.0, egui::FontFamily::Proportional),
+            typography::label_font(),
             if selected_text.is_some() {
                 tokens::text_primary(dark_mode)
             } else {
@@ -195,7 +195,7 @@ fn draw_option_row(
         egui::pos2(rect.left() + 10.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         label,
-        egui::FontId::new(12.0, egui::FontFamily::Proportional),
+        typography::label_font(),
         if selected {
             tokens::row_selected_text(dark_mode)
         } else {

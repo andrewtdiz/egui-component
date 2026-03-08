@@ -4,6 +4,8 @@ use std::sync::{Mutex, OnceLock};
 
 const ICON_DIRECTORY: &str = "assets/icons/lucide";
 const ICON_URI_PREFIX: &str = "bytes://egui-component/icons/";
+const ICON_STROKE_WIDTH_FROM: &str = "stroke-width=\"2\"";
+const ICON_STROKE_WIDTH_TO: &str = "stroke-width=\"1.75\"";
 
 static REGISTERED_ICON_URIS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
@@ -133,14 +135,19 @@ fn icon_path(name: &str) -> PathBuf {
 
 fn normalize_icon_svg_bytes(bytes: Vec<u8>) -> Vec<u8> {
     match String::from_utf8(bytes) {
-        Ok(svg) => svg.replace("currentColor", "#FFFFFF").into_bytes(),
+        Ok(svg) => svg
+            .replace("currentColor", "#FFFFFF")
+            .replace(ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO)
+            .into_bytes(),
         Err(error) => error.into_bytes(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_icon_name;
+    use super::{
+        normalize_icon_name, normalize_icon_svg_bytes, ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO,
+    };
 
     #[test]
     fn accepts_standard_lucide_kebab_case() {
@@ -170,5 +177,16 @@ mod tests {
     fn rejects_invalid_characters() {
         assert_eq!(normalize_icon_name(""), None);
         assert_eq!(normalize_icon_name("chevron/down"), None);
+    }
+
+    #[test]
+    fn normalizes_icon_stroke_width() {
+        let svg =
+            format!("<svg stroke=\"currentColor\" {ICON_STROKE_WIDTH_FROM}></svg>").into_bytes();
+        let normalized = String::from_utf8(normalize_icon_svg_bytes(svg)).unwrap();
+
+        assert!(normalized.contains("#FFFFFF"));
+        assert!(normalized.contains(ICON_STROKE_WIDTH_TO));
+        assert!(!normalized.contains(ICON_STROKE_WIDTH_FROM));
     }
 }

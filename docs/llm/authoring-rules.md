@@ -197,8 +197,8 @@ Practical rules:
 
 - default labels are typically `12.0`
 - body/button text is `14.0`
-- helper text is usually `11.0`
-- semibold labels use the named semibold font family already configured in the theme
+- helper text is usually `12.0`
+- semibold labels use the Segoe UI semibold family configured in the theme
 
 Do not introduce random font families or one-off type scales.
 

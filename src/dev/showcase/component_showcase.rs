@@ -5,7 +5,7 @@ use crate::components::{
     TooltipPlacement,
 };
 use crate::theme;
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Sense, Stroke, StrokeKind, Ui};
 
 use egui::containers::scroll_area::ScrollSource;
@@ -90,32 +90,32 @@ const MENU_BAR_RECENT_ENTRIES: [DropdownMenuEntry<'static>; 3] = [
     DropdownMenuEntry::action(5, "App Shell.md"),
 ];
 const MENU_BAR_FILE_ENTRIES: [DropdownMenuEntry<'static>; 7] = [
-    DropdownMenuEntry::action(0, "New File"),
-    DropdownMenuEntry::action(1, "Open..."),
-    DropdownMenuEntry::submenu("Open Recent", &MENU_BAR_RECENT_ENTRIES),
+    DropdownMenuEntry::action_with_icon(0, "New File", "file-plus"),
+    DropdownMenuEntry::action_with_icon(1, "Open...", "folder-open"),
+    DropdownMenuEntry::submenu_with_icon("Open Recent", "history", &MENU_BAR_RECENT_ENTRIES),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action(6, "Save"),
-    DropdownMenuEntry::action(7, "Save As..."),
-    DropdownMenuEntry::action(8, "Export"),
+    DropdownMenuEntry::action_with_icon(6, "Save", "save"),
+    DropdownMenuEntry::action_with_icon(7, "Save As...", "file-pen"),
+    DropdownMenuEntry::action_with_icon(8, "Export", "download"),
 ];
 const MENU_BAR_EDIT_ENTRIES: [DropdownMenuEntry<'static>; 5] = [
-    DropdownMenuEntry::action(9, "Undo"),
-    DropdownMenuEntry::action(10, "Redo"),
+    DropdownMenuEntry::action_with_icon(9, "Undo", "undo-2"),
+    DropdownMenuEntry::action_with_icon(10, "Redo", "redo-2"),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action(11, "Cut"),
-    DropdownMenuEntry::action(12, "Paste"),
+    DropdownMenuEntry::action_with_icon(11, "Cut", "scissors"),
+    DropdownMenuEntry::action_with_icon(12, "Paste", "clipboard"),
 ];
 const MENU_BAR_VIEW_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
-    DropdownMenuEntry::action(13, "Zoom In"),
-    DropdownMenuEntry::action(14, "Zoom Out"),
+    DropdownMenuEntry::action_with_icon(13, "Zoom In", "zoom-in"),
+    DropdownMenuEntry::action_with_icon(14, "Zoom Out", "zoom-out"),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action(15, "Toggle Guides"),
+    DropdownMenuEntry::action_with_icon(15, "Toggle Guides", "layout-grid"),
 ];
 const MENU_BAR_OBJECT_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
-    DropdownMenuEntry::action(16, "Group"),
-    DropdownMenuEntry::action(17, "Ungroup"),
+    DropdownMenuEntry::action_with_icon(16, "Group", "group"),
+    DropdownMenuEntry::action_with_icon(17, "Ungroup", "ungroup"),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action(18, "Bring to Front"),
+    DropdownMenuEntry::action_with_icon(18, "Bring to Front", "bring-to-front"),
 ];
 const MENU_BAR_ACTION_LABELS: [&str; 19] = [
     "New File",
@@ -479,7 +479,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
     let _ = ui.label(
         Label::new("Select a component to preview")
             .tone(LabelTone::Muted)
-            .size(11.0),
+            .size(typography::SMALL_SIZE),
     );
     ui.add_space(8.0);
     let _ = ui.separator();
@@ -504,7 +504,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
                 let _ = ui.label(
                     Label::new(group.title())
                         .tone(LabelTone::Muted)
-                        .size(11.0)
+                        .size(typography::SMALL_SIZE)
                         .weight(LabelWeight::Semibold),
                 );
                 ui.add_space(4.0);
@@ -537,7 +537,7 @@ fn draw_sidebar_theme_toggle(ui: &mut ComponentUi<'_>, dark_mode: &mut bool) -> 
         let _ = ui.label(
             Label::new("Appearance")
                 .tone(LabelTone::Muted)
-                .size(11.0)
+                .size(typography::SMALL_SIZE)
                 .weight(LabelWeight::Semibold),
         );
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
@@ -589,7 +589,7 @@ fn draw_sidebar_component_row(
         egui::pos2(rect.left() + 9.0, rect.center().y),
         Align2::LEFT_CENTER,
         label_text,
-        egui::FontId::new(12.0, egui::FontFamily::Proportional),
+        typography::label_font(),
         if selected || response.hovered() {
             tokens::row_selected_text(dark_mode)
         } else {
@@ -633,7 +633,7 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
                     let _ = ui.label(
                         Label::new(definition.description)
                             .tone(LabelTone::Muted)
-                            .size(11.0),
+                            .size(typography::SMALL_SIZE),
                     );
                     ui.add_space(8.0);
                     let _ = ui.separator();
@@ -668,7 +668,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new("Solid swatches")
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -680,7 +680,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new("Bordered swatches")
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -689,7 +689,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 }
             });
             ui.add_space(10.0);
-            let _ = ui.label(Label::new("Sizes").tone(LabelTone::Muted).size(11.0));
+            let _ = ui.label(
+                Label::new("Sizes")
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[0]).size(12.0));
@@ -702,7 +706,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let dark_mode = ui.visuals().dark_mode;
             let sample_png = egui::include_image!("../../../assets/images/clay_logo_large.png");
 
-            let _ = ui.label(Label::new("Embedded PNG").tone(LabelTone::Muted).size(11.0));
+            let _ = ui.label(
+                Label::new("Embedded PNG")
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
             ui.add_space(6.0);
             let _ = ui.image(
                 Image::new(sample_png.clone())
@@ -715,7 +723,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new("bytes:// source")
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
             let _ = ui.image(
@@ -728,7 +736,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
 
             ui.add_space(10.0);
-            let _ = ui.label(Label::new("Rotation").tone(LabelTone::Muted).size(11.0));
+            let _ = ui.label(
+                Label::new("Rotation")
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let _ = ui.slider(&mut state.image_rotation_degrees, (-180.0..=180.0, 220.0));
@@ -754,7 +766,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new("Supports include_image!, bytes://, and file:// PNG sources.")
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
         }
         ShowcaseComponentKind::Kbd => {
@@ -933,7 +945,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .select_index
                 .and_then(|index| SELECT_OPTIONS.get(index).copied())
                 .unwrap_or("None");
-            let _ = ui.label(Label::new(selected_label).tone(LabelTone::Muted).size(11.0));
+            let _ = ui.label(
+                Label::new(selected_label)
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
         }
         ShowcaseComponentKind::Tabs => {
             ui.tabs(
@@ -947,7 +963,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .find(|option| option.value == state.tab_index)
                 .map(|option| option.label)
                 .unwrap_or(TAB_OPTIONS[0].label);
-            let _ = ui.label(Label::new(selected_tab).tone(LabelTone::Muted).size(11.0));
+            let _ = ui.label(
+                Label::new(selected_tab)
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
 
             ui.add_space(18.0);
             ui.stacked_tabs(
@@ -964,7 +984,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new(selected_stacked_tab)
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
         }
         ShowcaseComponentKind::Separator => {
@@ -1054,13 +1074,13 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new(dropdown_action_label(state.dropdown_action))
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
             ui.add_space(8.0);
             let _ = ui.label(
                 Label::new("Shortcut keycaps")
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
             ui.add_space(4.0);
             draw_dropdown_shortcut_row(ui, "New Team", &["⌘", "T"]);
@@ -1079,7 +1099,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(
                 Label::new(COMBOBOX_OPTIONS[state.combobox_index])
                     .tone(LabelTone::Muted)
-                    .size(11.0),
+                    .size(typography::SMALL_SIZE),
             );
         }
         ShowcaseComponentKind::Command => {
@@ -1243,13 +1263,17 @@ fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys
         let _ = ui.label(
             Label::new(action_label)
                 .tone(LabelTone::Secondary)
-                .size(11.0),
+                .size(typography::SMALL_SIZE),
         );
         ui.add_space(8.0);
         let _ = ui.kbd_group(KbdGroup::new().gap(3.0), |ui| {
             for (index, key) in keys.iter().enumerate() {
                 if index > 0 {
-                    let _ = ui.label(Label::new("+").tone(LabelTone::Muted).size(10.0));
+                    let _ = ui.label(
+                        Label::new("+")
+                            .tone(LabelTone::Muted)
+                            .size(typography::SMALL_SIZE),
+                    );
                 }
                 let _ = ui.kbd(Kbd::new(key).height(18.0).text_size(9.5));
             }
@@ -1295,10 +1319,10 @@ fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseS
 fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let dark_mode = ui.visuals().dark_mode;
     let menu_items = [
-        MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(188.0),
-        MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(156.0),
-        MenuBarItem::new("View", &MENU_BAR_VIEW_ENTRIES).width(156.0),
-        MenuBarItem::new("Object", &MENU_BAR_OBJECT_ENTRIES).width(180.0),
+        MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(220.0),
+        MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(190.0),
+        MenuBarItem::new("View", &MENU_BAR_VIEW_ENTRIES).width(196.0),
+        MenuBarItem::new("Object", &MENU_BAR_OBJECT_ENTRIES).width(220.0),
     ];
 
     let menu_state = egui::Frame::new()
@@ -1323,7 +1347,7 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
     let _ = ui.label(
         Label::new(menu_bar_action_label(state.menu_bar_action))
             .tone(LabelTone::Muted)
-            .size(11.0),
+            .size(typography::SMALL_SIZE),
     );
 }
 

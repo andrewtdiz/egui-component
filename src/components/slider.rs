@@ -1,9 +1,7 @@
 use super::api::ComponentUi;
 use crate::components::chrome::{with_input_chrome, with_slider_chrome};
-use crate::ui::tokens;
-use egui::{
-    Align2, Color32, CornerRadius, CursorIcon, FontFamily, FontId, Id, Rect, Response, Stroke, Ui,
-};
+use crate::ui::{tokens, typography};
+use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Rect, Response, Stroke, Ui};
 use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
@@ -104,13 +102,18 @@ fn paint_slider(ui: &Ui, rect: Rect, response: &Response, value: f32, range: &Ra
         tokens::slider_track_active(dark_mode),
     );
 
-    let thumb_hovered = response.hovered() || response.dragged() || response.has_focus();
-    let thumb_fill = if thumb_hovered {
+    let thumb_pressed = response.is_pointer_button_down_on() || response.dragged();
+    let thumb_hovered = response.hovered() || response.has_focus();
+    let thumb_fill = if thumb_pressed {
+        tokens::slider_thumb_active_fill(dark_mode)
+    } else if thumb_hovered {
         tokens::slider_thumb_hover_fill(dark_mode)
     } else {
         tokens::slider_thumb_fill(dark_mode)
     };
-    let thumb_border = if thumb_hovered {
+    let thumb_border = if thumb_pressed {
+        tokens::slider_thumb_active_border(dark_mode)
+    } else if thumb_hovered {
         tokens::slider_thumb_hover_border(dark_mode)
     } else {
         tokens::slider_thumb_border(dark_mode)
@@ -250,7 +253,7 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
                         egui::pos2(response.rect.left() + 10.0, response.rect.center().y),
                         Align2::LEFT_CENTER,
                         prefix,
-                        FontId::new(12.0, FontFamily::Proportional),
+                        typography::label_font(),
                         props
                             .prefix_tint
                             .unwrap_or(tokens::text_secondary(dark_mode)),

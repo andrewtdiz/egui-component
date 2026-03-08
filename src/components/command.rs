@@ -1,5 +1,5 @@
 use super::{api::ComponentUi, LabelTone, TextInput};
-use crate::ui::tokens;
+use crate::ui::{tokens, typography};
 use egui::{containers::scroll_area::ScrollSource, Id, Response, RichText};
 
 #[derive(Debug, Clone, Copy)]
@@ -107,7 +107,8 @@ impl ComponentUi<'_> {
 
                         shown += 1;
                         ui.horizontal(|ui| {
-                            let _ = ui.label((item.group, LabelTone::Muted, 11.0));
+                            let _ =
+                                ui.label((item.group, LabelTone::Muted, typography::SMALL_SIZE));
                             ui.add_space(8.0);
                             let _ = ui.add(
                                 egui::Label::new(

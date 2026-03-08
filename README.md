@@ -1,7 +1,7 @@
 # egui-component
 
 A focused component library for egui with one interactive showcase runtime for all components in `src/components`.
-The default component typography uses Geist.
+The default component typography uses Segoe UI.
 
 ## Library Surface
 

@@ -1,5 +1,5 @@
 use super::api::ComponentUi;
-use crate::ui::{icons, tokens};
+use crate::ui::{icons, tokens, typography};
 use egui::{Align2, CornerRadius, CursorIcon, Id, Rect, RichText, Stroke, StrokeKind, Ui};
 
 const STACKED_TAB_SIZE: egui::Vec2 = egui::vec2(80.0, 68.0);
@@ -138,7 +138,7 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
                     egui::pos2(rect.center().x, rect.bottom() - 18.0),
                     Align2::CENTER_CENTER,
                     option.label,
-                    egui::FontId::new(12.0, egui::FontFamily::Proportional),
+                    typography::label_font(),
                     if selected {
                         tokens::text_primary(dark_mode)
                     } else {
