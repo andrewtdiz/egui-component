@@ -1,4 +1,5 @@
 use super::{api::ComponentUi, LabelTone, TextInput};
+use crate::primitives::content::muted_empty_state;
 use crate::ui::{tokens, typography};
 use egui::{containers::scroll_area::ScrollSource, Id, Response, RichText};
 
@@ -54,18 +55,6 @@ impl<'a> From<Id> for Command<'a> {
     }
 }
 
-impl<'a> From<(Id, f32)> for Command<'a> {
-    fn from((id, width): (Id, f32)) -> Self {
-        Self::new(id).width(width)
-    }
-}
-
-impl<'a> From<(Id, f32, f32)> for Command<'a> {
-    fn from((id, width, max_height): (Id, f32, f32)) -> Self {
-        Self::new(id).width(width).max_height(max_height)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn command<'a>(
         &mut self,
@@ -78,7 +67,7 @@ impl ComponentUi<'_> {
             query,
             TextInput::new()
                 .width(props.width)
-                .hint_text(props.placeholder),
+                .placeholder(props.placeholder),
         );
 
         self.add_space(6.0);
@@ -107,8 +96,11 @@ impl ComponentUi<'_> {
 
                         shown += 1;
                         ui.horizontal(|ui| {
-                            let _ =
-                                ui.label((item.group, LabelTone::Muted, typography::SMALL_SIZE));
+                            let _ = ui.label(
+                                crate::components::Label::new(item.group)
+                                    .tone(LabelTone::Muted)
+                                    .size(typography::SMALL_SIZE),
+                            );
                             ui.add_space(8.0);
                             let _ = ui.add(
                                 egui::Label::new(
@@ -121,7 +113,7 @@ impl ComponentUi<'_> {
                     }
 
                     if shown == 0 {
-                        let _ = ui.label(("No commands", LabelTone::Muted));
+                        let _ = muted_empty_state(ui.raw_mut(), "No commands");
                     }
                 });
         });

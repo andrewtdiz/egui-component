@@ -80,12 +80,6 @@ impl<'a> From<&'a str> for Kbd<'a> {
     }
 }
 
-impl<'a> From<(&'a str, f32)> for Kbd<'a> {
-    fn from((text, text_size): (&'a str, f32)) -> Self {
-        Self::new(text).text_size(text_size)
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct KbdGroup {
     pub gap: f32,

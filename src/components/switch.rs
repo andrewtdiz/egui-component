@@ -1,24 +1,18 @@
-use super::api::ComponentUi;
+use super::{api::ComponentUi, common::ControlSize};
 use crate::ui::tokens;
 use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum SwitchSize {
-    Default,
-    Small,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Switch<'a> {
     pub label: Option<&'a str>,
-    pub size: SwitchSize,
+    pub size: ControlSize,
 }
 
 impl<'a> Switch<'a> {
     pub fn new() -> Self {
         Self {
             label: None,
-            size: SwitchSize::Default,
+            size: ControlSize::Md,
         }
     }
 
@@ -27,13 +21,13 @@ impl<'a> Switch<'a> {
         self
     }
 
-    pub fn size(mut self, size: SwitchSize) -> Self {
+    pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
         self
     }
 
     pub fn small(mut self) -> Self {
-        self.size = SwitchSize::Small;
+        self.size = ControlSize::Sm;
         self
     }
 }
@@ -53,18 +47,6 @@ impl<'a> From<()> for Switch<'a> {
 impl<'a> From<&'a str> for Switch<'a> {
     fn from(label: &'a str) -> Self {
         Self::new().label(label)
-    }
-}
-
-impl<'a> From<SwitchSize> for Switch<'a> {
-    fn from(size: SwitchSize) -> Self {
-        Self::new().size(size)
-    }
-}
-
-impl<'a> From<(&'a str, SwitchSize)> for Switch<'a> {
-    fn from((label, size): (&'a str, SwitchSize)) -> Self {
-        Self::new().label(label).size(size)
     }
 }
 
@@ -99,17 +81,17 @@ fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
     }
 }
 
-fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: SwitchSize) -> Response {
+fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: ControlSize) -> Response {
     let dark_mode = ui.visuals().dark_mode;
     let metrics = match size {
-        SwitchSize::Default => SwitchMetrics {
+        ControlSize::Md => SwitchMetrics {
             width: 42.0,
             height: 24.0,
             corner_radius: 12,
             knob_radius: 8.6,
             knob_inset: 11.2,
         },
-        SwitchSize::Small => SwitchMetrics {
+        ControlSize::Sm => SwitchMetrics {
             width: 34.0,
             height: 20.0,
             corner_radius: 10,

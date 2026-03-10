@@ -1,8 +1,7 @@
 use super::api::ComponentUi;
+use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{
-    Align, Align2, Color32, CornerRadius, Id, Layout, Margin, Order, Pos2, Stroke, Ui, Vec2,
-};
+use egui::{Align, Align2, Color32, Id, Layout, Order, Pos2, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Toolbar {
@@ -105,23 +104,25 @@ fn draw_toolbar<R>(
         .constrain_to(parent_rect)
         .fade_in(false)
         .show(ui.ctx(), |ui| {
-            egui::Frame::new()
-                .fill(props.fill.unwrap_or(tokens::card_background(dark_mode)))
-                .stroke(
+            surface_frame(
+                ui,
+                SurfaceFrame::new(
+                    props.fill.unwrap_or(tokens::card_background(dark_mode)),
                     props
                         .stroke
                         .unwrap_or(Stroke::new(1.0, tokens::separator(dark_mode))),
                 )
-                .corner_radius(CornerRadius::same(props.corner_radius))
-                .inner_margin(Margin::symmetric(props.padding_x, props.padding_y))
-                .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm()))
-                .show(ui, |ui| {
+                .corner_radius(props.corner_radius)
+                .padding(props.padding_x, props.padding_y)
+                .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm())),
+                |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
                     ui.spacing_mut().item_spacing.y = 0.0;
                     ui.with_layout(Layout::left_to_right(Align::Center), add)
                         .inner
-                })
-                .inner
+                },
+            )
+            .inner
         })
 }
 
@@ -135,7 +136,7 @@ fn anchored_pos(rect: egui::Rect, anchor: Align2) -> Pos2 {
 #[cfg(test)]
 mod tests {
     use super::Toolbar;
-    use crate::components::{ButtonStyle, ComponentUiExt};
+    use crate::components::{Button, ButtonVariant, ComponentUiExt};
     use egui::{CentralPanel, Context, Id, RawInput, Rect};
 
     #[test]
@@ -149,7 +150,7 @@ mod tests {
                     rect = ui
                         .components()
                         .toolbar(Toolbar::new(Id::new("toolbar_test")), |ui| {
-                            let _ = ui.button(("Edit", ButtonStyle::Ghost));
+                            let _ = ui.button(Button::new("Edit").variant(ButtonVariant::Ghost));
                         })
                         .response
                         .rect;

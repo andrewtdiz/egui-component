@@ -1,8 +1,9 @@
+use crate::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use crate::components::{
-    Button, ButtonOverride, ButtonStyle, Checkbox, Color, CommandItem, ComponentUi, ComponentUiExt,
-    DialogueStyle, DropdownMenuEntry, Image, Kbd, KbdGroup, Label, LabelTone, LabelWeight, MenuBar,
-    MenuBarItem, NumberInput, NumberInputAxis, SwitchSize, TabOption, Toolbar, Tooltip,
-    TooltipPlacement,
+    Button, ButtonOverride, ButtonVariant, Checkbox, Color, CommandItem, ComponentUi,
+    ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu, DropdownMenuEntry, Image, Kbd,
+    KbdGroup, Label, LabelTone, LabelWeight, MenuBar, MenuBarItem, NumberInput, NumberInputAxis,
+    Select, TabOption, Toolbar, Tooltip, TooltipPlacement,
 };
 use crate::theme::{self, ThemeMode};
 use crate::ui::{tokens, typography};
@@ -141,13 +142,13 @@ const MENU_BAR_ACTION_LABELS: [&str; 19] = [
 ];
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ShowcaseGroup {
+enum ShowcaseSection {
     PrimaryPrimitive,
     DerivedComposed,
     Examples,
 }
 
-impl ShowcaseGroup {
+impl ShowcaseSection {
     fn title(self) -> &'static str {
         match self {
             Self::PrimaryPrimitive => "Primary / Primitive",
@@ -157,207 +158,152 @@ impl ShowcaseGroup {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ShowcaseComponentKind {
-    Label,
-    Color,
-    Image,
-    Kbd,
-    Input,
-    Field,
-    Button,
-    ButtonGroup,
-    Checkbox,
-    Switch,
-    Slider,
-    NumberInput,
-    Select,
-    Tabs,
-    Separator,
-    Card,
-    Progress,
-    Tooltip,
-    Collapsible,
-    DropdownMenu,
-    Combobox,
-    Command,
-    Dialogue,
-    Icon,
-    MenuBar,
-    Toolbar,
-}
-
 #[derive(Debug, Clone, Copy)]
-struct ShowcaseComponentDefinition {
-    kind: ShowcaseComponentKind,
-    label: &'static str,
+struct ShowcaseMetadata {
+    kind: ComponentKind,
     description: &'static str,
-    group: ShowcaseGroup,
+    section_override: Option<ShowcaseSection>,
 }
 
-const COMPONENT_DEFINITIONS: [ShowcaseComponentDefinition; 26] = [
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Label,
-        label: "Label",
+const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
+    // xtask:showcase-metadata:start
+    ShowcaseMetadata {
+        kind: ComponentKind::Label,
         description: "Text styles and tones",
-        group: ShowcaseGroup::PrimaryPrimitive,
+        section_override: None,
     },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Color,
-        label: "Color",
+    ShowcaseMetadata {
+        kind: ComponentKind::Color,
         description: "Circular solid color swatches",
-        group: ShowcaseGroup::PrimaryPrimitive,
+        section_override: None,
     },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Image,
-        label: "Image",
+    ShowcaseMetadata {
+        kind: ComponentKind::Image,
         description: "PNG-backed raster image rendering",
-        group: ShowcaseGroup::PrimaryPrimitive,
+        section_override: None,
     },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Kbd,
-        label: "Kbd",
-        description: "Keyboard keycaps and shortcuts",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Input,
-        label: "Input",
-        description: "Single-line text input",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Field,
-        label: "Field",
-        description: "Label + input + helper text",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Button,
-        label: "Button",
-        description: "Text, icon, and link button variants",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::ButtonGroup,
-        label: "Button Group",
-        description: "Attached segmented action group",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Checkbox,
-        label: "Checkbox",
-        description: "Boolean control with label",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Switch,
-        label: "Switch",
-        description: "Toggle control",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Slider,
-        label: "Slider",
-        description: "Range input",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::NumberInput,
-        label: "Number Input",
-        description: "Drag-based numeric input",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Select,
-        label: "Select",
-        description: "Popup option picker",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Tabs,
-        label: "Tabs",
-        description: "Segmented tab selector",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Separator,
-        label: "Separator",
-        description: "Inline divider",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Card,
-        label: "Card",
-        description: "Container surface",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Progress,
-        label: "Progress",
-        description: "Completion indicator",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Tooltip,
-        label: "Tooltip",
-        description: "Hover helper text",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Collapsible,
-        label: "Collapsible",
-        description: "Expandable content section",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::DropdownMenu,
-        label: "Dropdown Menu",
-        description: "Triggered option list",
-        group: ShowcaseGroup::PrimaryPrimitive,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Combobox,
-        label: "Combobox",
-        description: "Filterable option list",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Command,
-        label: "Command",
-        description: "Searchable command palette",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Dialogue,
-        label: "Dialogue",
-        description: "Dialogue window trigger",
-        group: ShowcaseGroup::DerivedComposed,
-    },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Icon,
-        label: "Icon",
+    ShowcaseMetadata {
+        kind: ComponentKind::Icon,
         description: "Lucide icon rendering",
-        group: ShowcaseGroup::DerivedComposed,
+        section_override: None,
     },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::MenuBar,
-        label: "Menu Bar",
+    ShowcaseMetadata {
+        kind: ComponentKind::Kbd,
+        description: "Keyboard keycaps and shortcuts",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Input,
+        description: "Single-line text input",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Field,
+        description: "Label + input + helper text",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Button,
+        description: "Text, icon, and link button variants",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::ButtonGroup,
+        description: "Attached segmented action group",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Checkbox,
+        description: "Boolean control with label",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Switch,
+        description: "Toggle control",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Slider,
+        description: "Range input",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::NumberInput,
+        description: "Drag-based numeric input",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Select,
+        description: "Popup option picker",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Tabs,
+        description: "Segmented tab selector",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Separator,
+        description: "Inline divider",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Card,
+        description: "Container surface",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Progress,
+        description: "Completion indicator",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Tooltip,
+        description: "Hover helper text",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::DropdownMenu,
+        description: "Triggered option list",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Collapsible,
+        description: "Expandable content section",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Combobox,
+        description: "Filterable option list",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Command,
+        description: "Searchable command palette",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::Dialogue,
+        description: "Dialogue window trigger",
+        section_override: None,
+    },
+    ShowcaseMetadata {
+        kind: ComponentKind::MenuBar,
         description: "Top-level menu strip with hover switching",
-        group: ShowcaseGroup::Examples,
+        section_override: Some(ShowcaseSection::Examples),
     },
-    ShowcaseComponentDefinition {
-        kind: ShowcaseComponentKind::Toolbar,
-        label: "Toolbar",
+    ShowcaseMetadata {
+        kind: ComponentKind::Toolbar,
         description: "Floating absolute-positioned editing bar",
-        group: ShowcaseGroup::Examples,
+        section_override: Some(ShowcaseSection::Examples),
     },
+    // xtask:showcase-metadata:end
 ];
 
 #[derive(Debug, Clone)]
 pub struct ComponentShowcaseState {
     dark_mode: bool,
-    selected_component: ShowcaseComponentKind,
+    selected_component: ComponentKind,
     input_value: String,
     field_value: String,
     checkbox_value: bool,
@@ -388,7 +334,7 @@ impl Default for ComponentShowcaseState {
     fn default() -> Self {
         Self {
             dark_mode: true,
-            selected_component: ShowcaseComponentKind::Button,
+            selected_component: ComponentKind::Button,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             checkbox_value: true,
@@ -503,20 +449,20 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
         .show(ui.raw_mut(), |ui| {
             let mut ui = ui.components();
             ui.spacing_mut().item_spacing.y = 1.0;
-            for group in [
-                ShowcaseGroup::PrimaryPrimitive,
-                ShowcaseGroup::DerivedComposed,
-                ShowcaseGroup::Examples,
+            for section in [
+                ShowcaseSection::PrimaryPrimitive,
+                ShowcaseSection::DerivedComposed,
+                ShowcaseSection::Examples,
             ] {
                 let _ = ui.label(
-                    Label::new(group.title())
+                    Label::new(section.title())
                         .tone(LabelTone::Muted)
                         .size(typography::SMALL_SIZE)
                         .weight(LabelWeight::Semibold),
                 );
                 ui.add_space(4.0);
 
-                for definition in component_definitions_by_group(group) {
+                for definition in showcase_component_definitions_by_section(section) {
                     let selected = state.selected_component == definition.kind;
                     if draw_sidebar_component_row(
                         ui.raw_mut(),
@@ -553,14 +499,22 @@ fn draw_sidebar_theme_toggle(ui: &mut ComponentUi<'_>, dark_mode: &mut bool) -> 
             } else {
                 tokens::text_muted(*dark_mode)
             };
-            let _ = ui.icon(("moon", 13.0, moon_tint));
-            let switch_response = ui.switch(dark_mode, SwitchSize::Small);
+            let _ = ui.icon(
+                crate::components::Icon::new("moon")
+                    .size(13.0)
+                    .tint(moon_tint),
+            );
+            let switch_response = ui.switch(dark_mode, crate::components::Switch::new().small());
             let sun_tint = if *dark_mode {
                 tokens::text_muted(*dark_mode)
             } else {
                 tokens::text_primary(*dark_mode)
             };
-            let _ = ui.icon(("sun", 13.0, sun_tint));
+            let _ = ui.icon(
+                crate::components::Icon::new("sun")
+                    .size(13.0)
+                    .tint(sun_tint),
+            );
             theme_changed = switch_response.changed();
         });
     });
@@ -608,7 +562,8 @@ fn draw_sidebar_component_row(
 }
 
 fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
-    let definition = component_definition(state.selected_component);
+    let definition = catalog_component_definition(state.selected_component);
+    let metadata = showcase_metadata(state.selected_component);
 
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_preview_scroll")
@@ -622,7 +577,7 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
             ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
                 let width = if matches!(
                     state.selected_component,
-                    ShowcaseComponentKind::Toolbar | ShowcaseComponentKind::MenuBar
+                    ComponentKind::Toolbar | ComponentKind::MenuBar
                 ) {
                     ui.available_width().min(980.0)
                 } else {
@@ -638,7 +593,7 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
                             .weight(LabelWeight::Semibold),
                     );
                     let _ = ui.label(
-                        Label::new(definition.description)
+                        Label::new(metadata.description)
                             .tone(LabelTone::Muted)
                             .size(typography::SMALL_SIZE),
                     );
@@ -654,7 +609,8 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
 
 fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     match state.selected_component {
-        ShowcaseComponentKind::Label => {
+        // xtask:showcase-render-arms:start
+        ComponentKind::Label => {
             let _ = ui.label(
                 Label::new("Primary label")
                     .tone(LabelTone::Primary)
@@ -668,7 +624,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .weight(LabelWeight::Semibold),
             );
         }
-        ShowcaseComponentKind::Color => {
+        ComponentKind::Color => {
             let dark_mode = ui.visuals().dark_mode;
             let border = Stroke::new(1.0, tokens::input_border(dark_mode));
 
@@ -709,7 +665,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[3]).size(28.0).stroke(border));
             });
         }
-        ShowcaseComponentKind::Image => {
+        ComponentKind::Image => {
             let dark_mode = ui.visuals().dark_mode;
             let sample_png = egui::include_image!("../../../assets/images/clay_logo_large.png");
 
@@ -776,7 +732,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
         }
-        ShowcaseComponentKind::Kbd => {
+        ComponentKind::Kbd => {
             let _ = ui.kbd_group(KbdGroup::new(), |ui| {
                 let _ = ui.kbd(Kbd::new("⌘"));
                 let _ = ui.kbd(Kbd::new("⇧"));
@@ -794,51 +750,74 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = ui.kbd(Kbd::new("B"));
             });
         }
-        ShowcaseComponentKind::Input => {
-            let _ = ui.text_input(&mut state.input_value, (280.0, "Type component name"));
-        }
-        ShowcaseComponentKind::Field => {
-            let _ = ui.field(
-                &mut state.field_value,
-                ("Material", 280.0, "Assigned material for selected mesh"),
+        ComponentKind::Input => {
+            let _ = ui.text_input(
+                &mut state.input_value,
+                crate::components::TextInput::new()
+                    .width(280.0)
+                    .placeholder("Type component name"),
             );
         }
-        ShowcaseComponentKind::Button => {
+        ComponentKind::Field => {
+            let _ = ui.field(
+                &mut state.field_value,
+                crate::components::Field::new("Material")
+                    .width(280.0)
+                    .helper_text("Assigned material for selected mesh"),
+            );
+        }
+        ComponentKind::Button => {
             ui.horizontal(|ui| {
-                let _ = ui.button(("Primary", ButtonStyle::Primary));
-                let _ = ui.button(("Secondary", ButtonStyle::Secondary));
-                let _ = ui.button(("Ghost", ButtonStyle::Ghost));
-                let _ = ui.button(("Link", ButtonStyle::Link));
+                let _ = ui.button(Button::new("Primary").variant(ButtonVariant::Primary));
+                let _ = ui.button(Button::new("Secondary").variant(ButtonVariant::Secondary));
+                let _ = ui.button(Button::new("Ghost").variant(ButtonVariant::Ghost));
+                let _ = ui.button(Button::new("Link").variant(ButtonVariant::Link));
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 let _ = ui.button(
                     Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .style(ButtonStyle::Primary),
+                        .variant(ButtonVariant::Primary),
                 );
                 let _ = ui.button(
                     Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .style(ButtonStyle::Secondary),
+                        .variant(ButtonVariant::Secondary),
                 );
                 let _ = ui.button(
                     Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .style(ButtonStyle::Ghost),
+                        .variant(ButtonVariant::Ghost),
                 );
                 let _ = ui.button(
                     Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
-                        .style(ButtonStyle::Link),
+                        .variant(ButtonVariant::Link),
                 );
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let _ = ui.button(("Create", "plus", ButtonStyle::Primary));
-                let _ = ui.button(("Create", "plus", ButtonStyle::Secondary));
-                let _ = ui.button(("Create", "plus", ButtonStyle::Ghost));
-                let _ = ui.button(("Create", "plus", ButtonStyle::Link));
+                let _ = ui.button(
+                    Button::new("Create")
+                        .leading_icon("plus")
+                        .variant(ButtonVariant::Primary),
+                );
+                let _ = ui.button(
+                    Button::new("Create")
+                        .leading_icon("plus")
+                        .variant(ButtonVariant::Secondary),
+                );
+                let _ = ui.button(
+                    Button::new("Create")
+                        .leading_icon("plus")
+                        .variant(ButtonVariant::Ghost),
+                );
+                let _ = ui.button(
+                    Button::new("Create")
+                        .leading_icon("plus")
+                        .variant(ButtonVariant::Link),
+                );
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -851,21 +830,21 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     };
                     let _ = ui.button(
                         Button::color_only(Color::new(fill).size(18.0).stroke(stroke))
-                            .style(ButtonStyle::Ghost),
+                            .variant(ButtonVariant::Ghost),
                     );
                 }
             });
         }
-        ShowcaseComponentKind::ButtonGroup => {
+        ComponentKind::ButtonGroup => {
             ui.button_group(
                 &mut state.button_group_index,
-                (
+                crate::components::ButtonGroup::new(
                     Id::new("component_showcase_button_group"),
                     &BUTTON_GROUP_OPTIONS[..],
                 ),
             );
         }
-        ShowcaseComponentKind::Checkbox => {
+        ComponentKind::Checkbox => {
             ui.horizontal(|ui| {
                 let mut checkbox_response = ui.checkbox(&mut state.checkbox_value, Checkbox::new());
                 let dark_mode = ui.visuals().dark_mode;
@@ -894,14 +873,16 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let _ = checkbox_response.on_hover_cursor(CursorIcon::PointingHand);
             });
         }
-        ShowcaseComponentKind::Switch => {
+        ComponentKind::Switch => {
             let _ = ui.switch(&mut state.switch_value, "Enable Post FX");
             let _ = ui.switch(
                 &mut state.small_switch_value,
-                ("Use Compact Handles", SwitchSize::Small),
+                crate::components::Switch::new()
+                    .label("Use Compact Handles")
+                    .size(ControlSize::Sm),
             );
         }
-        ShowcaseComponentKind::Slider => {
+        ComponentKind::Slider => {
             ui.horizontal(|ui| {
                 let _ = ui.slider(&mut state.slider_value, (0.0..=100.0, 250.0));
                 let value_label = format!("{:.0}", state.slider_value.round());
@@ -912,7 +893,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 );
             });
         }
-        ShowcaseComponentKind::NumberInput => {
+        ComponentKind::NumberInput => {
             ui.horizontal(|ui| {
                 let _ = ui.number_input(
                     &mut state.number_x_value,
@@ -938,14 +919,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 );
             });
         }
-        ShowcaseComponentKind::Select => {
+        ComponentKind::Select => {
             let _ = ui.select(
                 &mut state.select_index,
-                (
-                    Id::new("component_showcase_select"),
-                    &SELECT_OPTIONS[..],
-                    280.0,
-                ),
+                Select::from_id(Id::new("component_showcase_select"), &SELECT_OPTIONS[..])
+                    .width(280.0),
             );
 
             let selected_label = state
@@ -958,7 +936,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
         }
-        ShowcaseComponentKind::Tabs => {
+        ComponentKind::Tabs => {
             ui.tabs(
                 Id::new("component_showcase_tabs"),
                 &mut state.tab_index,
@@ -994,12 +972,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
         }
-        ShowcaseComponentKind::Separator => {
+        ComponentKind::Separator => {
             let _ = ui.label(Label::new("Above separator").tone(LabelTone::Secondary));
             let _ = ui.separator();
             let _ = ui.label(Label::new("Below separator").tone(LabelTone::Secondary));
         }
-        ShowcaseComponentKind::Card => {
+        ComponentKind::Card => {
             let dark_mode = ui.visuals().dark_mode;
             let _ = ui.card(
                 (
@@ -1027,22 +1005,25 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                             footer_size,
                             Layout::right_to_left(egui::Align::Center),
                             |ui| {
-                                let _ = ui.button(("Save", ButtonStyle::Primary));
-                                let _ = ui.button(("Cancel", ButtonStyle::Secondary));
+                                let _ =
+                                    ui.button(Button::new("Save").variant(ButtonVariant::Primary));
+                                let _ = ui.button(
+                                    Button::new("Cancel").variant(ButtonVariant::Secondary),
+                                );
                             },
                         );
                     });
                 },
             );
         }
-        ShowcaseComponentKind::Progress => {
+        ComponentKind::Progress => {
             let _ = ui.progress(state.progress_value, (280.0, 10.0));
         }
-        ShowcaseComponentKind::Tooltip => {
+        ComponentKind::Tooltip => {
             let mut placement_index = tooltip_placement_index(state.tooltip_placement);
             ui.button_group(
                 &mut placement_index,
-                (
+                crate::components::ButtonGroup::new(
                     Id::new("component_showcase_tooltip_placement"),
                     &TOOLTIP_PLACEMENT_OPTIONS[..],
                 ),
@@ -1055,26 +1036,30 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .placement(state.tooltip_placement),
             );
         }
-        ShowcaseComponentKind::Collapsible => {
+        ComponentKind::Collapsible => {
             let collapsible_open = state.collapsible_open;
             let _ = ui.collapsible(
                 &mut state.collapsible_open,
-                (
+                crate::components::Collapsible::new(
                     Id::new("component_showcase_collapsible"),
                     "Transform",
-                    collapsible_open,
-                    "move-3d",
-                    "ellipsis_vertical",
-                ),
+                )
+                .open(collapsible_open)
+                .leading_icon("move-3d")
+                .trailing_icon("ellipsis_vertical"),
                 |ui| {
-                    let _ = ui.label(("Position", LabelTone::Secondary));
-                    let _ = ui.label(("Rotation", LabelTone::Secondary));
-                    let _ = ui.label(("Scale", LabelTone::Secondary));
+                    let _ = ui.label(Label::new("Position").tone(LabelTone::Secondary));
+                    let _ = ui.label(Label::new("Rotation").tone(LabelTone::Secondary));
+                    let _ = ui.label(Label::new("Scale").tone(LabelTone::Secondary));
                 },
             );
         }
-        ShowcaseComponentKind::DropdownMenu => {
-            let (_response, menu_state) = ui.dropdown_menu(("Open", &DROPDOWN_ENTRIES[..], 220.0));
+        ComponentKind::DropdownMenu => {
+            let (_response, menu_state) = ui.dropdown_menu(
+                DropdownMenu::new("Open")
+                    .entries(&DROPDOWN_ENTRIES[..])
+                    .width(220.0),
+            );
             if let Some(action) = menu_state.action {
                 state.dropdown_action = Some(action);
             }
@@ -1093,15 +1078,15 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             draw_dropdown_shortcut_row(ui, "New Team", &["⌘", "T"]);
             draw_dropdown_shortcut_row(ui, "Log out", &["⇧", "⌘", "Q"]);
         }
-        ShowcaseComponentKind::Combobox => {
+        ComponentKind::Combobox => {
             let _ = ui.combobox(
                 &mut state.combobox_query,
                 &mut state.combobox_index,
-                (
+                crate::components::Combobox::new(
                     Id::new("component_showcase_combobox"),
                     &COMBOBOX_OPTIONS[..],
-                    280.0,
-                ),
+                )
+                .width(280.0),
             );
             let _ = ui.label(
                 Label::new(COMBOBOX_OPTIONS[state.combobox_index])
@@ -1109,24 +1094,24 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
         }
-        ShowcaseComponentKind::Command => {
+        ComponentKind::Command => {
             let _ = ui.command(
                 &mut state.command_query,
                 &COMMAND_OPTIONS,
-                (Id::new("component_showcase_command"), 280.0),
+                crate::components::Command::new(Id::new("component_showcase_command")).width(280.0),
             );
         }
-        ShowcaseComponentKind::Dialogue => {
+        ComponentKind::Dialogue => {
             ui.horizontal(|ui| {
                 if ui
-                    .button(("Open Dialogue", ButtonStyle::Secondary))
+                    .button(Button::new("Open Dialogue").variant(ButtonVariant::Secondary))
                     .clicked()
                 {
                     state.dialogue_open = true;
                 }
 
                 if ui
-                    .button(("Open Alert Dialogue", ButtonStyle::Secondary))
+                    .button(Button::new("Open Alert Dialogue").variant(ButtonVariant::Secondary))
                     .clicked()
                 {
                     state.alert_dialogue_open = true;
@@ -1135,12 +1120,14 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.dialogue_modal(
                 &mut state.dialogue_open,
-                (Id::new("component_showcase_dialogue"), 380.0),
+                crate::components::DialogueModal::new(Id::new("component_showcase_dialogue"))
+                    .width(380.0),
                 |ui, close_requested| {
-                    ui.dialogue_header_with_close((
-                        "Create Component",
-                        "Adds the selected component to the active object.",
-                    ), close_requested);
+                    ui.dialogue_header_with_close(
+                        crate::components::DialogueHeader::new("Create Component")
+                            .description("Adds the selected component to the active object."),
+                        close_requested,
+                    );
                     ui.add_space(12.0);
                     let _ = ui.vertical(|ui| {
                         let _ = ui.label(
@@ -1157,10 +1144,16 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                         footer_size,
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            if ui.button(("Create", ButtonStyle::Primary)).clicked() {
+                            if ui
+                                .button(Button::new("Create").variant(ButtonVariant::Primary))
+                                .clicked()
+                            {
                                 *close_requested = true;
                             }
-                            if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
+                            if ui
+                                .button(Button::new("Cancel").variant(ButtonVariant::Secondary))
+                                .clicked()
+                            {
                                 *close_requested = true;
                             }
                         },
@@ -1170,13 +1163,17 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.dialogue_modal(
                 &mut state.alert_dialogue_open,
-                (Id::new("component_showcase_alert_dialogue"), 380.0),
+                crate::components::DialogueModal::new(
+                    Id::new("component_showcase_alert_dialogue"),
+                )
+                .width(380.0),
                 |ui, close_requested| {
-                    ui.dialogue_header_with_close((
-                        "Delete Object",
-                        "This action cannot be undone.",
-                        DialogueStyle::Alert,
-                    ), close_requested);
+                    ui.dialogue_header_with_close(
+                        crate::components::DialogueHeader::new("Delete Object")
+                            .description("This action cannot be undone.")
+                            .intent(DialogueIntent::Alert),
+                        close_requested,
+                    );
                     ui.add_space(12.0);
                     let _ = ui.vertical(|ui| {
                         let _ = ui.label(
@@ -1193,10 +1190,16 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                         footer_size,
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            if ui.button(("Delete", ButtonStyle::Primary)).clicked() {
+                            if ui
+                                .button(Button::new("Delete").variant(ButtonVariant::Primary))
+                                .clicked()
+                            {
                                 *close_requested = true;
                             }
-                            if ui.button(("Cancel", ButtonStyle::Secondary)).clicked() {
+                            if ui
+                                .button(Button::new("Cancel").variant(ButtonVariant::Secondary))
+                                .clicked()
+                            {
                                 *close_requested = true;
                             }
                         },
@@ -1204,39 +1207,51 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 },
             );
         }
-        ShowcaseComponentKind::Icon => {
+        ComponentKind::Icon => {
             ui.horizontal(|ui| {
-                let _ = ui.icon(("bot", 16.0));
-                let _ = ui.icon(("settings-2", 16.0));
-                let _ = ui.icon(("sparkles", 16.0));
-                let _ = ui.icon(("gamepad-2", 16.0));
-                let _ = ui.icon(("wand-sparkles", 16.0));
+                let _ = ui.icon(crate::components::Icon::new("bot").size(16.0));
+                let _ = ui.icon(crate::components::Icon::new("settings-2").size(16.0));
+                let _ = ui.icon(crate::components::Icon::new("sparkles").size(16.0));
+                let _ = ui.icon(crate::components::Icon::new("gamepad-2").size(16.0));
+                let _ = ui.icon(crate::components::Icon::new("wand-sparkles").size(16.0));
             });
         }
-        ShowcaseComponentKind::MenuBar => {
+        ComponentKind::MenuBar => {
             draw_menu_bar_preview(ui, state);
         }
-        ShowcaseComponentKind::Toolbar => {
+        ComponentKind::Toolbar => {
             draw_toolbar_preview(ui, state);
-        }
+        } // xtask:showcase-render-arms:end
     }
 }
 
-fn component_definitions() -> impl Iterator<Item = &'static ShowcaseComponentDefinition> {
-    COMPONENT_DEFINITIONS.iter()
+fn showcase_component_definitions_by_section(
+    section: ShowcaseSection,
+) -> impl Iterator<Item = &'static ComponentDefinition> {
+    catalog::component_definitions()
+        .filter(move |definition| showcase_section(definition.kind) == section)
 }
 
-fn component_definitions_by_group(
-    group: ShowcaseGroup,
-) -> impl Iterator<Item = &'static ShowcaseComponentDefinition> {
-    component_definitions().filter(move |definition| definition.group == group)
-}
-
-fn component_definition(kind: ShowcaseComponentKind) -> &'static ShowcaseComponentDefinition {
-    COMPONENT_DEFINITIONS
-        .iter()
+fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefinition {
+    catalog::component_definitions()
         .find(|definition| definition.kind == kind)
-        .expect("missing showcase component definition")
+        .expect("missing catalog component definition")
+}
+
+fn showcase_metadata(kind: ComponentKind) -> &'static ShowcaseMetadata {
+    SHOWCASE_METADATA
+        .iter()
+        .find(|metadata| metadata.kind == kind)
+        .expect("missing showcase metadata")
+}
+
+fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
+    showcase_metadata(kind).section_override.unwrap_or(
+        match catalog_component_definition(kind).group {
+            ComponentGroup::Primitive => ShowcaseSection::PrimaryPrimitive,
+            ComponentGroup::Composed => ShowcaseSection::DerivedComposed,
+        },
+    )
 }
 
 fn dropdown_action_label(action: Option<usize>) -> &'static str {
@@ -1360,11 +1375,11 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
 
 fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
-        let _ = ui.button(Button::new(label).style(ButtonStyle::Ghost));
+        let _ = ui.button(Button::new(label).variant(ButtonVariant::Ghost));
         if index == 1 {
             let _ = ui.button(
                 Button::icon_only("crown")
-                    .style(ButtonStyle::Ghost)
+                    .variant(ButtonVariant::Ghost)
                     .icon_size(13.0)
                     .icon_tint(Color32::from_rgb(216, 168, 83)),
             );
@@ -1395,17 +1410,17 @@ fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
 
     draw_toolbar_divider(ui);
 
-    let _ = ui.button(Button::icon_only("square-menu").style(ButtonStyle::Ghost));
-    let _ = ui.button(Button::icon_only("rotate-ccw").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::icon_only("square-menu").variant(ButtonVariant::Ghost));
+    let _ = ui.button(Button::icon_only("rotate-ccw").variant(ButtonVariant::Ghost));
     draw_toolbar_divider(ui);
-    let _ = ui.button(Button::icon_only("crop").style(ButtonStyle::Ghost));
-    let _ = ui.button(Button::new("Flip").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::icon_only("crop").variant(ButtonVariant::Ghost));
+    let _ = ui.button(Button::new("Flip").variant(ButtonVariant::Ghost));
     draw_toolbar_divider(ui);
-    let _ = ui.button(Button::icon_only("grid-3x3").style(ButtonStyle::Ghost));
-    let _ = ui.button(Button::new("Animate").style(ButtonStyle::Ghost));
-    let _ = ui.button(Button::new("Position").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::icon_only("grid-3x3").variant(ButtonVariant::Ghost));
+    let _ = ui.button(Button::new("Animate").variant(ButtonVariant::Ghost));
+    let _ = ui.button(Button::new("Position").variant(ButtonVariant::Ghost));
     draw_toolbar_divider(ui);
-    let _ = ui.button(Button::icon_only("paint-roller").style(ButtonStyle::Ghost));
+    let _ = ui.button(Button::icon_only("paint-roller").variant(ButtonVariant::Ghost));
 }
 
 fn draw_toolbar_divider(ui: &mut ComponentUi<'_>) {
@@ -1463,5 +1478,54 @@ fn menu_bar_action_label(action: Option<usize>) -> &'static str {
     match action.and_then(|id| MENU_BAR_ACTION_LABELS.get(id).copied()) {
         Some(label) => label,
         None => "No menu action triggered",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn showcase_metadata_covers_each_catalog_component_once() {
+        assert_eq!(
+            SHOWCASE_METADATA.len(),
+            catalog::component_definitions().count()
+        );
+
+        for definition in catalog::component_definitions() {
+            assert_eq!(
+                SHOWCASE_METADATA
+                    .iter()
+                    .filter(|metadata| metadata.kind == definition.kind)
+                    .count(),
+                1,
+                "missing or duplicate showcase metadata for {:?}",
+                definition.kind
+            );
+        }
+    }
+
+    #[test]
+    fn showcase_sections_follow_catalog_groups_and_example_overrides() {
+        assert_eq!(
+            showcase_section(ComponentKind::Icon),
+            ShowcaseSection::PrimaryPrimitive
+        );
+        assert_eq!(
+            showcase_section(ComponentKind::NumberInput),
+            ShowcaseSection::PrimaryPrimitive
+        );
+        assert_eq!(
+            showcase_section(ComponentKind::Dialogue),
+            ShowcaseSection::DerivedComposed
+        );
+        assert_eq!(
+            showcase_section(ComponentKind::MenuBar),
+            ShowcaseSection::Examples
+        );
+        assert_eq!(
+            showcase_section(ComponentKind::Toolbar),
+            ShowcaseSection::Examples
+        );
     }
 }

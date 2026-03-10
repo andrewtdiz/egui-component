@@ -8,21 +8,23 @@ Use it when you are:
 - editing an existing component
 - generating examples
 - asking an LLM to extend the library without breaking the current look and feel
+- running the authoring workflow through `cargo xtask`
 
 Read these files in order:
 
-1. `authoring-rules.md`
-2. `components-reference.md`
+1. `architecture-overview.md`
+2. `authoring-rules.md`
+3. `components-reference.md`
 
 ## What This Library Is
 
 `egui-component` is a small component library on top of `egui`.
 
-The public surface is built around three ideas:
+The public runtime surface is built around three ideas:
 
 - `theme::install(&Context, ThemeMode)` installs the shared fonts, visuals, and icon loading.
 - `ui.components()` wraps an `egui::Ui` in `ComponentUi`.
-- Each component method accepts a typed builder and usually a few `Into<Builder>` shorthand forms.
+- Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
 ## Non-Negotiable Design Contract
 
@@ -49,20 +51,24 @@ Use these files as the source of truth:
 
 - `src/components/api.rs`
   Defines `ComponentUi`, `ComponentUiExt`, and scoped override plumbing.
+- `src/primitives/*.rs`
+  Public authoring primitives for chrome, popup framing, row layouts, and surface helpers.
 - `src/components/*.rs`
   One file per component or component family.
 - `src/ui/tokens.rs`
   Color, spacing, radius, and state tokens.
 - `src/ui/style.rs`
   Global component-theme defaults.
-- `src/components/chrome.rs`
-  Shared input and slider chrome helpers.
 - `src/theme.rs`
   Theme setup entry points.
 - `src/catalog.rs`
   Public component registry used by the showcase and parser helpers.
 - `src/dev/showcase/component_showcase.rs`
   Canonical live examples.
+- `docs/llm/components/*.md`
+  Per-component authoring stubs used to build the generated reference.
+- `docs/llm/templates/*.md`
+  Family guides and the component stub template used by `cargo xtask new-component`.
 
 ## Surface Summary
 
@@ -111,8 +117,8 @@ use egui_component::prelude::*;
 let mut ui = ui.components();
 
 let _ = ui.label("Material");
-let _ = ui.text_input(&mut name, (220.0, "Name"));
-let _ = ui.button(("Save", ButtonStyle::Primary));
+let _ = ui.text_input(&mut name, TextInput::new().width(220.0).placeholder("Name"));
+let _ = ui.button(Button::new("Save").variant(ButtonVariant::Primary));
 ```
 
 Scoped overrides are opt-in and type-specific:
@@ -120,7 +126,7 @@ Scoped overrides are opt-in and type-specific:
 ```rust
 ui.with_override(
     (
-        ButtonOverride::new().style(ButtonStyle::Secondary),
+        ButtonOverride::new().variant(ButtonVariant::Secondary),
         LabelOverride::new().tone(LabelTone::Muted),
     ),
     |ui| {
@@ -130,16 +136,33 @@ ui.with_override(
 );
 ```
 
+## Authoring Workflow
+
+Use these commands:
+
+- `cargo xtask new-component <name> --family <display|control|row-list|popup|composed>`
+- `cargo xtask sync-llm-docs`
+- `cargo xtask validate-components`
+
+The expected implementation path is:
+
+1. Run `cargo xtask new-component`.
+2. Fill in the typed builder and keep shorthands minimal.
+3. Compose `src/primitives/` helpers instead of painting new chrome inline.
+4. Update the generated doc stub in `docs/llm/components/`.
+5. Run sync and validation before finishing.
+
 ## If You Add A New Component
 
 Do all of this in the same change:
 
 1. Add `src/components/<name>.rs`.
 2. Export it from `src/components/mod.rs`.
-3. Re-export it from `src/lib.rs::prelude` if it belongs in the public prelude.
+3. Re-export it from `src/lib.rs::prelude`.
 4. Add it to `src/catalog.rs`.
 5. Add a showcase example in `src/dev/showcase/component_showcase.rs`.
-6. Reuse existing tokens and chrome helpers before creating new visual rules.
+6. Add or refine the component stub in `docs/llm/components/`.
+7. Reuse existing tokens and primitives before creating new visual rules.
 
 ## What To Read Next
 

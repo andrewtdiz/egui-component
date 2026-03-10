@@ -1,5 +1,5 @@
 use super::api::ComponentUi;
-use crate::components::chrome::{with_input_chrome, with_slider_chrome};
+use crate::primitives::control::{with_input_chrome, with_slider_chrome};
 use crate::ui::{tokens, typography};
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Rect, Response, Stroke, Ui};
 use std::ops::RangeInclusive;

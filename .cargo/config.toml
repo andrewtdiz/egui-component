@@ -4,3 +4,4 @@ target-dir = "target"
 [alias]
 showcase = "run -q --features showcase --bin showcase --"
 story = "run -q --bin story --"
+xtask = "run -q --manifest-path xtask/Cargo.toml --"

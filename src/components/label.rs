@@ -131,24 +131,6 @@ impl<'a> From<&'a str> for Label<'a> {
     }
 }
 
-impl<'a> From<(&'a str, LabelTone)> for Label<'a> {
-    fn from((text, tone): (&'a str, LabelTone)) -> Self {
-        Self::new(text).tone(tone)
-    }
-}
-
-impl<'a> From<(&'a str, LabelTone, f32)> for Label<'a> {
-    fn from((text, tone, size): (&'a str, LabelTone, f32)) -> Self {
-        Self::new(text).tone(tone).size(size)
-    }
-}
-
-impl<'a> From<(&'a str, LabelTone, LabelWeight)> for Label<'a> {
-    fn from((text, tone, weight): (&'a str, LabelTone, LabelWeight)) -> Self {
-        Self::new(text).tone(tone).weight(weight)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn label<'a>(&mut self, props: impl Into<Label<'a>>) -> egui::Response {
         let props = self.overrides.label.apply(props.into());

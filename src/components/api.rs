@@ -249,7 +249,7 @@ fn component_overrides_id() -> Id {
 mod tests {
     use super::*;
     use crate::components::{
-        button::{ButtonOverride, ButtonStyle},
+        button::{ButtonOverride, ButtonVariant},
         card::CardOverride,
         label::{LabelOverride, LabelTone},
     };
@@ -261,13 +261,13 @@ mod tests {
     fn tuple_override_sets_merge_by_widget_type() {
         let mut overrides = ComponentOverrides::default();
         (
-            ButtonOverride::new().style(ButtonStyle::Secondary),
+            ButtonOverride::new().variant(ButtonVariant::Secondary),
             LabelOverride::new().tone(LabelTone::Muted),
             CardOverride::new().fill(Color32::WHITE),
         )
             .apply_to(&mut overrides);
 
-        assert_eq!(overrides.button.style, Some(ButtonStyle::Secondary));
+        assert_eq!(overrides.button.variant, Some(ButtonVariant::Secondary));
         assert_eq!(overrides.label.tone, Some(LabelTone::Muted));
         assert_eq!(overrides.card.fill, Some(Color32::WHITE));
     }
@@ -276,15 +276,15 @@ mod tests {
     fn later_tuple_overrides_win_for_same_widget() {
         let mut overrides = ComponentOverrides::default();
         (
-            ButtonOverride::new().style(ButtonStyle::Secondary),
+            ButtonOverride::new().variant(ButtonVariant::Secondary),
             ButtonOverride::new()
-                .style(ButtonStyle::Ghost)
+                .variant(ButtonVariant::Ghost)
                 .icon_size(18.0),
             CardOverride::new().stroke(Stroke::NONE),
         )
             .apply_to(&mut overrides);
 
-        assert_eq!(overrides.button.style, Some(ButtonStyle::Ghost));
+        assert_eq!(overrides.button.variant, Some(ButtonVariant::Ghost));
         assert_eq!(overrides.button.icon_size, Some(18.0));
         assert_eq!(overrides.card.stroke, Some(Stroke::NONE));
     }

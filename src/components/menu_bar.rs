@@ -92,12 +92,6 @@ impl<'a> MenuBar<'a> {
     }
 }
 
-impl<'a> From<(Id, &'a [MenuBarItem<'a>])> for MenuBar<'a> {
-    fn from((id, items): (Id, &'a [MenuBarItem<'a>])) -> Self {
-        Self::new(id, items)
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct MenuBarState {
     pub action: Option<usize>,

@@ -1,4 +1,8 @@
-use super::{api::ComponentUi, ButtonStyle};
+use super::{api::ComponentUi, Button, ButtonVariant};
+use crate::primitives::{
+    popup::{popup_panel, PopupPanel},
+    row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
+};
 use crate::ui::{icons, tokens, typography};
 use egui::{
     Align2, CornerRadius, CursorIcon, FontFamily, FontId, Margin, Popup, Rect, Response, Stroke,
@@ -128,28 +132,23 @@ pub struct DropdownMenu<'a> {
     pub options: &'a [&'a str],
     pub entries: &'a [DropdownMenuEntry<'a>],
     pub width: f32,
-    pub trigger_style: ButtonStyle,
+    pub trigger_variant: ButtonVariant,
 }
 
 impl<'a> DropdownMenu<'a> {
-    pub fn new(trigger_label: &'a str, options: &'a [&'a str]) -> Self {
-        Self {
-            trigger_label,
-            options,
-            entries: &[],
-            width: 220.0,
-            trigger_style: ButtonStyle::Secondary,
-        }
-    }
-
-    pub fn with_entries(trigger_label: &'a str, entries: &'a [DropdownMenuEntry<'a>]) -> Self {
+    pub fn new(trigger_label: &'a str) -> Self {
         Self {
             trigger_label,
             options: &[],
-            entries,
+            entries: &[],
             width: 220.0,
-            trigger_style: ButtonStyle::Secondary,
+            trigger_variant: ButtonVariant::Secondary,
         }
+    }
+
+    pub fn options(mut self, options: &'a [&'a str]) -> Self {
+        self.options = options;
+        self
     }
 
     pub fn entries(mut self, entries: &'a [DropdownMenuEntry<'a>]) -> Self {
@@ -162,39 +161,15 @@ impl<'a> DropdownMenu<'a> {
         self
     }
 
-    pub fn trigger_style(mut self, trigger_style: ButtonStyle) -> Self {
-        self.trigger_style = trigger_style;
+    pub fn trigger_variant(mut self, trigger_variant: ButtonVariant) -> Self {
+        self.trigger_variant = trigger_variant;
         self
-    }
-}
-
-impl<'a> From<(&'a str, &'a [&'a str])> for DropdownMenu<'a> {
-    fn from((trigger_label, options): (&'a str, &'a [&'a str])) -> Self {
-        Self::new(trigger_label, options)
     }
 }
 
 impl<'a> From<&'a str> for DropdownMenu<'a> {
     fn from(trigger_label: &'a str) -> Self {
-        Self::new(trigger_label, &[])
-    }
-}
-
-impl<'a> From<(&'a str, &'a [DropdownMenuEntry<'a>])> for DropdownMenu<'a> {
-    fn from((trigger_label, entries): (&'a str, &'a [DropdownMenuEntry<'a>])) -> Self {
-        Self::with_entries(trigger_label, entries)
-    }
-}
-
-impl<'a> From<(&'a str, &'a [&'a str], f32)> for DropdownMenu<'a> {
-    fn from((trigger_label, options, width): (&'a str, &'a [&'a str], f32)) -> Self {
-        Self::new(trigger_label, options).width(width)
-    }
-}
-
-impl<'a> From<(&'a str, &'a [DropdownMenuEntry<'a>], f32)> for DropdownMenu<'a> {
-    fn from((trigger_label, entries, width): (&'a str, &'a [DropdownMenuEntry<'a>], f32)) -> Self {
-        Self::with_entries(trigger_label, entries).width(width)
+        Self::new(trigger_label)
     }
 }
 
@@ -213,7 +188,7 @@ impl ComponentUi<'_> {
 
         if props.options.is_empty() && props.entries.is_empty() {
             let response = self
-                .button((props.trigger_label, props.trigger_style))
+                .button(Button::new(props.trigger_label).variant(props.trigger_variant))
                 .on_hover_cursor(CursorIcon::PointingHand);
 
             return (response, state);
@@ -221,7 +196,7 @@ impl ComponentUi<'_> {
 
         let row_width = props.width.max(MENU_MIN_WIDTH);
         let response = self
-            .button((props.trigger_label, props.trigger_style))
+            .button(Button::new(props.trigger_label).variant(props.trigger_variant))
             .on_hover_cursor(CursorIcon::PointingHand);
 
         let _ = self.raw_mut().scope(|ui| {
@@ -259,18 +234,17 @@ pub(crate) fn show_menu_entries_surface(
     ui.set_min_width(row_width);
     ui.set_max_width(row_width);
 
-    egui::Frame::new()
-        .inner_margin(Margin::symmetric(
-            MENU_INNER_PADDING_X,
-            MENU_INNER_PADDING_Y,
-        ))
-        .show(ui.raw_mut(), |ui| {
+    popup_panel(
+        ui.raw_mut(),
+        PopupPanel::new(row_width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
+        |ui| {
             let mut ui = ComponentUi::new(ui);
             let inner_width = inner_row_width(row_width);
             ui.set_min_width(inner_width);
             ui.set_max_width(inner_width);
             draw_entries(&mut ui, entries, action, row_width);
-        });
+        },
+    );
 }
 
 fn draw_entries(
@@ -304,20 +278,18 @@ fn draw_entries(
                     |ui| {
                         let mut ui = ComponentUi::new(ui);
                         ui.style_mut().spacing.item_spacing.y = 0.0;
-                        ui.set_min_width(row_width);
-                        ui.set_max_width(row_width);
-                        egui::Frame::new()
-                            .inner_margin(Margin::symmetric(
-                                MENU_INNER_PADDING_X,
-                                MENU_INNER_PADDING_Y,
-                            ))
-                            .show(ui.raw_mut(), |ui| {
+                        popup_panel(
+                            ui.raw_mut(),
+                            PopupPanel::new(row_width)
+                                .padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
+                            |ui| {
                                 let mut ui = ComponentUi::new(ui);
                                 let inner_width = inner_row_width(row_width);
                                 ui.set_min_width(inner_width);
                                 ui.set_max_width(inner_width);
                                 draw_entries(&mut ui, submenu.entries, selected_action, row_width);
-                            });
+                            },
+                        );
                     },
                 );
             }
@@ -358,19 +330,17 @@ fn draw_menu_row(
 ) -> (Response, Option<Rect>) {
     let dark_mode = ui.visuals().dark_mode;
     let desired_size = egui::vec2(inner_row_width(menu_width), MENU_ROW_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-    let fill = tokens::row_bg(
-        false,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-        dark_mode,
-    );
-    ui.painter().rect(
-        rect,
-        CornerRadius::ZERO,
-        fill,
-        egui::Stroke::NONE,
-        StrokeKind::Outside,
+    let (rect, response) = row_chrome(
+        ui,
+        RowChrome::new(desired_size).stroke(egui::Stroke::NONE),
+        |response| {
+            tokens::row_bg(
+                false,
+                response.is_pointer_button_down_on(),
+                response.hovered(),
+                dark_mode,
+            )
+        },
     );
 
     let label_color = if response.hovered() || response.is_pointer_button_down_on() {
@@ -396,38 +366,22 @@ fn draw_menu_row(
     } else {
         None
     };
-    let leading_width = if icon.is_some() {
-        MENU_LEADING_ICON_SIZE + MENU_LEADING_ICON_GAP
-    } else {
-        0.0
-    };
-    let label_x = rect.left() + MENU_ROW_PADDING_X + leading_width;
     let label_right = trailing_rect
         .map(|rect| rect.left() - MENU_TRAILING_GAP)
         .unwrap_or(rect.right() - MENU_ROW_PADDING_X);
-
-    if let Some(icon) = icon {
-        draw_menu_icon(
-            ui,
-            Rect::from_center_size(
-                egui::pos2(
-                    rect.left() + MENU_ROW_PADDING_X + (MENU_LEADING_ICON_SIZE * 0.5),
-                    rect.center().y,
-                ),
-                egui::vec2(MENU_LEADING_ICON_SIZE, MENU_LEADING_ICON_SIZE),
-            ),
-            icon,
-            label_color,
-        );
-    }
-
-    ui.painter().text(
-        egui::pos2(label_x.min(label_right), rect.center().y),
-        Align2::LEFT_CENTER,
-        label,
-        typography::proportional(MENU_TEXT_SIZE),
-        label_color,
-    );
+    let row = {
+        let row = IconLabelRow::new(label, typography::proportional(MENU_TEXT_SIZE), label_color)
+            .padding_x(MENU_ROW_PADDING_X)
+            .leading_icon_size(MENU_LEADING_ICON_SIZE)
+            .leading_gap(MENU_LEADING_ICON_GAP);
+        if let Some(icon) = icon {
+            row.leading_icon(icon)
+        } else {
+            row
+        }
+    };
+    let _ = label_right;
+    let _ = icon_label_row(ui, rect, &row);
 
     if submenu {
         if let Some(trailing_rect) = trailing_rect {
@@ -481,13 +435,6 @@ fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
         }
     }
 }
-
-fn draw_menu_icon(ui: &mut Ui, icon_rect: Rect, icon: &str, tint: egui::Color32) {
-    if let Some(image) = icons::image(ui.ctx(), icon, MENU_LEADING_ICON_SIZE) {
-        image.tint(tint).paint_at(ui, icon_rect);
-    }
-}
-
 fn draw_submenu_indicator(ui: &mut Ui, trailing_rect: Rect) {
     let dark_mode = ui.visuals().dark_mode;
     if let Some(image) = icons::image(ui.ctx(), "chevron-right", MENU_TRAILING_ICON_SIZE) {

@@ -56,6 +56,7 @@ const LIGHT_SLIDER_THUMB_HOVER_BORDER: Color32 = Color32::from_rgb(161, 161, 170
 const LIGHT_SLIDER_THUMB_ACTIVE_BORDER: Color32 = Color32::from_rgb(140, 140, 149);
 const LIGHT_INPUT_FOCUS_BORDER: Color32 = Color32::from_rgb(82, 82, 91);
 const LIGHT_TEXT_SELECTION_BG: Color32 = Color32::from_rgba_premultiplied(37, 99, 235, 96);
+const LIGHT_DIALOGUE_BACKDROP: Color32 = Color32::from_black_alpha(96);
 
 const DARK_APP_BACKGROUND: Color32 = Color32::from_rgb(9, 9, 11);
 const DARK_CARD_BACKGROUND: Color32 = Color32::from_rgb(17, 17, 20);
@@ -95,6 +96,7 @@ const DARK_SLIDER_THUMB_HOVER_BORDER: Color32 = Color32::from_rgb(92, 92, 101);
 const DARK_SLIDER_THUMB_ACTIVE_BORDER: Color32 = Color32::from_rgb(113, 113, 122);
 const DARK_INPUT_FOCUS_BORDER: Color32 = Color32::from_rgb(161, 161, 170);
 const DARK_TEXT_SELECTION_BG: Color32 = Color32::from_rgba_premultiplied(59, 130, 246, 120);
+const DARK_DIALOGUE_BACKDROP: Color32 = Color32::from_black_alpha(160);
 
 const fn mode_color(dark_mode: bool, light: Color32, dark: Color32) -> Color32 {
     if dark_mode {
@@ -281,6 +283,10 @@ pub(crate) const fn tailwind_shadow_lg() -> Shadow {
 
 pub(crate) fn text_selection_bg(dark_mode: bool) -> Color32 {
     mode_color(dark_mode, LIGHT_TEXT_SELECTION_BG, DARK_TEXT_SELECTION_BG)
+}
+
+pub(crate) fn dialogue_backdrop(dark_mode: bool) -> Color32 {
+    mode_color(dark_mode, LIGHT_DIALOGUE_BACKDROP, DARK_DIALOGUE_BACKDROP)
 }
 
 pub(crate) fn input_bg(dark_mode: bool, focused: bool, hovered: bool) -> Color32 {

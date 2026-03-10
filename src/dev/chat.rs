@@ -1,4 +1,4 @@
-use crate::components::{Button, ButtonStyle, ComponentUiExt, Select};
+use crate::components::{Button, ButtonVariant, ComponentUiExt, Select};
 use crate::theme::{self, ThemeMode};
 use crate::ui::{icons, tokens, typography};
 use crate::{ComponentLibraryError, Result};
@@ -174,8 +174,8 @@ impl ChatExampleState {
             .components()
             .button(
                 Button::new("New Thread")
-                    .icon("square-pen")
-                    .style(ButtonStyle::Ghost)
+                    .leading_icon("square-pen")
+                    .variant(ButtonVariant::Ghost)
                     .min_size(egui::vec2(new_thread_width, 32.0)),
             )
             .clicked()
@@ -311,7 +311,7 @@ impl ChatExampleState {
                     if draw_round_icon_button(
                         ui,
                         "arrow-up",
-                        ButtonStyle::Primary,
+                        ButtonVariant::Primary,
                         can_send,
                         ROUND_ICON_BUTTON_SIZE,
                     )
@@ -323,7 +323,7 @@ impl ChatExampleState {
                     let _ = draw_round_icon_button(
                         ui,
                         "plus",
-                        ButtonStyle::Ghost,
+                        ButtonVariant::Ghost,
                         true,
                         ROUND_ICON_BUTTON_SIZE,
                     )
@@ -792,8 +792,14 @@ fn draw_jump_to_end_button(context: &Context, conversation_rect: egui::Rect) -> 
         .interactable(true)
         .show(context, |ui| {
             theme::apply_component_theme(ui);
-            draw_round_icon_button(ui, "arrow-down", ButtonStyle::Secondary, true, button_size)
-                .clicked()
+            draw_round_icon_button(
+                ui,
+                "arrow-down",
+                ButtonVariant::Secondary,
+                true,
+                button_size,
+            )
+            .clicked()
         })
         .inner
 }
@@ -801,7 +807,7 @@ fn draw_jump_to_end_button(context: &Context, conversation_rect: egui::Rect) -> 
 fn draw_round_icon_button(
     ui: &mut Ui,
     icon_name: &str,
-    style: ButtonStyle,
+    variant: ButtonVariant,
     enabled: bool,
     size: f32,
 ) -> egui::Response {
@@ -812,20 +818,20 @@ fn draw_round_icon_button(
         Sense::hover()
     };
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), sense);
-    let (base_fill, hover_fill, active_fill, icon_fill) = match style {
-        ButtonStyle::Primary => (
+    let (base_fill, hover_fill, active_fill, icon_fill) = match variant {
+        ButtonVariant::Primary => (
             tokens::primary_bg(dark_mode),
             tokens::primary_hover_bg(dark_mode),
             tokens::primary_active_bg(dark_mode),
             tokens::primary_fg(dark_mode),
         ),
-        ButtonStyle::Secondary => (
+        ButtonVariant::Secondary => (
             tokens::muted_surface(dark_mode),
             tokens::row_hover_bg(dark_mode),
             tokens::row_selected_bg(dark_mode),
             tokens::text_primary(dark_mode),
         ),
-        ButtonStyle::Ghost | ButtonStyle::Link => (
+        ButtonVariant::Ghost | ButtonVariant::Link => (
             tokens::TRANSPARENT,
             tokens::row_hover_bg(dark_mode),
             tokens::row_active_bg(dark_mode),

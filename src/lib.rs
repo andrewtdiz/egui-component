@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod components;
+pub mod primitives;
 pub mod theme;
 pub mod ui;
 
@@ -19,13 +20,56 @@ pub use theme::ThemeMode;
 
 pub mod prelude {
     pub use crate::components::{
-        Button, ButtonGroup, ButtonOverride, ButtonStyle, Card, CardOverride, Checkbox,
-        Collapsible, Color, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt, Dialogue,
-        DialogueHeader, DialogueModal, DialogueStyle, DropdownMenu, DropdownMenuAction,
-        DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu, Field, Icon, Image, Kbd,
-        KbdGroup, Label, LabelOverride, LabelTone, LabelWeight, MenuBar, MenuBarItem, MenuBarState,
-        NumberInput, NumberInputAxis, Progress, Select, Slider, Switch, SwitchSize, TabOption,
-        TextInput, TextInputOverride, Toolbar, Tooltip, TooltipPlacement,
+        Button,
+        ButtonGroup,
+        ButtonOverride,
+        ButtonVariant,
+        Card,
+        CardOverride,
+        Checkbox,
+        Collapsible,
+        Color,
+        Combobox,
+        Command,
+        CommandItem,
+        ComponentUi,
+        ComponentUiExt,
+        ControlSize,
+        Dialogue,
+        DialogueHeader,
+        DialogueIntent,
+        DialogueModal,
+        DropdownMenu,
+        DropdownMenuAction,
+        DropdownMenuEntry,
+        DropdownMenuState,
+        DropdownMenuSubmenu,
+        Field,
+        Icon,
+        Image,
+        Kbd,
+        KbdGroup,
+        Label,
+        LabelOverride,
+        LabelTone,
+        LabelWeight,
+        MenuBar,
+        MenuBarItem,
+        MenuBarState,
+        NumberInput,
+        NumberInputAxis,
+        Progress,
+        Select,
+        Slider,
+        Switch,
+        TabOption,
+        TextInput,
+        TextInputOverride,
+        Toolbar,
+        Tooltip,
+        TooltipPlacement,
+        // xtask:prelude-exports:start
+        // xtask:prelude-exports:end
     };
     pub use crate::theme::ThemeMode;
 }

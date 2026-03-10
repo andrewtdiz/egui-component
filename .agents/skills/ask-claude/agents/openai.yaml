@@ -1,0 +1,4 @@
+interface:
+  display_name: "ask claude"
+  short_description: "Run a general Claude prompt and save output"
+  default_prompt: "Use $ask-claude to run an external Claude prompt for the requested task, poll until completion, and write the full response to a file."

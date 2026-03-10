@@ -14,12 +14,6 @@ impl<'a> ButtonGroup<'a> {
     }
 }
 
-impl<'a> From<(Id, &'a [&'a str])> for ButtonGroup<'a> {
-    fn from((id, options): (Id, &'a [&'a str])) -> Self {
-        Self::new(id, options)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn button_group<'a>(
         &mut self,

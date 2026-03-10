@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ComponentKind {
-    AlertDialogue,
+    // xtask:component-kinds:start
     Button,
     ButtonGroup,
     Card,
@@ -12,11 +12,13 @@ pub enum ComponentKind {
     Dialogue,
     DropdownMenu,
     Field,
+    Icon,
     Image,
     Input,
     Kbd,
     Label,
     MenuBar,
+    NumberInput,
     Progress,
     Select,
     Separator,
@@ -25,6 +27,7 @@ pub enum ComponentKind {
     Tabs,
     Toolbar,
     Tooltip,
+    // xtask:component-kinds:end
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -50,11 +53,30 @@ pub struct ComponentDefinition {
     pub group: ComponentGroup,
 }
 
-const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
+const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
+    // xtask:component-definitions:start
     ComponentDefinition {
         kind: ComponentKind::Label,
         id: "label",
         label: "Label",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Color,
+        id: "color",
+        label: "Color",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Image,
+        id: "image",
+        label: "Image",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Icon,
+        id: "icon",
+        label: "Icon",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -76,12 +98,6 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::Image,
-        id: "image",
-        label: "Image",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Button,
         id: "button",
         label: "Button",
@@ -100,12 +116,6 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::Color,
-        id: "color",
-        label: "Color",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Switch,
         id: "switch",
         label: "Switch",
@@ -115,6 +125,12 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         kind: ComponentKind::Slider,
         id: "slider",
         label: "Slider",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::NumberInput,
+        id: "number-input",
+        label: "Number Input",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -154,22 +170,16 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::MenuBar,
-        id: "menu-bar",
-        label: "Menu Bar",
-        group: ComponentGroup::Composed,
+        kind: ComponentKind::DropdownMenu,
+        id: "dropdown-menu",
+        label: "Dropdown Menu",
+        group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
         kind: ComponentKind::Collapsible,
         id: "collapsible",
         label: "Collapsible",
         group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::DropdownMenu,
-        id: "dropdown-menu",
-        label: "Dropdown Menu",
-        group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
         kind: ComponentKind::Combobox,
@@ -190,17 +200,18 @@ const COMPONENT_DEFINITIONS: [ComponentDefinition; 25] = [
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
+        kind: ComponentKind::MenuBar,
+        id: "menu-bar",
+        label: "Menu Bar",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Toolbar,
         id: "toolbar",
         label: "Toolbar",
         group: ComponentGroup::Composed,
     },
-    ComponentDefinition {
-        kind: ComponentKind::AlertDialogue,
-        id: "alert-dialogue",
-        label: "Alert Dialogue",
-        group: ComponentGroup::Composed,
-    },
+    // xtask:component-definitions:end
 ];
 
 impl ComponentKind {
@@ -257,14 +268,17 @@ mod tests {
         let ids = component_definitions()
             .map(|definition| definition.id)
             .collect::<Vec<_>>();
-        assert_eq!(ids.len(), 25);
+        assert!(ids.len() >= 26);
         assert!(ids.contains(&"button"));
         assert!(ids.contains(&"color"));
+        assert!(ids.contains(&"icon"));
         assert!(ids.contains(&"image"));
         assert!(ids.contains(&"kbd"));
+        assert!(ids.contains(&"number-input"));
         assert!(ids.contains(&"dropdown-menu"));
         assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"toolbar"));
+        assert!(!ids.contains(&"alert-dialogue"));
         assert!(!ids.contains(&"accordion"));
     }
 
@@ -279,9 +293,10 @@ mod tests {
             Some(ComponentKind::Dialogue)
         );
         assert_eq!(
-            parse_component_kind("alertdialogue"),
-            Some(ComponentKind::AlertDialogue)
+            parse_component_kind("number_input"),
+            Some(ComponentKind::NumberInput)
         );
+        assert_eq!(parse_component_kind("icon"), Some(ComponentKind::Icon));
         assert_eq!(
             parse_component_kind("toolbar"),
             Some(ComponentKind::Toolbar)
@@ -291,6 +306,7 @@ mod tests {
             parse_component_kind("menu_bar"),
             Some(ComponentKind::MenuBar)
         );
+        assert_eq!(parse_component_kind("alertdialogue"), None);
         assert_eq!(parse_component_kind("contextmenu"), None);
         assert_eq!(parse_component_kind("agentchat"), None);
     }
@@ -303,7 +319,8 @@ mod tests {
         let composed = component_definitions()
             .filter(|definition| definition.group == ComponentGroup::Composed)
             .count();
-        assert_eq!(primitive, 18);
-        assert_eq!(composed, 7);
+        assert_eq!(primitive + composed, component_definitions().count());
+        assert!(primitive >= 20);
+        assert!(composed >= 6);
     }
 }

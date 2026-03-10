@@ -1,19 +1,19 @@
 use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
-use crate::components::chrome::with_input_chrome;
+use crate::primitives::control::with_input_chrome;
 use crate::ui::tokens;
 use egui::{Align, CornerRadius, CursorIcon, Shape, StrokeKind, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TextInput<'a> {
     pub width: f32,
-    pub hint_text: Option<&'a str>,
+    pub placeholder: Option<&'a str>,
 }
 
 impl<'a> TextInput<'a> {
     pub fn new() -> Self {
         Self {
             width: 220.0,
-            hint_text: None,
+            placeholder: None,
         }
     }
 
@@ -22,8 +22,8 @@ impl<'a> TextInput<'a> {
         self
     }
 
-    pub fn hint_text(mut self, hint_text: &'a str) -> Self {
-        self.hint_text = Some(hint_text);
+    pub fn placeholder(mut self, placeholder: &'a str) -> Self {
+        self.placeholder = Some(placeholder);
         self
     }
 }
@@ -72,20 +72,8 @@ impl<'a> From<()> for TextInput<'a> {
 }
 
 impl<'a> From<&'a str> for TextInput<'a> {
-    fn from(hint_text: &'a str) -> Self {
-        Self::new().hint_text(hint_text)
-    }
-}
-
-impl<'a> From<f32> for TextInput<'a> {
-    fn from(width: f32) -> Self {
-        Self::new().width(width)
-    }
-}
-
-impl<'a> From<(f32, &'a str)> for TextInput<'a> {
-    fn from((width, hint_text): (f32, &'a str)) -> Self {
-        Self::new().width(width).hint_text(hint_text)
+    fn from(placeholder: &'a str) -> Self {
+        Self::new().placeholder(placeholder)
     }
 }
 
@@ -111,9 +99,9 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
                 tokens::INPUT_PADDING_X,
                 tokens::INPUT_PADDING_Y,
             ));
-        if let Some(hint_text) = props.hint_text {
+        if let Some(placeholder) = props.placeholder {
             text_edit = text_edit.hint_text(
-                egui::RichText::new(hint_text)
+                egui::RichText::new(placeholder)
                     .color(tokens::text_muted(dark_mode))
                     .weak(),
             );

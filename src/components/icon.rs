@@ -35,18 +35,6 @@ impl<'a> From<&'a str> for Icon<'a> {
     }
 }
 
-impl<'a> From<(&'a str, f32)> for Icon<'a> {
-    fn from((name, size): (&'a str, f32)) -> Self {
-        Self::new(name).size(size)
-    }
-}
-
-impl<'a> From<(&'a str, f32, Color32)> for Icon<'a> {
-    fn from((name, size, tint): (&'a str, f32, Color32)) -> Self {
-        Self::new(name).size(size).tint(tint)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn icon<'a>(&mut self, props: impl Into<Icon<'a>>) -> Response {
         draw_icon(self.raw_mut(), props.into())

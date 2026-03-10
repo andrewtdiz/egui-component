@@ -1,8 +1,10 @@
-use super::{api::ComponentUi, LabelTone, TextInput};
-use crate::ui::{tokens, typography};
-use egui::{
-    containers::scroll_area::ScrollSource, CornerRadius, CursorIcon, Id, Response, StrokeKind, Ui,
+use super::{api::ComponentUi, TextInput};
+use crate::primitives::{
+    content::muted_empty_state,
+    row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
 };
+use crate::ui::{tokens, typography};
+use egui::{containers::scroll_area::ScrollSource, Id, Response, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Combobox<'a> {
@@ -40,18 +42,6 @@ impl<'a> Combobox<'a> {
     }
 }
 
-impl<'a> From<(Id, &'a [&'a str])> for Combobox<'a> {
-    fn from((id, options): (Id, &'a [&'a str])) -> Self {
-        Self::new(id, options)
-    }
-}
-
-impl<'a> From<(Id, &'a [&'a str], f32)> for Combobox<'a> {
-    fn from((id, options, width): (Id, &'a [&'a str], f32)) -> Self {
-        Self::new(id, options).width(width)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn combobox<'a>(
         &mut self,
@@ -65,7 +55,7 @@ impl ComponentUi<'_> {
             query,
             TextInput::new()
                 .width(props.width)
-                .hint_text(props.placeholder),
+                .placeholder(props.placeholder),
         );
 
         self.add_space(6.0);
@@ -99,7 +89,7 @@ impl ComponentUi<'_> {
                     }
 
                     if shown == 0 {
-                        let _ = ui.label(("No matches", LabelTone::Muted));
+                        let _ = muted_empty_state(ui.raw_mut(), "No matches");
                     }
                 });
         });
@@ -116,24 +106,21 @@ impl ComponentUi<'_> {
 
 fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> Response {
     let desired_size = egui::vec2(ui.available_width().max(96.0), ui.spacing().interact_size.y);
-    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-
-    let fill = tokens::row_bg(
-        selected,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-        dark_mode,
+    let (rect, response) = row_chrome(
+        ui,
+        RowChrome::new(desired_size)
+            .corner_radius(tokens::RADIUS_SM)
+            .stroke(egui::Stroke::NONE),
+        |response| {
+            tokens::row_bg(
+                selected,
+                response.is_pointer_button_down_on(),
+                response.hovered(),
+                dark_mode,
+            )
+        },
     );
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(tokens::RADIUS_SM),
-        fill,
-        egui::Stroke::NONE,
-        StrokeKind::Outside,
-    );
-    ui.painter().text(
-        egui::pos2(rect.left() + 10.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
+    let row = IconLabelRow::new(
         text,
         typography::label_font(),
         if selected {
@@ -142,6 +129,7 @@ fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> 
             tokens::text_secondary(dark_mode)
         },
     );
+    let _ = icon_label_row(ui, rect, &row);
 
-    response.on_hover_cursor(CursorIcon::PointingHand)
+    response
 }

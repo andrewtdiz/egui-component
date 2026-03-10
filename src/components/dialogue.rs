@@ -1,9 +1,10 @@
-use super::{api::ComponentUi, Button, ButtonStyle, Label, LabelTone, LabelWeight};
+use super::{api::ComponentUi, Button, ButtonVariant, Label, LabelTone, LabelWeight};
+use crate::primitives::surface::{surface_frame_builder, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{Align, Color32, CornerRadius, Id, Layout, Margin, Response, Sense, Stroke, UiBuilder};
+use egui::{Align, Id, Layout, Response, Sense, Stroke, UiBuilder};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum DialogueStyle {
+pub enum DialogueIntent {
     Default,
     Alert,
 }
@@ -31,17 +32,11 @@ impl From<Id> for DialogueModal {
     }
 }
 
-impl From<(Id, f32)> for DialogueModal {
-    fn from((id, width): (Id, f32)) -> Self {
-        Self::new(id).width(width)
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct DialogueHeader<'a> {
     pub title: &'a str,
     pub description: &'a str,
-    pub style: DialogueStyle,
+    pub intent: DialogueIntent,
 }
 
 impl<'a> DialogueHeader<'a> {
@@ -49,7 +44,7 @@ impl<'a> DialogueHeader<'a> {
         Self {
             title,
             description: "",
-            style: DialogueStyle::Default,
+            intent: DialogueIntent::Default,
         }
     }
 
@@ -58,8 +53,8 @@ impl<'a> DialogueHeader<'a> {
         self
     }
 
-    pub fn style(mut self, style: DialogueStyle) -> Self {
-        self.style = style;
+    pub fn intent(mut self, intent: DialogueIntent) -> Self {
+        self.intent = intent;
         self
     }
 }
@@ -67,18 +62,6 @@ impl<'a> DialogueHeader<'a> {
 impl<'a> From<&'a str> for DialogueHeader<'a> {
     fn from(title: &'a str) -> Self {
         Self::new(title)
-    }
-}
-
-impl<'a> From<(&'a str, &'a str)> for DialogueHeader<'a> {
-    fn from((title, description): (&'a str, &'a str)) -> Self {
-        Self::new(title).description(description)
-    }
-}
-
-impl<'a> From<(&'a str, &'a str, DialogueStyle)> for DialogueHeader<'a> {
-    fn from((title, description, style): (&'a str, &'a str, DialogueStyle)) -> Self {
-        Self::new(title).description(description).style(style)
     }
 }
 
@@ -91,7 +74,7 @@ pub struct Dialogue<'a> {
     pub cancel_label: &'a str,
     pub confirm_label: &'a str,
     pub width: f32,
-    pub style: DialogueStyle,
+    pub intent: DialogueIntent,
 }
 
 impl<'a> Dialogue<'a> {
@@ -104,7 +87,7 @@ impl<'a> Dialogue<'a> {
             cancel_label: "Cancel",
             confirm_label: "Confirm",
             width: 360.0,
-            style: DialogueStyle::Default,
+            intent: DialogueIntent::Default,
         }
     }
 
@@ -133,33 +116,9 @@ impl<'a> Dialogue<'a> {
         self
     }
 
-    pub fn style(mut self, style: DialogueStyle) -> Self {
-        self.style = style;
+    pub fn intent(mut self, intent: DialogueIntent) -> Self {
+        self.intent = intent;
         self
-    }
-}
-
-impl<'a> From<(Id, &'a str)> for Dialogue<'a> {
-    fn from((id, title): (Id, &'a str)) -> Self {
-        Self::new(id, title)
-    }
-}
-
-impl<'a> From<(Id, &'a str, &'a str)> for Dialogue<'a> {
-    fn from((id, title, description): (Id, &'a str, &'a str)) -> Self {
-        Self::new(id, title).description(description)
-    }
-}
-
-impl<'a> From<(Id, &'a str, f32)> for Dialogue<'a> {
-    fn from((id, title, width): (Id, &'a str, f32)) -> Self {
-        Self::new(id, title).width(width)
-    }
-}
-
-impl<'a> From<(Id, &'a str, &'a str, DialogueStyle)> for Dialogue<'a> {
-    fn from((id, title, description, style): (Id, &'a str, &'a str, DialogueStyle)) -> Self {
-        Self::new(id, title).description(description).style(style)
     }
 }
 
@@ -177,15 +136,18 @@ impl ComponentUi<'_> {
 
         let mut close_requested = false;
         let dark_mode = self.visuals().dark_mode;
-        let frame = egui::Frame::popup(self.style())
-            .fill(tokens::card_background(dark_mode))
-            .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
-            .corner_radius(CornerRadius::same(tokens::RADIUS_LG))
-            .inner_margin(Margin::symmetric(12, 12))
-            .shadow(tokens::tailwind_shadow_lg());
+        let frame = surface_frame_builder(
+            SurfaceFrame::new(
+                tokens::card_background(dark_mode),
+                Stroke::new(1.0, tokens::separator(dark_mode)),
+            )
+            .corner_radius(tokens::RADIUS_LG)
+            .padding(12, 12)
+            .shadow(tokens::tailwind_shadow_lg()),
+        );
         let dialogue_modal_response = egui::Modal::new(props.id)
             .frame(frame)
-            .backdrop_color(Color32::from_black_alpha(if dark_mode { 160 } else { 96 }))
+            .backdrop_color(tokens::dialogue_backdrop(dark_mode))
             .show(self.ctx(), |ui| {
                 ui.set_min_width(props.width);
                 ui.set_max_width(props.width);
@@ -198,8 +160,8 @@ impl ComponentUi<'_> {
         }
     }
 
-    pub fn dialogue_title(&mut self, title: &str, style: DialogueStyle) -> Response {
-        let tone = if style == DialogueStyle::Alert {
+    pub fn dialogue_title(&mut self, title: &str, intent: DialogueIntent) -> Response {
+        let tone = if intent == DialogueIntent::Alert {
             LabelTone::Destructive
         } else {
             LabelTone::Primary
@@ -214,12 +176,12 @@ impl ComponentUi<'_> {
     }
 
     pub fn dialogue_description(&mut self, description: &str) -> Response {
-        self.label((description, LabelTone::Muted, 12.0))
+        self.label(Label::new(description).tone(LabelTone::Muted).size(12.0))
     }
 
     pub fn dialogue_header<'a>(&mut self, props: impl Into<DialogueHeader<'a>>) {
         let props = props.into();
-        let _ = self.dialogue_title(props.title, props.style);
+        let _ = self.dialogue_title(props.title, props.intent);
         if !props.description.is_empty() {
             self.add_space(6.0);
             let _ = self.dialogue_description(props.description);
@@ -254,7 +216,7 @@ impl ComponentUi<'_> {
                 .max_rect(title_rect)
                 .layout(Layout::top_down(Align::Min)),
             |ui| {
-                let _ = ui.dialogue_title(props.title, props.style);
+                let _ = ui.dialogue_title(props.title, props.intent);
             },
         );
 
@@ -266,7 +228,7 @@ impl ComponentUi<'_> {
                 |ui| {
                     ui.button(
                         Button::icon_only("x")
-                            .style(ButtonStyle::Ghost)
+                            .variant(ButtonVariant::Ghost)
                             .icon_size(14.0)
                             .min_size(egui::vec2(close_button_size, close_button_size)),
                     )
@@ -286,37 +248,48 @@ impl ComponentUi<'_> {
 
     pub fn dialogue<'a>(&mut self, open: &mut bool, props: impl Into<Dialogue<'a>>) -> Response {
         let props = props.into();
-        let trigger_response = self.button((props.trigger_label, ButtonStyle::Secondary));
+        let trigger_response =
+            self.button(Button::new(props.trigger_label).variant(ButtonVariant::Secondary));
         if trigger_response.clicked() {
             *open = true;
         }
 
-        self.dialogue_modal(open, (props.id, props.width), |ui, close_requested| {
-            ui.dialogue_header_with_close(
-                (props.title, props.description, props.style),
-                close_requested,
-            );
-            ui.add_space(12.0);
-            let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-            let _ = ui.allocate_ui_with_layout(
-                footer_size,
-                Layout::right_to_left(Align::Center),
-                |ui| {
-                    if ui
-                        .button((props.confirm_label, ButtonStyle::Primary))
-                        .clicked()
-                    {
-                        *close_requested = true;
-                    }
-                    if ui
-                        .button((props.cancel_label, ButtonStyle::Secondary))
-                        .clicked()
-                    {
-                        *close_requested = true;
-                    }
-                },
-            );
-        });
+        self.dialogue_modal(
+            open,
+            DialogueModal::new(props.id).width(props.width),
+            |ui, close_requested| {
+                ui.dialogue_header_with_close(
+                    DialogueHeader::new(props.title)
+                        .description(props.description)
+                        .intent(props.intent),
+                    close_requested,
+                );
+                ui.add_space(12.0);
+                let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                let _ = ui.allocate_ui_with_layout(
+                    footer_size,
+                    Layout::right_to_left(Align::Center),
+                    |ui| {
+                        if ui
+                            .button(
+                                Button::new(props.confirm_label).variant(ButtonVariant::Primary),
+                            )
+                            .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                        if ui
+                            .button(
+                                Button::new(props.cancel_label).variant(ButtonVariant::Secondary),
+                            )
+                            .clicked()
+                        {
+                            *close_requested = true;
+                        }
+                    },
+                );
+            },
+        );
 
         trigger_response
     }

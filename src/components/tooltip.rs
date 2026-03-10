@@ -1,4 +1,4 @@
-use super::{api::ComponentUi, Button, ButtonStyle, LabelTone};
+use super::{api::ComponentUi, Button, ButtonVariant, LabelTone};
 use crate::ui::tokens;
 use egui::CursorIcon;
 use egui::Response;
@@ -46,35 +46,6 @@ impl<'a> Tooltip<'a> {
         self.placement = placement;
         self
     }
-
-    pub fn top_center(mut self, top_center: bool) -> Self {
-        self.placement = if top_center {
-            TooltipPlacement::Top
-        } else {
-            TooltipPlacement::Auto
-        };
-        self
-    }
-}
-
-impl<'a> From<(&'a str, &'a str)> for Tooltip<'a> {
-    fn from((trigger_label, text): (&'a str, &'a str)) -> Self {
-        Self::new(trigger_label, text)
-    }
-}
-
-impl<'a> From<(&'a str, &'a str, f32)> for Tooltip<'a> {
-    fn from((trigger_label, text, width): (&'a str, &'a str, f32)) -> Self {
-        Self::new(trigger_label, text).width(width)
-    }
-}
-
-impl<'a> From<(&'a str, &'a str, f32, bool)> for Tooltip<'a> {
-    fn from((trigger_label, text, width, top_center): (&'a str, &'a str, f32, bool)) -> Self {
-        Self::new(trigger_label, text)
-            .width(width)
-            .top_center(top_center)
-    }
 }
 
 impl ComponentUi<'_> {
@@ -89,7 +60,8 @@ impl ComponentUi<'_> {
                 let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let response = ui
                     .button(
-                        Button::from((props.trigger_label, ButtonStyle::Secondary))
+                        Button::new(props.trigger_label)
+                            .variant(ButtonVariant::Secondary)
                             .min_size(egui::vec2(props.width, ui.spacing().interact_size.y)),
                     )
                     .on_hover_cursor(CursorIcon::PointingHand);
@@ -157,7 +129,9 @@ impl ComponentUi<'_> {
 
                     let _ = tooltip.show(|ui| {
                         let mut ui = ComponentUi::new(ui);
-                        let _ = ui.label((props.text, LabelTone::Secondary));
+                        let _ = ui.label(
+                            crate::components::Label::new(props.text).tone(LabelTone::Secondary),
+                        );
                     });
                 }
 

@@ -1,6 +1,7 @@
 use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
+use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{Color32, CornerRadius, Margin, Stroke, Ui};
+use egui::{Color32, Stroke, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Card {
@@ -164,14 +165,16 @@ fn draw_card<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
     let dark_mode = ui.visuals().dark_mode;
-    egui::Frame::new()
-        .fill(props.fill.unwrap_or(tokens::muted_surface(dark_mode)))
-        .stroke(
+    surface_frame(
+        ui,
+        SurfaceFrame::new(
+            props.fill.unwrap_or(tokens::muted_surface(dark_mode)),
             props
                 .stroke
                 .unwrap_or(Stroke::new(1.0, tokens::separator(dark_mode))),
         )
-        .corner_radius(CornerRadius::same(props.corner_radius))
-        .inner_margin(Margin::symmetric(props.padding_x, props.padding_y))
-        .show(ui, add)
+        .corner_radius(props.corner_radius)
+        .padding(props.padding_x, props.padding_y),
+        add,
+    )
 }

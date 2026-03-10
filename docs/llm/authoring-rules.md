@@ -1,255 +1,35 @@
 # Authoring Rules
 
-This file is the implementation contract for contributors and coding agents.
+Use these rules when you add or revise a component.
 
-Its goal is simple: add or edit components without drifting from the current design system.
+## Runtime Contract
 
-## Primary Standard
+- Keep the typed runtime surface centered on `theme::install`, `theme::set_mode`, `ui.components()`, and typed component builders.
+- Keep existing shipped builder entry points working unless the user explicitly asks for a public API break.
+- Do not add new multi-field tuple shorthand permutations. Prefer one dominant shorthand at most.
 
-Follow the spirit of shadcn component authoring:
+## Authoring Contract
 
-- small public APIs
-- predictable builder structs
-- token-driven visuals
-- composition from primitives
-- restrained variants
+- Use `src/primitives/` before adding new paint or layout helpers inside a component.
+- Add a new primitive only when at least two components need the same behavior.
+- Keep style resolution local to the component with a private `resolve_*_style` helper.
+- Use named semantic fields for new work: `variant`, `size`, `tone`, `intent`, `leading_icon`, `trailing_text`, and closures for compound sections when they fit.
 
-In this repo that means:
+## Visual Contract
 
-- do not improvise colors
-- do not improvise padding
-- do not improvise radius values
-- do not add variants unless the component truly needs them
+- Use `src/ui/tokens.rs` for colors, spacing, radii, and shared state values.
+- Use `src/ui/style.rs` for global defaults.
+- Do not hardcode runtime `Color32::from_*` values inside `src/components/*.rs`.
+- Reuse the shared popup, row, control, and surface primitives before inventing new chrome.
 
-## Required Runtime Entry Points
+## Tooling Contract
 
-Use these APIs instead of rolling your own setup path:
+- Scaffold with `cargo xtask new-component`.
+- Regenerate the LLM reference with `cargo xtask sync-llm-docs`.
+- Finish with `cargo xtask validate-components`.
 
-- `egui_component::theme::install(&Context, ThemeMode)`
-- `egui_component::theme::set_mode(&Context, ThemeMode)` when a caller swaps themes at runtime
-- `ComponentUiExt::components()`
+## Registry Contract
 
-`ui.components()` already applies the component profile to the current `Ui`.
-
-Do not create a parallel wrapper abstraction unless the user explicitly wants a redesign.
-
-## Required Styling Sources
-
-Before adding a new color, spacing rule, or shape rule, check these files first:
-
-- `src/ui/tokens.rs`
-- `src/ui/style.rs`
-- `src/components/chrome.rs`
-
-Prefer existing tokens in this order:
-
-1. semantic text tokens like `TEXT_PRIMARY`, `TEXT_SECONDARY`, `TEXT_MUTED`, `TEXT_DESTRUCTIVE`
-2. input state tokens like `INPUT_BACKGROUND`, `INPUT_HOVER_BACKGROUND`, `INPUT_BORDER`
-3. row state helpers like `row_bg`, `row_stroke`, `row_selected_text`
-4. primary action helpers like `primary_bg`, `primary_hover_bg`, `primary_fg`
-
-## Fixed Visual Invariants
-
-Unless the user asks for a design-system change, preserve these values:
-
-| Token | Value |
-| --- | --- |
-| `SPACING_ITEM_Y` | `8.0` |
-| `SPACING_BUTTON_PADDING_X` | `12.0` |
-| `SPACING_BUTTON_PADDING_Y` | `7.0` |
-| `SPACING_INTERACT_HEIGHT` | `34.0` |
-| `INPUT_PADDING_X` | `10` |
-| `INPUT_PADDING_Y` | `6` |
-| `RADIUS_SM` | `6` |
-| `RADIUS_MD` | `8` |
-| `RADIUS_LG` | `10` |
-
-Practical consequence:
-
-- buttons should continue to feel like the current button system
-- inputs should continue to use the current input chrome
-- menus and popups should continue to match current row heights and corner treatment
-
-## Public API Pattern
-
-Every component in this repo follows roughly the same shape:
-
-1. A small builder struct with public fields.
-2. `new(...)` plus chainable setters.
-3. A few `From<_>` shorthand implementations for common use.
-4. A `ComponentUi` method that accepts `impl Into<Builder>`.
-5. External state passed in by mutable reference when needed.
-
-Prefer that pattern over custom traits or macro-heavy abstractions.
-
-## Builder Rules
-
-Use these rules when adding or editing builders:
-
-- Make the builder easy to construct from the most common case.
-- Clamp obviously invalid numeric values to a safe minimum when the existing code does that.
-- Add shorthand `From<_>` forms only for common, obvious call sites.
-- Do not create tuple shorthands that are hard to read or easy to misorder.
-- Keep defaults close to current component defaults in this repo.
-
-Good:
-
-```rust
-pub struct Tooltip<'a> {
-    pub trigger_label: &'a str,
-    pub text: &'a str,
-    pub width: f32,
-}
-```
-
-Bad:
-
-```rust
-pub struct Tooltip<'a> {
-    pub a: &'a str,
-    pub b: &'a str,
-    pub style_mode: i32,
-    pub custom_padding: Option<(f32, f32)>,
-}
-```
-
-## State Ownership Rules
-
-Interactive state stays with the caller unless `egui` itself needs temporary UI-local data.
-
-Use caller-owned state for:
-
-- selected indices
-- open flags
-- text input values
-- boolean toggles
-- numeric values
-
-Use `Ui::data` or response-local state only for short-lived UI details such as:
-
-- scoped overrides
-- hover timestamps
-- popup bookkeeping already tied to `egui::Id`
-
-Do not hide durable component state inside global statics.
-
-## Composition Rules
-
-Prefer composition when a component is derived from existing primitives.
-
-Current examples:
-
-- `Field` = label + input + helper text
-- `Combobox` = input + card + filterable rows
-- `Command` = input + grouped list
-- `Dialogue` = trigger button + modal + dialogue header/actions
-
-If a new component can be built from existing primitives without awkward behavior, do that first.
-
-## Override Rules
-
-Scoped overrides already exist for:
-
-- `Button`
-- `Card`
-- `Label`
-- `TextInput`
-
-Use the existing override mechanism in `src/components/api.rs` if the new behavior is truly a scoped styling override.
-
-Do not add overrides for every component by default.
-
-Add a new override type only when:
-
-- the component is reused heavily
-- scoped style changes improve ergonomics
-- the override can stay small and predictable
-
-## Interaction Rules
-
-Mirror the current interaction conventions:
-
-- clickable things use `CursorIcon::PointingHand`
-- text inputs use `CursorIcon::Text`
-- drag-based number inputs use axis resize cursors
-- focus states come from input or row token helpers
-- selected rows use `row_bg`, `row_stroke`, and `row_selected_text`
-
-Do not invent custom hover/focus behavior per component unless there is a real interaction need.
-
-## Popup And Modal Rules
-
-For popups, menus, and modals:
-
-- use stable `egui::Id` values
-- keep width defaults aligned with existing components
-- use cards/rows that visually match `Select`, `DropdownMenu`, `Combobox`, and `Command`
-- close popups through normal `egui` close behavior when possible
-
-Current default widths:
-
-- input/select/dropdown/combobox/command: about `220.0`
-- dialogue modal: `360.0`
-
-## Typography Rules
-
-The library uses the theme installed by `src/ui/style.rs`.
-
-Practical rules:
-
-- default labels are typically `12.0`
-- body/button text is `14.0`
-- helper text is usually `12.0`
-- semibold labels use the Segoe UI semibold family configured in the theme
-
-Do not introduce random font families or one-off type scales.
-
-## Chrome Rules
-
-Reuse shared chrome helpers before writing component-local visuals:
-
-- `with_input_chrome(ui, ...)`
-- `with_slider_chrome(ui, ...)`
-
-These helpers already encode the expected background, border, focus, and radius behavior.
-
-If a new control belongs to the same family as input or slider controls, extend those helpers only if the change benefits multiple widgets.
-
-## Do Not Do This
-
-- Do not hardcode ad hoc colors when tokens exist.
-- Do not change padding to "make it look nicer" without a broader design-system reason.
-- Do not introduce a new radius just for one component.
-- Do not use raw default `egui` widgets and accept their default visuals if the component is meant to match this library.
-- Do not add a variant because another library has one.
-- Do not overfit the public API to a single showcase example.
-- Do not skip catalog/showcase updates for public components.
-
-## New Component Checklist
-
-Use this checklist before considering the work complete:
-
-- The component lives in `src/components/<name>.rs`.
-- It exports a focused builder struct.
-- It has a `ComponentUi` method.
-- It uses existing tokens and existing chrome helpers where appropriate.
-- It owns no hidden durable state.
-- It has only the minimum useful `From<_>` shorthands.
-- It is exported from `src/components/mod.rs`.
-- It is re-exported from `src/lib.rs::prelude` if appropriate.
-- It is registered in `src/catalog.rs`.
-- It has a showcase example.
-- It does not change the system's color, spacing, or radius language.
-
-## Editing Existing Components
-
-When updating a current component, preserve these things unless the task explicitly says otherwise:
-
-- default width
-- default height
-- default text size
-- current variant names
-- tuple shorthand call sites already used in the README/showcase
-- token choices for hover, active, selected, and focus
-
-If behavior must change, prefer changing composition or state handling before changing the visual contract.
+- Every public component must be exported from `src/components/mod.rs`.
+- Every public component must be re-exported from `src/lib.rs::prelude`.
+- Every public component must have a catalog definition, a showcase metadata entry, a showcase render arm, and a `docs/llm/components/<id>.md` stub.

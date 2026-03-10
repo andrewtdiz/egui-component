@@ -52,29 +52,6 @@ impl<'a> Collapsible<'a> {
     }
 }
 
-impl<'a> From<(Id, &'a str)> for Collapsible<'a> {
-    fn from((id, title): (Id, &'a str)) -> Self {
-        Self::new(id, title)
-    }
-}
-
-impl<'a> From<(Id, &'a str, bool)> for Collapsible<'a> {
-    fn from((id, title, open): (Id, &'a str, bool)) -> Self {
-        Self::new(id, title).open(open)
-    }
-}
-
-impl<'a> From<(Id, &'a str, bool, &'a str, &'a str)> for Collapsible<'a> {
-    fn from(
-        (id, title, open, leading_icon, trailing_icon): (Id, &'a str, bool, &'a str, &'a str),
-    ) -> Self {
-        Self::new(id, title)
-            .open(open)
-            .leading_icon(leading_icon)
-            .trailing_icon(trailing_icon)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn collapsible<'a, R>(
         &mut self,
@@ -134,29 +111,37 @@ fn draw_collapsible<R>(
             } else {
                 "chevron-right"
             };
-            let _ = ui.icon((expand_icon, 12.0, tokens::text_muted(dark_mode)));
+            let _ = ui.icon(
+                crate::components::Icon::new(expand_icon)
+                    .size(12.0)
+                    .tint(tokens::text_muted(dark_mode)),
+            );
 
             if let Some(leading_icon) = props.leading_icon {
-                let _ = ui.icon((
-                    leading_icon,
-                    13.0,
-                    props
-                        .leading_icon_tint
-                        .unwrap_or(tokens::text_secondary(dark_mode)),
-                ));
+                let _ = ui.icon(
+                    crate::components::Icon::new(leading_icon).size(13.0).tint(
+                        props
+                            .leading_icon_tint
+                            .unwrap_or(tokens::text_secondary(dark_mode)),
+                    ),
+                );
             }
 
-            let _ = ui.label((props.title, LabelTone::Primary, LabelWeight::Semibold));
+            let _ = ui.label(
+                crate::components::Label::new(props.title)
+                    .tone(LabelTone::Primary)
+                    .weight(LabelWeight::Semibold),
+            );
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some(trailing_icon) = props.trailing_icon {
-                    let _ = ui.icon((
-                        trailing_icon,
-                        13.0,
-                        props
-                            .trailing_icon_tint
-                            .unwrap_or(tokens::text_muted(dark_mode)),
-                    ));
+                    let _ = ui.icon(
+                        crate::components::Icon::new(trailing_icon).size(13.0).tint(
+                            props
+                                .trailing_icon_tint
+                                .unwrap_or(tokens::text_muted(dark_mode)),
+                        ),
+                    );
                 }
             });
         },

@@ -1,6 +1,11 @@
 use super::api::ComponentUi;
-use crate::ui::{icons, tokens, typography};
-use egui::{CornerRadius, CursorIcon, Id, StrokeKind, Ui};
+use crate::primitives::{
+    control::{control_frame, ControlFrame},
+    popup::{popup_panel, PopupPanel},
+    row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
+};
+use crate::ui::{tokens, typography};
+use egui::{CursorIcon, Id, Ui};
 
 const MENU_INNER_PADDING_X: i8 = 3;
 const MENU_INNER_PADDING_Y: i8 = 3;
@@ -41,24 +46,6 @@ impl<'a> Select<'a> {
     }
 }
 
-impl<'a> From<(Id, Id, &'a [&'a str])> for Select<'a> {
-    fn from((trigger_id, popup_id, options): (Id, Id, &'a [&'a str])) -> Self {
-        Self::new(trigger_id, popup_id, options)
-    }
-}
-
-impl<'a> From<(Id, &'a [&'a str])> for Select<'a> {
-    fn from((id, options): (Id, &'a [&'a str])) -> Self {
-        Self::from_id(id, options)
-    }
-}
-
-impl<'a> From<(Id, &'a [&'a str], f32)> for Select<'a> {
-    fn from((id, options, width): (Id, &'a [&'a str], f32)) -> Self {
-        Self::from_id(id, options).width(width)
-    }
-}
-
 impl ComponentUi<'_> {
     pub fn select<'a>(
         &mut self,
@@ -66,6 +53,32 @@ impl ComponentUi<'_> {
         props: impl Into<Select<'a>>,
     ) -> egui::Response {
         draw_select(self.raw_mut(), selected_index, props.into())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedSelectStyle {
+    fill: egui::Color32,
+    stroke: egui::Stroke,
+    text_color: egui::Color32,
+    icon_color: egui::Color32,
+}
+
+fn resolve_select_style(
+    dark_mode: bool,
+    focused: bool,
+    hovered: bool,
+    has_selection: bool,
+) -> ResolvedSelectStyle {
+    ResolvedSelectStyle {
+        fill: tokens::input_bg(dark_mode, focused, hovered),
+        stroke: tokens::input_stroke(dark_mode, focused, hovered),
+        text_color: if has_selection {
+            tokens::text_primary(dark_mode)
+        } else {
+            tokens::text_muted(dark_mode)
+        },
+        icon_color: tokens::text_secondary(dark_mode),
     }
 }
 
@@ -90,16 +103,11 @@ fn draw_select(
         .gap(4.0)
         .show(|ui| {
             ui.style_mut().spacing.item_spacing.y = 2.0;
-            ui.set_min_width(props.width);
-            ui.set_max_width(props.width);
-
             let row_width = (props.width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
-            egui::Frame::new()
-                .inner_margin(egui::Margin::symmetric(
-                    MENU_INNER_PADDING_X,
-                    MENU_INNER_PADDING_Y,
-                ))
-                .show(ui, |ui| {
+            popup_panel(
+                ui,
+                PopupPanel::new(props.width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
+                |ui| {
                     ui.set_min_width(row_width);
                     ui.set_max_width(row_width);
 
@@ -116,7 +124,8 @@ fn draw_select(
                             ui.close();
                         }
                     }
-                });
+                },
+            );
         });
 
     if let Some(next_index) = next_selection {
@@ -136,34 +145,17 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
         let hovered = response.hovered();
         let dark_mode = ui.visuals().dark_mode;
-        let fill = tokens::input_bg(dark_mode, focused, hovered);
-        let stroke = tokens::input_stroke(dark_mode, focused, hovered);
-        ui.painter().rect(
-            rect,
-            CornerRadius::same(tokens::RADIUS_MD),
-            fill,
-            stroke,
-            StrokeKind::Outside,
-        );
-        ui.painter().text(
-            egui::pos2(rect.left() + 10.0, rect.center().y),
-            egui::Align2::LEFT_CENTER,
+        let style = resolve_select_style(dark_mode, focused, hovered, selected_text.is_some());
+        control_frame(ui, rect, ControlFrame::new(style.fill, style.stroke));
+        let row = IconLabelRow::new(
             selected_text.unwrap_or(props.placeholder),
             typography::label_font(),
-            if selected_text.is_some() {
-                tokens::text_primary(dark_mode)
-            } else {
-                tokens::text_muted(dark_mode)
-            },
-        );
-        if let Some(image) = icons::image(ui.ctx(), "chevron-down", 12.0) {
-            let icon_size = 12.0;
-            let icon_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.right() - 12.0, rect.center().y),
-                egui::vec2(icon_size, icon_size),
-            );
-            let _ = ui.put(icon_rect, image.tint(tokens::text_secondary(dark_mode)));
-        }
+            style.text_color,
+        )
+        .trailing_icon("chevron-down")
+        .trailing_icon_size(12.0)
+        .trailing_icon_tint(style.icon_color);
+        let _ = icon_label_row(ui, rect, &row);
         response.on_hover_cursor(CursorIcon::PointingHand)
     })
     .inner
@@ -177,23 +169,21 @@ fn draw_option_row(
     dark_mode: bool,
 ) -> egui::Response {
     let desired_size = egui::vec2(row_width.max(96.0), MENU_ROW_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-    let fill = tokens::row_bg(
-        selected,
-        response.is_pointer_button_down_on(),
-        response.hovered(),
-        dark_mode,
+    let (rect, response) = row_chrome(
+        ui,
+        RowChrome::new(desired_size)
+            .corner_radius(tokens::RADIUS_SM)
+            .stroke(egui::Stroke::NONE),
+        |response| {
+            tokens::row_bg(
+                selected,
+                response.is_pointer_button_down_on(),
+                response.hovered(),
+                dark_mode,
+            )
+        },
     );
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(tokens::RADIUS_SM),
-        fill,
-        egui::Stroke::NONE,
-        StrokeKind::Outside,
-    );
-    ui.painter().text(
-        egui::pos2(rect.left() + 10.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
+    let row = IconLabelRow::new(
         label,
         typography::label_font(),
         if selected {
@@ -202,5 +192,6 @@ fn draw_option_row(
             tokens::text_secondary(dark_mode)
         },
     );
-    response.on_hover_cursor(CursorIcon::PointingHand)
+    let _ = icon_label_row(ui, rect, &row);
+    response
 }
