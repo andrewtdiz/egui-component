@@ -14,6 +14,7 @@ mod dropdown_menu;
 mod field;
 mod icon;
 mod image;
+mod image_tile;
 mod input;
 mod kbd;
 mod label;
@@ -46,6 +47,7 @@ pub use dropdown_menu::{
 pub use field::Field;
 pub use icon::Icon;
 pub use image::Image;
+pub use image_tile::{ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState};
 pub use input::{TextInput, TextInputOverride};
 pub use kbd::{Kbd, KbdGroup};
 pub use label::{Label, LabelOverride, LabelTone, LabelWeight};

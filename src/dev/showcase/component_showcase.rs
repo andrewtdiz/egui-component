@@ -1,9 +1,10 @@
 use crate::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use crate::components::{
     Button, ButtonOverride, ButtonVariant, Checkbox, Color, CommandItem, ComponentUi,
-    ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu, DropdownMenuEntry, Image, Kbd,
-    KbdGroup, Label, LabelTone, LabelWeight, MenuBar, MenuBarItem, NumberInput, NumberInputAxis,
-    Select, TabOption, Toolbar, Tooltip, TooltipPlacement,
+    ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu, DropdownMenuEntry, Image, ImageTile,
+    ImageTilePlaybackState, ImageTileSize, Kbd, KbdGroup, Label, LabelTone, LabelWeight, MenuBar,
+    MenuBarItem, NumberInput, NumberInputAxis, Select, TabOption, Toolbar, Tooltip,
+    TooltipPlacement,
 };
 use crate::theme::{self, ThemeMode};
 use crate::ui::{tokens, typography};
@@ -29,6 +30,7 @@ const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(206, 164, 84),
 ];
 const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
+const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
 const COMBOBOX_OPTIONS: [&str; 6] = [
@@ -39,15 +41,18 @@ const COMBOBOX_OPTIONS: [&str; 6] = [
     "Sprite Mask",
     "UI Text Style",
 ];
-const COMMAND_OPTIONS: [CommandItem<'static>; 8] = [
-    CommandItem::new("Scene", "Open Scene Search"),
-    CommandItem::new("Scene", "Save Scene"),
-    CommandItem::new("GameObject", "Create Empty"),
-    CommandItem::new("GameObject", "Add Sprite Renderer"),
-    CommandItem::new("View", "Toggle Grid"),
-    CommandItem::new("View", "Toggle Gizmos"),
-    CommandItem::new("Tools", "Snap to Pixels"),
-    CommandItem::new("Tools", "Rebuild Lighting"),
+const COMMAND_OPTIONS: [CommandItem<'static>; 11] = [
+    CommandItem::new("", "scene: open scene search").shortcut("Ctrl+P"),
+    CommandItem::new("", "scene: save active scene").shortcut("Ctrl+S"),
+    CommandItem::new("", "gameobject: create empty").shortcut("Ctrl+Shift+N"),
+    CommandItem::new("", "gameobject: add camera"),
+    CommandItem::new("", "assets: reimport selected").shortcut("Ctrl+R"),
+    CommandItem::new("", "view: toggle gizmos"),
+    CommandItem::new("", "view: focus selection").shortcut("F"),
+    CommandItem::new("", "window: animation"),
+    CommandItem::new("", "window: inspector").shortcut("Ctrl+I"),
+    CommandItem::new("", "tools: bake lighting"),
+    CommandItem::new("", "tools: build nav mesh").shortcut("Ctrl+B"),
 ];
 const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
     DropdownMenuEntry::action(4, "Email"),
@@ -297,6 +302,11 @@ const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
         description: "Floating absolute-positioned editing bar",
         section_override: Some(ShowcaseSection::Examples),
     },
+    ShowcaseMetadata {
+        kind: ComponentKind::ImageTile,
+        description: "Grid-friendly media tile with custom body and playback overlay",
+        section_override: Some(ShowcaseSection::Examples),
+    },
     // xtask:showcase-metadata:end
 ];
 
@@ -328,6 +338,8 @@ pub struct ComponentShowcaseState {
     alert_dialogue_open: bool,
     menu_bar_action: Option<usize>,
     tooltip_placement: TooltipPlacement,
+    image_tile_playback_state: ImageTilePlaybackState,
+    image_tile_last_action: String,
 }
 
 impl Default for ComponentShowcaseState {
@@ -359,6 +371,8 @@ impl Default for ComponentShowcaseState {
             alert_dialogue_open: false,
             menu_bar_action: None,
             tooltip_placement: TooltipPlacement::Top,
+            image_tile_playback_state: ImageTilePlaybackState::Paused,
+            image_tile_last_action: "No image tile actions yet".to_owned(),
         }
     }
 }
@@ -1098,7 +1112,9 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.command(
                 &mut state.command_query,
                 &COMMAND_OPTIONS,
-                crate::components::Command::new(Id::new("component_showcase_command")).width(280.0),
+                crate::components::Command::new(Id::new("component_showcase_command"))
+                    .width(380.0)
+                    .preview(true),
             );
         }
         ComponentKind::Dialogue => {
@@ -1221,6 +1237,9 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         }
         ComponentKind::Toolbar => {
             draw_toolbar_preview(ui, state);
+        }
+        ComponentKind::ImageTile => {
+            draw_image_tile_preview(ui, state);
         } // xtask:showcase-render-arms:end
     }
 }
@@ -1371,6 +1390,148 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
             .tone(LabelTone::Muted)
             .size(typography::SMALL_SIZE),
     );
+}
+
+fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    let showcase_image = egui::include_image!("../../../assets/images/showcase-image.png");
+    let logo_image = egui::include_image!("../../../assets/images/clay_logo_large.png");
+
+    let _ = ui.label(
+        Label::new("Shared spacing, stacked examples")
+            .tone(LabelTone::Muted)
+            .size(typography::SMALL_SIZE),
+    );
+    ui.add_space(tokens::SPACING_ITEM_Y);
+
+    let _ = ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = tokens::SPACING_ITEM_Y;
+
+        let _ = ui.label(
+            Label::new("Featured tile")
+                .tone(LabelTone::Muted)
+                .size(typography::SMALL_SIZE),
+        );
+        let (_, featured_state) = ui.image_tile_with_body(
+            ImageTile::new(Image::new(showcase_image.clone())).size(ImageTileSize::Lg),
+            |ui| {
+                let _ = ui.label(
+                    Label::new("Untitled Design")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold)
+                        .size(16.0),
+                );
+                draw_image_tile_metadata_row(ui, "Edited 2 days ago");
+            },
+        );
+        if featured_state.tile_clicked {
+            state.image_tile_last_action = "Opened Untitled Design".to_owned();
+        }
+
+        ui.add_space(tokens::SPACING_ITEM_Y);
+        let _ = ui.label(
+            Label::new("Custom body")
+                .tone(LabelTone::Muted)
+                .size(typography::SMALL_SIZE),
+        );
+        let (_, custom_state) = ui.image_tile_with_body(
+            ImageTile::new(Image::new(logo_image.clone())).image_size(egui::vec2(180.0, 120.0)),
+            |ui| {
+                let _ = ui.label(
+                    Label::new("Custom body")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold),
+                );
+                let _ = ui.label(
+                    Label::new("Compose badges, helper text, or any other tile footer.")
+                        .tone(LabelTone::Muted)
+                        .size(typography::SMALL_SIZE),
+                );
+            },
+        );
+        if custom_state.tile_clicked {
+            state.image_tile_last_action = "Opened custom body tile".to_owned();
+        }
+
+        ui.add_space(tokens::SPACING_ITEM_Y);
+        let _ = ui.label(
+            Label::new("Bodyless grid cell")
+                .tone(LabelTone::Muted)
+                .size(typography::SMALL_SIZE),
+        );
+        let (_, bodyless_state) = ui
+            .image_tile(ImageTile::new(Image::new(showcase_image.clone())).size(ImageTileSize::Sm));
+        if bodyless_state.tile_clicked {
+            state.image_tile_last_action = "Opened bodyless tile".to_owned();
+        }
+
+        ui.add_space(tokens::SPACING_ITEM_Y);
+        let _ = ui.label(
+            Label::new("Audio preview")
+                .tone(LabelTone::Muted)
+                .size(typography::SMALL_SIZE),
+        );
+        let (_, audio_state) = ui.image_tile_with_body(
+            ImageTile::new(Image::new(showcase_image))
+                .size(ImageTileSize::Md)
+                .playback_state(state.image_tile_playback_state),
+            |ui| {
+                let _ = ui.label(
+                    Label::new("Ambient Preview")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold),
+                );
+                let playback_label = match state.image_tile_playback_state {
+                    ImageTilePlaybackState::Paused => "Paused • Click play to preview",
+                    ImageTilePlaybackState::Playing => "Playing • 0:27 loop",
+                };
+                draw_image_tile_metadata_row(ui, playback_label);
+            },
+        );
+        if audio_state.play_pause_clicked {
+            state.image_tile_playback_state = match state.image_tile_playback_state {
+                ImageTilePlaybackState::Paused => ImageTilePlaybackState::Playing,
+                ImageTilePlaybackState::Playing => ImageTilePlaybackState::Paused,
+            };
+            state.image_tile_last_action = match state.image_tile_playback_state {
+                ImageTilePlaybackState::Paused => "Paused audio preview".to_owned(),
+                ImageTilePlaybackState::Playing => "Started audio preview".to_owned(),
+            };
+        } else if audio_state.tile_clicked {
+            state.image_tile_last_action = "Opened audio preview tile".to_owned();
+        }
+    });
+
+    ui.add_space(tokens::SPACING_ITEM_Y);
+    let playback_status = match state.image_tile_playback_state {
+        ImageTilePlaybackState::Paused => "Paused",
+        ImageTilePlaybackState::Playing => "Playing",
+    };
+    let status_text = format!(
+        "Playback: {playback_status} | Last action: {}",
+        state.image_tile_last_action
+    );
+    let _ = ui.label(
+        Label::new(status_text.as_str())
+            .tone(LabelTone::Muted)
+            .size(typography::SMALL_SIZE),
+    );
+}
+
+fn draw_image_tile_metadata_row(ui: &mut ComponentUi<'_>, text: &str) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let _ = ui.icon(
+            crate::components::Icon::new("globe")
+                .size(12.0)
+                .tint(IMAGE_TILE_META_ACCENT),
+        );
+        let _ = ui.label(Label::new("•").tone(LabelTone::Muted));
+        let _ = ui.label(
+            Label::new(text)
+                .tone(LabelTone::Muted)
+                .size(typography::SMALL_SIZE),
+        );
+    });
 }
 
 fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
@@ -1525,6 +1686,10 @@ mod tests {
         );
         assert_eq!(
             showcase_section(ComponentKind::Toolbar),
+            ShowcaseSection::Examples
+        );
+        assert_eq!(
+            showcase_section(ComponentKind::ImageTile),
             ShowcaseSection::Examples
         );
     }

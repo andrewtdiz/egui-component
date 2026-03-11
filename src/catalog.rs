@@ -14,6 +14,7 @@ pub enum ComponentKind {
     Field,
     Icon,
     Image,
+    ImageTile,
     Input,
     Kbd,
     Label,
@@ -197,6 +198,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Dialogue,
         id: "dialogue",
         label: "Dialogue",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::ImageTile,
+        id: "image-tile",
+        label: "Image Tile",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
