@@ -146,7 +146,8 @@ fn normalize_icon_svg_bytes(bytes: Vec<u8>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_icon_name, normalize_icon_svg_bytes, ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO,
+        ensure_icon_uri, icon_path, normalize_icon_name, normalize_icon_svg_bytes, setup,
+        ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO, ICON_URI_PREFIX,
     };
 
     #[test]
@@ -171,6 +172,10 @@ mod tests {
             normalize_icon_name("chevron-down.svg"),
             Some("chevron-down".to_owned())
         );
+        assert_eq!(
+            normalize_icon_name("PlayFill"),
+            Some("play-fill".to_owned())
+        );
     }
 
     #[test]
@@ -188,5 +193,17 @@ mod tests {
         assert!(normalized.contains("#FFFFFF"));
         assert!(normalized.contains(ICON_STROKE_WIDTH_TO));
         assert!(!normalized.contains(ICON_STROKE_WIDTH_FROM));
+    }
+
+    #[test]
+    fn resolves_play_fill_icon_asset() {
+        assert!(icon_path("play-fill").is_file());
+
+        let context = egui::Context::default();
+        setup(&context);
+
+        let uri = ensure_icon_uri(&context, "PlayFill");
+        let expected_uri = format!("{ICON_URI_PREFIX}play-fill.svg");
+        assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
     }
 }
