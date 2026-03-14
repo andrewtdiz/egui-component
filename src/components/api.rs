@@ -2,7 +2,7 @@ use super::{
     button::ButtonOverride, card::CardOverride, input::TextInputOverride, label::LabelOverride,
 };
 use crate::ui::style;
-use egui::{Id, InnerResponse, Layout, Ui, UiBuilder, Vec2};
+use egui::{pos2, Id, InnerResponse, Layout, Rect, Ui, UiBuilder, Vec2};
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 
@@ -134,6 +134,34 @@ impl<'ui> ComponentUi<'ui> {
         })
     }
 
+    pub fn centered_lane<R>(
+        &mut self,
+        width: f32,
+        layout: Layout,
+        add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+    ) -> InnerResponse<R> {
+        let available_rect = self.ui.available_rect_before_wrap();
+        let lane_width = width.max(0.0).min(available_rect.width().max(0.0));
+        let top = self.ui.cursor().top().max(available_rect.top());
+        let bottom = available_rect.bottom().max(top);
+        let lane_rect = Rect::from_min_max(
+            pos2(available_rect.center().x - lane_width * 0.5, top),
+            pos2(available_rect.center().x + lane_width * 0.5, bottom),
+        );
+        let overrides = self.overrides;
+        let mut used_rect = Rect::from_min_size(lane_rect.min, Vec2::ZERO);
+        let response =
+            self.ui
+                .scope_builder(UiBuilder::new().max_rect(lane_rect).layout(layout), |ui| {
+                    let mut components = ComponentUi::with_overrides(ui, overrides);
+                    let inner = add(&mut components);
+                    used_rect = components.min_rect();
+                    inner
+                });
+        self.ui.advance_cursor_after_rect(used_rect);
+        response
+    }
+
     pub fn push_id<R>(
         &mut self,
         id_salt: impl Hash,
@@ -252,10 +280,11 @@ mod tests {
         button::{ButtonOverride, ButtonVariant},
         card::CardOverride,
         label::{LabelOverride, LabelTone},
+        Label,
     };
     use crate::theme::{self, ThemeMode};
     use crate::ui::tokens;
-    use egui::{CentralPanel, Color32, RawInput, Stroke};
+    use egui::{Align, CentralPanel, Color32, Layout, RawInput, Stroke};
 
     #[test]
     fn tuple_override_sets_merge_by_widget_type() {
@@ -312,6 +341,34 @@ mod tests {
                 );
                 assert_eq!(components.spacing().menu_spacing, 0.0);
                 assert_eq!(components.visuals().selection.stroke, Stroke::NONE);
+            });
+        });
+    }
+
+    #[test]
+    fn centered_lane_centers_and_advances_parent_cursor() {
+        let context = egui::Context::default();
+        theme::install(&context, ThemeMode::Light);
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let parent_center_x = ui.max_rect().center().x;
+                let cursor_top_before = ui.cursor().top();
+                let lane = {
+                    let mut components = ui.components();
+                    components.centered_lane(180.0, Layout::top_down(Align::Min), |ui| {
+                        let lane_rect = ui.max_rect();
+                        let label_rect = ui.label(Label::new("Centered lane")).rect;
+                        (lane_rect, label_rect)
+                    })
+                };
+                let cursor_top_after = ui.cursor().top();
+                let (lane_rect, label_rect) = lane.inner;
+
+                assert!((lane_rect.center().x - parent_center_x).abs() <= 0.5);
+                assert!(cursor_top_after >= label_rect.bottom());
+                assert!(cursor_top_after < lane_rect.bottom());
+                assert!(cursor_top_after > cursor_top_before);
             });
         });
     }

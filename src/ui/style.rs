@@ -24,6 +24,11 @@ pub(crate) fn apply_component_profile(ui: &mut Ui) {
 
 fn component_font_definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
+    let proportional_fallback = fonts
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
     fonts.font_data.insert(
         typography::REGULAR_DATA_KEY.to_owned(),
         FontData::from_static(include_bytes!("../../assets/fonts/Segoe-UI.TTF")).into(),
@@ -43,19 +48,19 @@ fn component_font_definitions() -> FontDefinitions {
 
     fonts.families.insert(
         FontFamily::Name(typography::REGULAR_FAMILY.into()),
-        vec![typography::REGULAR_DATA_KEY.to_owned()],
+        component_font_family_with_fallback(typography::REGULAR_DATA_KEY, &proportional_fallback),
     );
     fonts.families.insert(
         FontFamily::Name(typography::SEMIBOLD_FAMILY.into()),
-        vec![typography::SEMIBOLD_DATA_KEY.to_owned()],
+        component_font_family_with_fallback(typography::SEMIBOLD_DATA_KEY, &proportional_fallback),
     );
     fonts.families.insert(
         FontFamily::Name(typography::BOLD_FAMILY.into()),
-        vec![typography::BOLD_DATA_KEY.to_owned()],
+        component_font_family_with_fallback(typography::BOLD_DATA_KEY, &proportional_fallback),
     );
     fonts.families.insert(
         FontFamily::Name(typography::ITALIC_FAMILY.into()),
-        vec![typography::ITALIC_DATA_KEY.to_owned()],
+        component_font_family_with_fallback(typography::ITALIC_DATA_KEY, &proportional_fallback),
     );
 
     if let Some(proportional) = fonts.families.get_mut(&FontFamily::Proportional) {
@@ -63,6 +68,16 @@ fn component_font_definitions() -> FontDefinitions {
     }
 
     fonts
+}
+
+fn component_font_family_with_fallback(
+    primary_font_key: &str,
+    fallback_family: &[String],
+) -> Vec<String> {
+    let mut family = Vec::with_capacity(1 + fallback_family.len());
+    family.push(primary_font_key.to_owned());
+    family.extend(fallback_family.iter().cloned());
+    family
 }
 
 fn apply_typography(style: &mut Style) {

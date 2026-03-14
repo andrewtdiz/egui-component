@@ -5,6 +5,11 @@ use egui::{Align2, CornerRadius, CursorIcon, Id, Rect, RichText, Stroke, StrokeK
 const STACKED_TAB_SIZE: egui::Vec2 = egui::vec2(80.0, 68.0);
 const STACKED_TAB_GAP: f32 = 8.0;
 const STACKED_TAB_ICON_SIZE: f32 = 18.0;
+const RAIL_TAB_SIZE: egui::Vec2 = egui::vec2(62.0, 54.0);
+const RAIL_TAB_GAP: f32 = 4.0;
+const RAIL_TAB_ICON_SIZE: f32 = 16.0;
+const RAIL_TAB_ICON_OFFSET_Y: f32 = -9.0;
+const RAIL_TAB_LABEL_OFFSET_Y: f32 = 10.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TabOption<'a> {
@@ -38,6 +43,19 @@ impl ComponentUi<'_> {
 
     pub fn stacked_tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
         let _ = draw_stacked_tabs(self.raw_mut(), id, current, options);
+    }
+
+    pub fn rail_tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
+        let _ = draw_rail_tabs(self.raw_mut(), id, current, options);
+    }
+
+    pub fn toggle_rail_tabs(
+        &mut self,
+        id: Id,
+        current: &mut Option<usize>,
+        options: &[TabOption<'_>],
+    ) {
+        let _ = draw_toggle_rail_tabs(self.raw_mut(), id, current, options);
     }
 }
 
@@ -159,9 +177,166 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
     .inner
 }
 
+fn draw_rail_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>]) -> Rect {
+    if options.is_empty() {
+        return Rect::NOTHING;
+    }
+
+    let dark_mode = ui.visuals().dark_mode;
+    *current = (*current).min(options.len().saturating_sub(1));
+
+    ui.push_id(id, |ui| {
+        ui.spacing_mut().item_spacing.y = RAIL_TAB_GAP;
+        ui.vertical(|ui| {
+            for option in options {
+                let selected = *current == option.value;
+                let (rect, response) = ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
+                let icon_and_text_color = if selected {
+                    tokens::text_primary(dark_mode)
+                } else if response.hovered() {
+                    tokens::text_secondary(dark_mode)
+                } else {
+                    tokens::text_muted(dark_mode)
+                };
+
+                let fill = if response.is_pointer_button_down_on() {
+                    tokens::button_secondary_active_bg(dark_mode)
+                } else if selected {
+                    tokens::row_active_bg(dark_mode)
+                } else if response.hovered() {
+                    tokens::button_secondary_hover_bg(dark_mode)
+                } else {
+                    tokens::TRANSPARENT
+                };
+
+                ui.painter().rect(
+                    rect,
+                    CornerRadius::same(tokens::RADIUS_SM),
+                    fill,
+                    Stroke::NONE,
+                    StrokeKind::Outside,
+                );
+
+                if let Some(icon) = option.icon {
+                    if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
+                        let icon_rect = Rect::from_center_size(
+                            egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_ICON_OFFSET_Y),
+                            egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
+                        );
+                        image.tint(icon_and_text_color).paint_at(ui, icon_rect);
+                    }
+                }
+
+                ui.painter().text(
+                    egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
+                    Align2::CENTER_CENTER,
+                    option.label,
+                    egui::FontId::new(10.0, egui::FontFamily::Proportional),
+                    icon_and_text_color,
+                );
+
+                if response.clicked() && !selected {
+                    *current = option.value;
+                }
+
+                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+            }
+        })
+        .response
+        .rect
+    })
+    .inner
+}
+
+fn draw_toggle_rail_tabs(
+    ui: &mut Ui,
+    id: Id,
+    current: &mut Option<usize>,
+    options: &[TabOption<'_>],
+) -> Rect {
+    if options.is_empty() {
+        return Rect::NOTHING;
+    }
+
+    let dark_mode = ui.visuals().dark_mode;
+
+    if let Some(selected) = current.as_mut() {
+        *selected = (*selected).min(options.len().saturating_sub(1));
+    }
+
+    ui.push_id(id, |ui| {
+        ui.spacing_mut().item_spacing.y = RAIL_TAB_GAP;
+        ui.vertical(|ui| {
+            for option in options {
+                let selected = *current == Some(option.value);
+                let (rect, response) = ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
+                let icon_and_text_color = if selected {
+                    tokens::text_primary(dark_mode)
+                } else if response.hovered() {
+                    tokens::text_secondary(dark_mode)
+                } else {
+                    tokens::text_muted(dark_mode)
+                };
+
+                let fill = if response.is_pointer_button_down_on() {
+                    tokens::button_secondary_active_bg(dark_mode)
+                } else if selected {
+                    tokens::row_active_bg(dark_mode)
+                } else if response.hovered() {
+                    tokens::button_secondary_hover_bg(dark_mode)
+                } else {
+                    tokens::TRANSPARENT
+                };
+
+                ui.painter().rect(
+                    rect,
+                    CornerRadius::same(tokens::RADIUS_SM),
+                    fill,
+                    Stroke::NONE,
+                    StrokeKind::Outside,
+                );
+
+                if let Some(icon) = option.icon {
+                    if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
+                        let icon_rect = Rect::from_center_size(
+                            egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_ICON_OFFSET_Y),
+                            egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
+                        );
+                        image.tint(icon_and_text_color).paint_at(ui, icon_rect);
+                    }
+                }
+
+                ui.painter().text(
+                    egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
+                    Align2::CENTER_CENTER,
+                    option.label,
+                    egui::FontId::new(10.0, egui::FontFamily::Proportional),
+                    icon_and_text_color,
+                );
+
+                if response.clicked() {
+                    if selected {
+                        *current = None;
+                    } else {
+                        *current = Some(option.value);
+                    }
+                }
+
+                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+            }
+        })
+        .response
+        .rect
+    })
+    .inner
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{draw_stacked_tabs, TabOption, STACKED_TAB_GAP, STACKED_TAB_SIZE};
+    use super::{
+        draw_rail_tabs, draw_stacked_tabs, draw_toggle_rail_tabs, TabOption, RAIL_TAB_GAP,
+        RAIL_TAB_SIZE, STACKED_TAB_GAP, STACKED_TAB_SIZE,
+    };
     use egui::{CentralPanel, Context, Id, RawInput, Rect};
 
     #[test]
@@ -184,5 +359,73 @@ mod tests {
             + (STACKED_TAB_GAP * options.len().saturating_sub(1) as f32);
         assert_eq!(rect.width(), expected_width);
         assert_eq!(rect.height(), STACKED_TAB_SIZE.y);
+    }
+
+    #[test]
+    fn renders_rail_tabs() {
+        let context = Context::default();
+        let mut rect = Rect::NOTHING;
+        let options = [
+            TabOption::with_icon(0, "World", "globe"),
+            TabOption::with_icon(1, "Assets", "folder-open"),
+        ];
+        let mut current = 0;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                rect = draw_rail_tabs(ui, Id::new("rail_tabs_test"), &mut current, &options);
+            });
+        });
+
+        let expected_height = (RAIL_TAB_SIZE.y * options.len() as f32)
+            + (RAIL_TAB_GAP * options.len().saturating_sub(1) as f32);
+        assert_eq!(rect.width(), RAIL_TAB_SIZE.x);
+        assert_eq!(rect.height(), expected_height);
+    }
+
+    #[test]
+    fn rail_tabs_clamp_current_to_last_visible_option() {
+        let context = Context::default();
+        let options = [
+            TabOption::with_icon(0, "World", "globe"),
+            TabOption::with_icon(1, "Assets", "folder-open"),
+        ];
+        let mut current = 99;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = draw_rail_tabs(ui, Id::new("rail_tabs_clamp_test"), &mut current, &options);
+            });
+        });
+
+        assert_eq!(current, options.len() - 1);
+    }
+
+    #[test]
+    fn renders_toggle_rail_tabs_with_no_selection() {
+        let context = Context::default();
+        let mut rect = Rect::NOTHING;
+        let options = [
+            TabOption::with_icon(0, "World", "globe"),
+            TabOption::with_icon(1, "Assets", "folder-open"),
+        ];
+        let mut current = None;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                rect = draw_toggle_rail_tabs(
+                    ui,
+                    Id::new("toggle_rail_tabs_test"),
+                    &mut current,
+                    &options,
+                );
+            });
+        });
+
+        let expected_height = (RAIL_TAB_SIZE.y * options.len() as f32)
+            + (RAIL_TAB_GAP * options.len().saturating_sub(1) as f32);
+        assert_eq!(rect.width(), RAIL_TAB_SIZE.x);
+        assert_eq!(rect.height(), expected_height);
+        assert_eq!(current, None);
     }
 }

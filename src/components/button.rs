@@ -3,8 +3,8 @@ use super::{
     color::{paint_color, Color},
     common::ControlSize,
 };
-use crate::ui::{icons, tokens};
-use egui::{Color32, CursorIcon, RichText, Stroke, Ui, Vec2};
+use crate::ui::{icons, tokens, typography};
+use egui::{pos2, Color32, CursorIcon, FontId, Rect, RichText, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ButtonVariant {
@@ -12,6 +12,13 @@ pub enum ButtonVariant {
     Secondary,
     Ghost,
     Link,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ButtonLabelWeight {
+    Regular,
+    Medium,
+    Bold,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -26,8 +33,10 @@ pub struct Button<'a> {
     pub icon_only: bool,
     pub trailing_text: Option<&'a str>,
     pub trailing_hint: bool,
+    pub trailing_icon: Option<&'a str>,
     pub selected: bool,
     pub min_size: Option<Vec2>,
+    pub label_weight: ButtonLabelWeight,
 }
 
 impl<'a> Button<'a> {
@@ -43,8 +52,10 @@ impl<'a> Button<'a> {
             icon_only: false,
             trailing_text: None,
             trailing_hint: false,
+            trailing_icon: None,
             selected: false,
             min_size: None,
+            label_weight: ButtonLabelWeight::Regular,
         }
     }
 
@@ -60,8 +71,10 @@ impl<'a> Button<'a> {
             icon_only: true,
             trailing_text: None,
             trailing_hint: false,
+            trailing_icon: None,
             selected: false,
             min_size: None,
+            label_weight: ButtonLabelWeight::Regular,
         }
     }
 
@@ -77,8 +90,10 @@ impl<'a> Button<'a> {
             icon_only: true,
             trailing_text: None,
             trailing_hint: false,
+            trailing_icon: None,
             selected: false,
             min_size: None,
+            label_weight: ButtonLabelWeight::Regular,
         }
     }
 
@@ -89,6 +104,11 @@ impl<'a> Button<'a> {
 
     pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
+        self
+    }
+
+    pub fn color(mut self, color: impl Into<Color>) -> Self {
+        self.color = Some(color.into());
         self
     }
 
@@ -119,6 +139,11 @@ impl<'a> Button<'a> {
         self
     }
 
+    pub fn trailing_icon(mut self, trailing_icon: &'a str) -> Self {
+        self.trailing_icon = Some(trailing_icon);
+        self
+    }
+
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
         self
@@ -126,6 +151,11 @@ impl<'a> Button<'a> {
 
     pub fn min_size(mut self, min_size: Vec2) -> Self {
         self.min_size = Some(min_size);
+        self
+    }
+
+    pub fn label_weight(mut self, label_weight: ButtonLabelWeight) -> Self {
+        self.label_weight = label_weight;
         self
     }
 }
@@ -268,6 +298,7 @@ fn resolve_button_style(
     dark_mode: bool,
     variant: ButtonVariant,
     size: ControlSize,
+    color_override: Option<Color>,
     icon_tint_override: Option<Color32>,
 ) -> ResolvedButtonStyle {
     let secondary_fg = Stroke::new(1.0, tokens::text_primary(dark_mode));
@@ -359,13 +390,32 @@ fn resolve_button_style(
         resolved.icon_tint = icon_tint;
     }
 
+    if let Some(color) = color_override {
+        if variant == ButtonVariant::Primary {
+            let fill = color.fill;
+            let hover_fill = fill.gamma_multiply(1.08);
+            let active_fill = fill.gamma_multiply(0.92);
+            resolved.inactive_fill = fill;
+            resolved.hovered_fill = hover_fill;
+            resolved.active_fill = active_fill;
+            resolved.label_color = Some(Color32::from_rgb(250, 250, 250));
+            resolved.icon_tint = Color32::from_rgb(250, 250, 250);
+        }
+    }
+
     resolved
 }
 
 fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
     ui.scope(|ui| {
         let dark_mode = ui.visuals().dark_mode;
-        let resolved = resolve_button_style(dark_mode, props.variant, props.size, props.icon_tint);
+        let resolved = resolve_button_style(
+            dark_mode,
+            props.variant,
+            props.size,
+            props.color,
+            props.icon_tint,
+        );
         ui.spacing_mut().button_padding = resolved.button_padding;
         let visuals = &mut ui.style_mut().visuals.widgets;
         visuals.inactive.bg_fill = resolved.inactive_fill;
@@ -380,9 +430,28 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         visuals.inactive.fg_stroke = resolved.inactive_fg;
         visuals.hovered.fg_stroke = resolved.hovered_fg;
         visuals.active.fg_stroke = resolved.active_fg;
+        let button_font_size = egui::TextStyle::Button.resolve(ui.style()).size;
+        let button_label_font = resolve_button_label_font(props.label_weight, button_font_size);
+        let label_color = resolved.label_color.unwrap_or(resolved.inactive_fg.color);
+        let label_width = if props.label.is_empty() {
+            0.0
+        } else {
+            ui.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(
+                        props.label.to_owned(),
+                        button_label_font.clone(),
+                        label_color,
+                    )
+                    .size()
+                    .x
+            })
+        };
         let button_label = match resolved.label_color {
-            Some(label_color) => RichText::new(props.label).color(label_color),
-            None => RichText::new(props.label),
+            Some(label_color) => RichText::new(props.label)
+                .font(button_label_font)
+                .color(label_color),
+            None => RichText::new(props.label).font(button_label_font),
         };
         let has_label = !props.label.is_empty();
         let swatch_only = props.color.is_some() && !has_label && props.leading_icon.is_none();
@@ -406,11 +475,13 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
             }
         };
 
-        if let Some(trailing_text) = props.trailing_text {
-            if props.trailing_hint {
-                widget = widget.shortcut_text(trailing_text);
-            } else {
-                widget = widget.right_text(trailing_text);
+        if props.trailing_icon.is_none() {
+            if let Some(trailing_text) = props.trailing_text {
+                if props.trailing_hint {
+                    widget = widget.shortcut_text(trailing_text);
+                } else {
+                    widget = widget.right_text(trailing_text);
+                }
             }
         }
 
@@ -419,17 +490,60 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         if !resolved.frame {
             widget = widget.frame(false);
         }
+        let trailing_icon_extra_width = if props.trailing_icon.is_some() {
+            props.icon_size + 12.0
+        } else {
+            0.0
+        };
         if let Some(min_size) = props.min_size {
-            widget = widget.min_size(min_size);
+            widget = widget.min_size(egui::vec2(
+                min_size.x.max(
+                    label_width
+                        + resolved.button_padding.x * 2.0
+                        + trailing_icon_extra_width
+                        + if props.leading_icon.is_some() && has_label {
+                            props.icon_size + 8.0
+                        } else {
+                            0.0
+                        },
+                ),
+                min_size.y,
+            ));
         } else if props.icon_only || (props.leading_icon.is_some() && !has_label) || swatch_only {
             widget = widget.min_size(Vec2::splat(props.size.min_interact_height()));
         } else {
-            widget = widget.min_size(resolved.min_size);
+            widget = widget.min_size(egui::vec2(
+                resolved.min_size.x.max(
+                    label_width
+                        + resolved.button_padding.x * 2.0
+                        + trailing_icon_extra_width
+                        + if props.leading_icon.is_some() && has_label {
+                            props.icon_size + 8.0
+                        } else {
+                            0.0
+                        },
+                ),
+                resolved.min_size.y,
+            ));
         }
 
         let response = ui.add(widget).on_hover_cursor(CursorIcon::PointingHand);
         if let Some(color) = props.color.filter(|_| swatch_only) {
             paint_color(ui.painter(), response.rect, color);
+        }
+        if let Some(icon_name) = props.trailing_icon {
+            paint_trailing_icon(
+                ui,
+                &response,
+                icon_name,
+                props.icon_size,
+                resolved.button_padding.x,
+                if !ui.is_enabled() {
+                    tokens::text_muted(dark_mode)
+                } else {
+                    resolved.icon_tint
+                },
+            );
         }
         if props.variant == ButtonVariant::Link
             && response.hovered()
@@ -457,6 +571,34 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         response
     })
     .inner
+}
+
+fn paint_trailing_icon(
+    ui: &mut Ui,
+    response: &egui::Response,
+    icon_name: &str,
+    icon_size: f32,
+    padding_x: f32,
+    tint: Color32,
+) {
+    if let Some(image) = icons::image(ui.ctx(), icon_name, icon_size) {
+        let icon_rect = Rect::from_center_size(
+            pos2(
+                response.rect.right() - padding_x - icon_size * 0.5,
+                response.rect.center().y,
+            ),
+            egui::vec2(icon_size, icon_size),
+        );
+        let _ = image.tint(tint).paint_at(ui, icon_rect);
+    }
+}
+
+fn resolve_button_label_font(weight: ButtonLabelWeight, size: f32) -> FontId {
+    match weight {
+        ButtonLabelWeight::Regular => typography::proportional(size),
+        ButtonLabelWeight::Medium => typography::semibold_font(size),
+        ButtonLabelWeight::Bold => typography::bold_font(size),
+    }
 }
 
 #[cfg(test)]

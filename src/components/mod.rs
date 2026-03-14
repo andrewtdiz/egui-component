@@ -31,7 +31,7 @@ mod tooltip;
 
 pub use api::{ComponentUi, ComponentUiExt};
 // xtask:component-exports:start
-pub use button::{Button, ButtonOverride, ButtonVariant};
+pub use button::{Button, ButtonLabelWeight, ButtonOverride, ButtonVariant};
 pub use button_group::ButtonGroup;
 pub use card::{Card, CardOverride};
 pub use checkbox::Checkbox;

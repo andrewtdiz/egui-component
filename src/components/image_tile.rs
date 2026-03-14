@@ -45,6 +45,8 @@ pub struct ImageTile<'a> {
     pub image: Image<'a>,
     pub size: ImageTileSize,
     pub image_size: Option<Vec2>,
+    pub image_frame: bool,
+    pub selected: bool,
     pub playback_state: Option<ImageTilePlaybackState>,
 }
 
@@ -54,6 +56,8 @@ impl<'a> ImageTile<'a> {
             image: image.into(),
             size: ImageTileSize::Md,
             image_size: None,
+            image_frame: true,
+            selected: false,
             playback_state: None,
         }
     }
@@ -65,6 +69,16 @@ impl<'a> ImageTile<'a> {
 
     pub fn image_size(mut self, image_size: Vec2) -> Self {
         self.image_size = Some(egui::vec2(image_size.x.max(1.0), image_size.y.max(1.0)));
+        self
+    }
+
+    pub fn image_frame(mut self, image_frame: bool) -> Self {
+        self.image_frame = image_frame;
+        self
+    }
+
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
         self
     }
 
@@ -109,7 +123,7 @@ fn draw_image_tile(
 ) -> (Response, ImageTileState) {
     let overrides = ui.overrides;
     let dark_mode = ui.visuals().dark_mode;
-    let style = resolve_image_tile_style(dark_mode);
+    let style = resolve_image_tile_style(dark_mode, props.selected);
     let image_size = props.resolved_image_size();
     let mut playback_response = None;
 
@@ -123,27 +137,37 @@ fn draw_image_tile(
             ui.set_min_width(image_size.x);
             ui.set_max_width(image_size.x);
 
-            let image_surface = surface_frame_builder(
-                SurfaceFrame::new(style.image_fill, style.image_stroke)
-                    .corner_radius(tokens::RADIUS_MD),
-            )
-            .show(ui, |ui| {
-                let mut components = ComponentUi::with_overrides(ui, overrides);
-                let _ = components.image(
-                    props
-                        .image
-                        .fit_to_exact_size(image_size)
+            let image_rect = if props.image_frame {
+                surface_frame_builder(
+                    SurfaceFrame::new(style.image_fill, style.image_stroke)
                         .corner_radius(tokens::RADIUS_MD),
-                );
-            });
+                )
+                .show(ui, |ui| {
+                    let mut components = ComponentUi::with_overrides(ui, overrides);
+                    let _ = components.image(
+                        props
+                            .image
+                            .fit_to_exact_size(image_size)
+                            .corner_radius(tokens::RADIUS_MD),
+                    );
+                })
+                .response
+                .rect
+            } else {
+                let mut components = ComponentUi::with_overrides(ui, overrides);
+                components
+                    .image(
+                        props
+                            .image
+                            .fit_to_exact_size(image_size)
+                            .corner_radius(tokens::RADIUS_LG),
+                    )
+                    .rect
+            };
 
             if let Some(playback_state) = props.playback_state {
-                playback_response = Some(draw_playback_button(
-                    ui,
-                    image_surface.response.rect,
-                    playback_state,
-                    &style,
-                ));
+                playback_response =
+                    Some(draw_playback_button(ui, image_rect, playback_state, &style));
             }
 
             if show_body {
@@ -209,10 +233,25 @@ struct ImageTileStyle {
     playback_icon_tint: egui::Color32,
 }
 
-fn resolve_image_tile_style(dark_mode: bool) -> ImageTileStyle {
+fn resolve_image_tile_style(dark_mode: bool, selected: bool) -> ImageTileStyle {
     ImageTileStyle {
-        tile_fill: tokens::muted_surface(dark_mode),
-        tile_stroke: Stroke::new(1.0, tokens::separator(dark_mode)),
+        tile_fill: if selected {
+            if dark_mode {
+                egui::Color32::from_rgb(21, 74, 39)
+            } else {
+                egui::Color32::from_rgb(224, 241, 220)
+            }
+        } else {
+            tokens::muted_surface(dark_mode)
+        },
+        tile_stroke: Stroke::new(
+            1.0,
+            if selected {
+                egui::Color32::from_rgb(88, 164, 76)
+            } else {
+                tokens::separator(dark_mode)
+            },
+        ),
         tile_hover_stroke: Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
         tile_active_stroke: tokens::input_focus_stroke(dark_mode),
         image_fill: tokens::card_background(dark_mode),
@@ -443,7 +482,7 @@ mod tests {
 
         let _ = context.run(input, |context| {
             CentralPanel::default().show(context, |ui| {
-                let style = resolve_image_tile_style(ui.visuals().dark_mode);
+                let style = resolve_image_tile_style(ui.visuals().dark_mode, false);
                 image_rect = ui.allocate_exact_size(vec2(216.0, 144.0), Sense::hover()).0;
                 clicked =
                     draw_playback_button(ui, image_rect, ImageTilePlaybackState::Paused, &style)

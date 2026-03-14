@@ -22,6 +22,7 @@ pub mod prelude {
     pub use crate::components::{
         Button,
         ButtonGroup,
+        ButtonLabelWeight,
         ButtonOverride,
         ButtonVariant,
         Card,
