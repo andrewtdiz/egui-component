@@ -206,4 +206,16 @@ mod tests {
         let expected_uri = format!("{ICON_URI_PREFIX}play-fill.svg");
         assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
     }
+
+    #[test]
+    fn resolves_fire_icon_asset() {
+        assert!(icon_path("fire").is_file());
+
+        let context = egui::Context::default();
+        setup(&context);
+
+        let uri = ensure_icon_uri(&context, "fire");
+        let expected_uri = format!("{ICON_URI_PREFIX}fire.svg");
+        assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
+    }
 }
