@@ -149,6 +149,7 @@ mod tests {
         ensure_icon_uri, icon_path, normalize_icon_name, normalize_icon_svg_bytes, setup,
         ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO, ICON_URI_PREFIX,
     };
+    use egui::load::{ImagePoll, SizeHint};
 
     #[test]
     fn accepts_standard_lucide_kebab_case() {
@@ -217,5 +218,41 @@ mod tests {
         let uri = ensure_icon_uri(&context, "fire");
         let expected_uri = format!("{ICON_URI_PREFIX}fire.svg");
         assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
+    }
+
+    #[test]
+    fn resolves_requested_sidebar_icon_assets() {
+        for icon in ["globe-americas", "music-note-beamed", "box"] {
+            assert!(icon_path(icon).is_file(), "missing icon file for {icon}");
+
+            let context = egui::Context::default();
+            setup(&context);
+
+            let uri = ensure_icon_uri(&context, icon);
+            let expected_uri = format!("{ICON_URI_PREFIX}{icon}.svg");
+            assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
+        }
+    }
+
+    #[test]
+    fn rasterizes_requested_sidebar_icons_with_visible_pixels() {
+        for icon in ["globe-americas", "fire", "music-note-beamed", "box"] {
+            let context = egui::Context::default();
+            setup(&context);
+
+            let uri = ensure_icon_uri(&context, icon).expect("icon uri");
+            let image = context
+                .try_load_image(uri.as_str(), SizeHint::default())
+                .expect("image load");
+
+            let ImagePoll::Ready { image } = image else {
+                panic!("icon image should be ready for {icon}");
+            };
+
+            assert!(
+                image.pixels.iter().any(|pixel| pixel.a() > 0),
+                "icon should contain visible pixels for {icon}"
+            );
+        }
     }
 }
