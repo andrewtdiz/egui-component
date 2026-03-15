@@ -72,6 +72,7 @@ pub mod prelude {
         Slider,
         Switch,
         TabOption,
+        TabsVariant,
         TextInput,
         TextInputOverride,
         Toolbar,

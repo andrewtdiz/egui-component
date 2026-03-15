@@ -58,7 +58,7 @@ pub use progress::Progress;
 pub use select::Select;
 pub use slider::{NumberInput, NumberInputAxis, Slider};
 pub use switch::Switch;
-pub use tabs::TabOption;
+pub use tabs::{TabOption, TabsVariant};
 pub use toolbar::Toolbar;
 pub use tooltip::{Tooltip, TooltipPlacement};
 // xtask:component-exports:end

@@ -3,6 +3,10 @@ use crate::ui::tokens;
 use egui::CursorIcon;
 use egui::Response;
 
+const TOOLTIP_GAP: f32 = 6.0;
+const TOOLTIP_PADDING_X: i8 = 6;
+const TOOLTIP_PADDING_Y: i8 = 4;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum TooltipPlacement {
     Auto,
@@ -54,9 +58,6 @@ impl ComponentUi<'_> {
         let overrides = self.overrides;
         self.raw_mut()
             .scope(|ui| {
-                ui.style_mut().visuals.popup_shadow = tokens::tailwind_shadow_sm();
-                ui.style_mut().spacing.menu_margin = egui::Margin::symmetric(6, 4);
-
                 let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let response = ui
                     .button(
@@ -98,7 +99,9 @@ impl ComponentUi<'_> {
                 };
 
                 if show_tooltip {
-                    let mut tooltip = egui::Tooltip::for_widget(&response).gap(6.0);
+                    let tooltip_frame = tooltip_frame(ui.style());
+                    let mut tooltip = egui::Tooltip::for_widget(&response).gap(TOOLTIP_GAP);
+                    tooltip.popup = tooltip.popup.frame(tooltip_frame);
                     match props.placement {
                         TooltipPlacement::Auto => {}
                         TooltipPlacement::Top => {
@@ -138,5 +141,40 @@ impl ComponentUi<'_> {
                 response
             })
             .inner
+    }
+}
+
+fn tooltip_frame(style: &egui::Style) -> egui::Frame {
+    egui::Frame::popup(style)
+        .inner_margin(egui::Margin::symmetric(
+            TOOLTIP_PADDING_X,
+            TOOLTIP_PADDING_Y,
+        ))
+        .shadow(tokens::tailwind_shadow_sm())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{tooltip_frame, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y};
+    use crate::theme::ThemeMode;
+    use crate::ui::tokens;
+    use egui::{Context, Margin};
+
+    #[test]
+    fn tooltip_frame_overrides_popup_padding_and_shadow() {
+        let context = Context::default();
+        crate::theme::install(&context, ThemeMode::Dark);
+        let style = context.style();
+        let popup_frame = egui::Frame::popup(&style);
+        let frame = tooltip_frame(&style);
+
+        assert_eq!(
+            frame.inner_margin,
+            Margin::symmetric(TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y)
+        );
+        assert_eq!(frame.shadow, tokens::tailwind_shadow_sm());
+        assert_eq!(frame.fill, popup_frame.fill);
+        assert_eq!(frame.stroke, popup_frame.stroke);
+        assert_eq!(frame.corner_radius, popup_frame.corner_radius);
     }
 }

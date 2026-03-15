@@ -3,7 +3,7 @@ use crate::components::{
     Button, ButtonOverride, ButtonVariant, Checkbox, Color, CommandItem, ComponentUi,
     ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu, DropdownMenuEntry, Image, ImageTile,
     ImageTilePlaybackState, ImageTileSize, Kbd, KbdGroup, Label, LabelTone, LabelWeight, MenuBar,
-    MenuBarItem, NumberInput, NumberInputAxis, Select, TabOption, Toolbar, Tooltip,
+    MenuBarItem, NumberInput, NumberInputAxis, Select, TabOption, TabsVariant, Toolbar, Tooltip,
     TooltipPlacement,
 };
 use crate::theme::{self, ThemeMode};
@@ -327,6 +327,7 @@ pub struct ComponentShowcaseState {
     progress_value: f32,
     select_index: Option<usize>,
     tab_index: usize,
+    segmented_tab_index: usize,
     stacked_tab_index: usize,
     button_group_index: usize,
     collapsible_open: bool,
@@ -360,6 +361,7 @@ impl Default for ComponentShowcaseState {
             progress_value: 0.58,
             select_index: Some(1),
             tab_index: 0,
+            segmented_tab_index: 0,
             stacked_tab_index: 0,
             button_group_index: 0,
             collapsible_open: true,
@@ -964,6 +966,25 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .unwrap_or(TAB_OPTIONS[0].label);
             let _ = ui.label(
                 Label::new(selected_tab)
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
+
+            ui.add_space(18.0);
+            ui.tabs_variant(
+                Id::new("component_showcase_segmented_tabs"),
+                &mut state.segmented_tab_index,
+                &TAB_OPTIONS,
+                TabsVariant::Segmented,
+            );
+
+            let selected_segmented_tab = TAB_OPTIONS
+                .iter()
+                .find(|option| option.value == state.segmented_tab_index)
+                .map(|option| option.label)
+                .unwrap_or(TAB_OPTIONS[0].label);
+            let _ = ui.label(
+                Label::new(selected_segmented_tab)
                     .tone(LabelTone::Muted)
                     .size(typography::SMALL_SIZE),
             );
@@ -1603,6 +1624,9 @@ fn clamp_state(state: &mut ComponentShowcaseState) {
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
     state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
+    state.segmented_tab_index = state
+        .segmented_tab_index
+        .min(TAB_OPTIONS.len().saturating_sub(1));
     state.stacked_tab_index = state
         .stacked_tab_index
         .min(STACKED_TAB_OPTIONS.len().saturating_sub(1));
