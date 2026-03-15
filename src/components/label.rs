@@ -24,6 +24,7 @@ pub struct Label<'a> {
     pub weight: LabelWeight,
     pub size: f32,
     pub color_override: Option<Color32>,
+    pub truncate: bool,
 }
 
 impl<'a> Label<'a> {
@@ -34,6 +35,7 @@ impl<'a> Label<'a> {
             weight: LabelWeight::Regular,
             size: 12.0,
             color_override: None,
+            truncate: false,
         }
     }
 
@@ -54,6 +56,11 @@ impl<'a> Label<'a> {
 
     pub fn color(mut self, color: Color32) -> Self {
         self.color_override = Some(color);
+        self
+    }
+
+    pub fn truncate(mut self) -> Self {
+        self.truncate = true;
         self
     }
 }
@@ -153,8 +160,11 @@ fn draw_label(ui: &mut Ui, props: Label<'_>) -> egui::Response {
         LabelWeight::Bold => typography::bold_font(props.size),
     };
     let text = RichText::new(props.text).font(font_id).color(color);
-
-    ui.add(egui::Label::new(text).selectable(false))
+    let mut label = egui::Label::new(text).selectable(false);
+    if props.truncate {
+        label = label.truncate();
+    }
+    ui.add(label)
 }
 
 #[cfg(test)]

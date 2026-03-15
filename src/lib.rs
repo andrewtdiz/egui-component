@@ -33,6 +33,7 @@ pub mod prelude {
         Checkbox,
         Collapsible,
         Color,
+        ColorInput,
         Combobox,
         Command,
         CommandItem,
