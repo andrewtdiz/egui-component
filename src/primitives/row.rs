@@ -1,4 +1,4 @@
-use crate::ui::icons;
+use crate::icons;
 use egui::{
     Align2, Color32, CornerRadius, CursorIcon, FontId, Rect, Response, Sense, Stroke, StrokeKind,
     Ui, Vec2,

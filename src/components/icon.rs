@@ -1,5 +1,5 @@
 use super::api::ComponentUi;
-use crate::ui::{icons, tokens};
+use crate::{icons, ui::tokens};
 use egui::{Color32, Response, Sense, Ui};
 
 #[derive(Debug, Clone, Copy)]

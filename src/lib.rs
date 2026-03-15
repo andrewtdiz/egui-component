@@ -1,5 +1,8 @@
 pub mod catalog;
 pub mod components;
+pub mod icons {
+    pub use crate::ui::icons::{image, setup, svg_source};
+}
 pub mod primitives;
 pub mod theme;
 pub mod ui;

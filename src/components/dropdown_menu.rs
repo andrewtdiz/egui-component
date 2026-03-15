@@ -578,7 +578,7 @@ mod tests {
 
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
-                crate::ui::icons::setup(context);
+                crate::icons::setup(context);
                 before = ui.min_rect();
                 draw_submenu_indicator(
                     ui,

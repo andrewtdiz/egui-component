@@ -1,4 +1,4 @@
-use crate::ui::{icons, style};
+use crate::{icons, ui::style};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ThemeMode {

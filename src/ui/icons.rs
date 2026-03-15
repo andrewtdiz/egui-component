@@ -1,74 +1,85 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
-const ICON_DIRECTORY: &str = "assets/icons/lucide";
-const ICON_URI_PREFIX: &str = "bytes://egui-component/icons/";
+const ICON_DIRECTORY: &str = "assets/icons";
+const LUCIDE_ICON_SUBDIRECTORY: &str = "lucide";
+const BOOTSTRAP_ICON_SUBDIRECTORY: &str = "bootstrap";
+const LUCIDE_ICON_URI_PREFIX: &str = "bytes://egui-component/lucide/";
+const BOOTSTRAP_ICON_URI_PREFIX: &str = "bytes://egui-component/bootstrap/";
 const ICON_STROKE_WIDTH_FROM: &str = "stroke-width=\"2\"";
 const ICON_STROKE_WIDTH_TO: &str = "stroke-width=\"1.75\"";
 
-static REGISTERED_ICON_URIS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static CACHED_ICON_ASSETS: OnceLock<Mutex<HashMap<String, Arc<CachedIconAsset>>>> = OnceLock::new();
 
-pub(crate) fn setup(egui_context: &egui::Context) {
+#[derive(Debug)]
+struct CachedIconAsset {
+    source: Arc<str>,
+    raster_bytes: Arc<[u8]>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IconFamily {
+    Lucide,
+    Bootstrap,
+}
+
+pub fn setup(egui_context: &egui::Context) {
     egui_extras::install_image_loaders(egui_context);
 }
 
-pub(crate) fn image(
-    egui_context: &egui::Context,
-    name: &str,
-    size: f32,
-) -> Option<egui::Image<'static>> {
+pub fn image(egui_context: &egui::Context, name: &str, size: f32) -> Option<egui::Image<'static>> {
     let uri = ensure_icon_uri(egui_context, name)?;
     let icon_size = size.max(1.0);
     Some(egui::Image::from_uri(uri).fit_to_exact_size(egui::vec2(icon_size, icon_size)))
 }
 
+pub fn svg_source(name: &str) -> Option<Arc<str>> {
+    let (family, normalized_name) = parse_icon_name(name)?;
+    Some(Arc::clone(
+        &load_icon_asset(family, normalized_name.as_str())?.source,
+    ))
+}
+
 fn ensure_icon_uri(egui_context: &egui::Context, name: &str) -> Option<String> {
-    let normalized_name = normalize_icon_name(name)?;
-
-    let uri = format!("{ICON_URI_PREFIX}{normalized_name}.svg");
-    if is_uri_registered(uri.as_str()) {
-        return Some(uri);
-    }
-
-    let svg_bytes = match std::fs::read(icon_path(normalized_name.as_str())) {
-        Ok(bytes) => normalize_icon_svg_bytes(bytes),
-        Err(_) => {
-            unregister_uri(uri.as_str());
-            return None;
-        }
-    };
-
+    let (family, normalized_name) = parse_icon_name(name)?;
+    let uri = format!("{}{}.svg", family.uri_prefix(), normalized_name);
+    let svg_bytes = Arc::clone(&load_icon_asset(family, normalized_name.as_str())?.raster_bytes);
     egui_context.include_bytes(uri.clone(), svg_bytes);
     Some(uri)
 }
 
-fn is_uri_registered(uri: &str) -> bool {
-    let registry = registered_icon_uris();
-    let mut guard = match registry.lock() {
+fn load_icon_asset(family: IconFamily, name: &str) -> Option<Arc<CachedIconAsset>> {
+    let cache = cached_icon_assets();
+    let mut guard = match cache.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
-
-    if guard.contains(uri) {
-        true
-    } else {
-        guard.insert(uri.to_owned());
-        false
+    let cache_key = format!("{}:{name}", family.cache_key());
+    if let Some(asset) = guard.get(cache_key.as_str()) {
+        return Some(Arc::clone(asset));
     }
+
+    let source = std::fs::read_to_string(icon_path(family, name)).ok()?;
+    let asset = Arc::new(CachedIconAsset {
+        raster_bytes: Arc::<[u8]>::from(normalize_icon_svg_source(family, source.as_str())),
+        source: Arc::<str>::from(source.into_boxed_str()),
+    });
+    guard.insert(cache_key, Arc::clone(&asset));
+    Some(asset)
 }
 
-fn unregister_uri(uri: &str) {
-    let registry = registered_icon_uris();
-    let mut guard = match registry.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    guard.remove(uri);
+fn cached_icon_assets() -> &'static Mutex<HashMap<String, Arc<CachedIconAsset>>> {
+    CACHED_ICON_ASSETS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn registered_icon_uris() -> &'static Mutex<HashSet<String>> {
-    REGISTERED_ICON_URIS.get_or_init(|| Mutex::new(HashSet::new()))
+fn parse_icon_name(name: &str) -> Option<(IconFamily, String)> {
+    let trimmed = name.trim();
+    if let Some(name) = trimmed.strip_prefix("bootstrap:") {
+        return Some((IconFamily::Bootstrap, normalize_icon_name(name)?));
+    }
+
+    Some((IconFamily::Lucide, normalize_icon_name(trimmed)?))
 }
 
 fn normalize_icon_name(name: &str) -> Option<String> {
@@ -127,27 +138,52 @@ fn normalize_icon_name(name: &str) -> Option<String> {
     }
 }
 
-fn icon_path(name: &str) -> PathBuf {
+fn icon_path(family: IconFamily, name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join(ICON_DIRECTORY)
+        .join(family.subdirectory())
         .join(format!("{name}.svg"))
 }
 
-fn normalize_icon_svg_bytes(bytes: Vec<u8>) -> Vec<u8> {
-    match String::from_utf8(bytes) {
-        Ok(svg) => svg
-            .replace("currentColor", "#FFFFFF")
+fn normalize_icon_svg_source(family: IconFamily, source: &str) -> Vec<u8> {
+    let normalized = source.replace("currentColor", "#FFFFFF");
+    match family {
+        IconFamily::Lucide => normalized
             .replace(ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO)
             .into_bytes(),
-        Err(error) => error.into_bytes(),
+        IconFamily::Bootstrap => normalized.into_bytes(),
+    }
+}
+
+impl IconFamily {
+    fn cache_key(self) -> &'static str {
+        match self {
+            Self::Lucide => "lucide",
+            Self::Bootstrap => "bootstrap",
+        }
+    }
+
+    fn subdirectory(self) -> &'static str {
+        match self {
+            Self::Lucide => LUCIDE_ICON_SUBDIRECTORY,
+            Self::Bootstrap => BOOTSTRAP_ICON_SUBDIRECTORY,
+        }
+    }
+
+    fn uri_prefix(self) -> &'static str {
+        match self {
+            Self::Lucide => LUCIDE_ICON_URI_PREFIX,
+            Self::Bootstrap => BOOTSTRAP_ICON_URI_PREFIX,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_icon_uri, icon_path, normalize_icon_name, normalize_icon_svg_bytes, setup,
-        ICON_STROKE_WIDTH_FROM, ICON_STROKE_WIDTH_TO, ICON_URI_PREFIX,
+        ensure_icon_uri, icon_path, normalize_icon_name, normalize_icon_svg_source,
+        parse_icon_name, setup, svg_source, IconFamily, ICON_STROKE_WIDTH_FROM,
+        ICON_STROKE_WIDTH_TO, LUCIDE_ICON_URI_PREFIX,
     };
     use egui::load::{ImagePoll, SizeHint};
 
@@ -187,9 +223,9 @@ mod tests {
 
     #[test]
     fn normalizes_icon_stroke_width() {
-        let svg =
-            format!("<svg stroke=\"currentColor\" {ICON_STROKE_WIDTH_FROM}></svg>").into_bytes();
-        let normalized = String::from_utf8(normalize_icon_svg_bytes(svg)).unwrap();
+        let svg = format!("<svg stroke=\"currentColor\" {ICON_STROKE_WIDTH_FROM}></svg>");
+        let normalized =
+            String::from_utf8(normalize_icon_svg_source(IconFamily::Lucide, svg.as_str())).unwrap();
 
         assert!(normalized.contains("#FFFFFF"));
         assert!(normalized.contains(ICON_STROKE_WIDTH_TO));
@@ -198,61 +234,102 @@ mod tests {
 
     #[test]
     fn resolves_play_fill_icon_asset() {
-        assert!(icon_path("play-fill").is_file());
+        assert!(icon_path(IconFamily::Lucide, "play-fill").is_file());
 
         let context = egui::Context::default();
         setup(&context);
 
         let uri = ensure_icon_uri(&context, "PlayFill");
-        let expected_uri = format!("{ICON_URI_PREFIX}play-fill.svg");
+        let expected_uri = format!("{LUCIDE_ICON_URI_PREFIX}play-fill.svg");
         assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
     }
 
     #[test]
     fn resolves_fire_icon_asset() {
-        assert!(icon_path("fire").is_file());
+        assert!(icon_path(IconFamily::Lucide, "fire").is_file());
 
         let context = egui::Context::default();
         setup(&context);
 
         let uri = ensure_icon_uri(&context, "fire");
-        let expected_uri = format!("{ICON_URI_PREFIX}fire.svg");
+        let expected_uri = format!("{LUCIDE_ICON_URI_PREFIX}fire.svg");
         assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
     }
 
     #[test]
     fn resolves_requested_sidebar_icon_assets() {
-        for icon in ["globe-americas", "music-note-beamed", "box"] {
-            assert!(icon_path(icon).is_file(), "missing icon file for {icon}");
+        for (name, family, icon) in [
+            (
+                "bootstrap:globe-americas",
+                IconFamily::Bootstrap,
+                "globe-americas",
+            ),
+            (
+                "bootstrap:music-note-beamed",
+                IconFamily::Bootstrap,
+                "music-note-beamed",
+            ),
+            ("bootstrap:box", IconFamily::Bootstrap, "box"),
+            ("image", IconFamily::Lucide, "image"),
+        ] {
+            assert!(
+                icon_path(family, icon).is_file(),
+                "missing icon file for {icon}"
+            );
 
             let context = egui::Context::default();
             setup(&context);
 
-            let uri = ensure_icon_uri(&context, icon);
-            let expected_uri = format!("{ICON_URI_PREFIX}{icon}.svg");
+            let uri = ensure_icon_uri(&context, name);
+            let expected_uri = format!("{}{}.svg", family.uri_prefix(), icon);
             assert_eq!(uri.as_deref(), Some(expected_uri.as_str()));
         }
     }
 
     #[test]
-    fn rasterizes_requested_sidebar_icons_with_visible_pixels() {
-        for icon in ["globe-americas", "fire", "music-note-beamed", "box"] {
-            let context = egui::Context::default();
-            setup(&context);
+    fn rasterizes_requested_sidebar_icons_with_visible_pixels_in_each_context() {
+        let first_context = egui::Context::default();
+        let second_context = egui::Context::default();
+        setup(&first_context);
+        setup(&second_context);
 
-            let uri = ensure_icon_uri(&context, icon).expect("icon uri");
-            let image = context
-                .try_load_image(uri.as_str(), SizeHint::default())
-                .expect("image load");
+        for context in [&first_context, &second_context] {
+            for icon in [
+                "bootstrap:globe-americas",
+                "bootstrap:fire",
+                "bootstrap:music-note-beamed",
+                "bootstrap:box",
+            ] {
+                let uri = ensure_icon_uri(context, icon).expect("icon uri");
+                let image = context
+                    .try_load_image(uri.as_str(), SizeHint::default())
+                    .expect("image load");
 
-            let ImagePoll::Ready { image } = image else {
-                panic!("icon image should be ready for {icon}");
-            };
+                let ImagePoll::Ready { image } = image else {
+                    panic!("icon image should be ready for {icon}");
+                };
 
-            assert!(
-                image.pixels.iter().any(|pixel| pixel.a() > 0),
-                "icon should contain visible pixels for {icon}"
-            );
+                assert!(
+                    image.pixels.iter().any(|pixel| pixel.a() > 0),
+                    "icon should contain visible pixels for {icon}"
+                );
+            }
         }
+    }
+
+    #[test]
+    fn parses_bootstrap_prefixed_names() {
+        assert_eq!(
+            parse_icon_name("bootstrap:MusicNoteBeamed"),
+            Some((IconFamily::Bootstrap, "music-note-beamed".to_owned()))
+        );
+    }
+
+    #[test]
+    fn exposes_svg_source_from_shared_assets() {
+        let source = svg_source("bootstrap:fire").expect("svg source");
+
+        assert!(source.contains("<svg"));
+        assert!(source.contains("<path") || source.contains("<g"));
     }
 }
