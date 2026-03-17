@@ -1,4 +1,5 @@
-use super::api::ComponentUi;
+use super::api::{with_component_overrides, ComponentUi};
+use crate::layout;
 use crate::ui::tokens;
 use egui::{Align2, Color32, CornerRadius, FontFamily, FontId, Sense, Stroke, StrokeKind, Ui};
 
@@ -9,7 +10,7 @@ pub struct Kbd<'a> {
     pub height: f32,
     pub padding_x: f32,
     pub padding_y: f32,
-    pub corner_radius: u8,
+    pub corner_radius: Option<u8>,
     pub fill: Option<Color32>,
     pub stroke: Option<Stroke>,
     pub text_color: Option<Color32>,
@@ -24,7 +25,7 @@ impl<'a> Kbd<'a> {
             height: 20.0,
             padding_x: 4.0,
             padding_y: 2.0,
-            corner_radius: tokens::RADIUS_SM,
+            corner_radius: None,
             fill: None,
             stroke: None,
             text_color: None,
@@ -49,7 +50,7 @@ impl<'a> Kbd<'a> {
     }
 
     pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -116,25 +117,24 @@ impl From<f32> for KbdGroup {
 
 impl ComponentUi<'_> {
     pub fn kbd<'a>(&mut self, props: impl Into<Kbd<'a>>) -> egui::Response {
-        draw_kbd(self.raw_mut(), props.into())
+        draw_kbd(self.ui_mut(), props.into())
     }
 
     pub fn kbd_group<R>(
         &mut self,
         props: impl Into<KbdGroup>,
-        add_contents: impl FnOnce(&mut ComponentUi<'_>) -> R,
+        add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> egui::InnerResponse<R> {
-        let overrides = self.overrides;
-        draw_kbd_group(self.raw_mut(), props.into(), |ui| {
-            let mut components = ComponentUi::with_overrides(ui, overrides);
-            add_contents(&mut components)
+        let overrides = self.overrides();
+        draw_kbd_group(self.ui_mut(), props.into(), |ui| {
+            with_component_overrides(ui, overrides, add_contents)
         })
     }
 }
 
 fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
-    let dark_mode = ui.visuals().dark_mode;
-    let text_color = props.text_color.unwrap_or(tokens::text_muted(dark_mode));
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let text_color = props.text_color.unwrap_or(tokens::text_muted(runtime));
     let font_id = FontId::new(props.text_size, FontFamily::Monospace);
     let text_width = ui.fonts_mut(|fonts| {
         fonts
@@ -147,11 +147,11 @@ fn draw_kbd(ui: &mut Ui, props: Kbd<'_>) -> egui::Response {
 
     ui.painter().rect(
         rect,
-        CornerRadius::same(props.corner_radius),
-        props.fill.unwrap_or(tokens::input_background(dark_mode)),
+        CornerRadius::same(props.corner_radius.unwrap_or(tokens::radius_sm(runtime))),
+        props.fill.unwrap_or(tokens::input_background(runtime)),
         props
             .stroke
-            .unwrap_or(Stroke::new(1.0, tokens::input_border(dark_mode))),
+            .unwrap_or(Stroke::new(1.0, tokens::input_border(runtime))),
         StrokeKind::Outside,
     );
     ui.painter().text(
@@ -170,11 +170,7 @@ fn draw_kbd_group<R>(
     props: KbdGroup,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = props.gap;
-        ui.horizontal(add_contents)
-    })
-    .inner
+    layout::row().gap(props.gap).show(ui, add_contents)
 }
 
 #[cfg(test)]

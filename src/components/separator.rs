@@ -4,18 +4,18 @@ use egui::{Response, Sense, Stroke, Ui};
 
 impl ComponentUi<'_> {
     pub fn separator(&mut self) -> Response {
-        draw_separator(self.raw_mut())
+        draw_separator(self.ui_mut())
     }
 }
 
 fn draw_separator(ui: &mut Ui) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let width = ui.available_width().max(1.0);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 1.0), Sense::hover());
     ui.painter().hline(
         rect.x_range(),
         rect.center().y,
-        Stroke::new(1.0, tokens::separator(dark_mode)),
+        Stroke::new(1.0, tokens::separator(runtime)),
     );
     response
 }

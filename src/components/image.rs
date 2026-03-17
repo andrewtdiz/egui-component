@@ -115,7 +115,7 @@ where
 
 impl ComponentUi<'_> {
     pub fn image<'a>(&mut self, props: impl Into<Image<'a>>) -> Response {
-        draw_image(self.raw_mut(), props.into())
+        draw_image(self.ui_mut(), props.into())
     }
 }
 

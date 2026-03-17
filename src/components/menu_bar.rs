@@ -4,12 +4,13 @@ use super::{
 };
 use crate::ui::{tokens, typography};
 use egui::{
-    Align2, Color32, CornerRadius, CursorIcon, FontId, Id, Margin, Popup, Response, Stroke,
+    Align2, Color32, CornerRadius, CursorIcon, FontId, Id, Popup, Rect, Response, Stroke,
     StrokeKind, Ui,
 };
 
 const MENU_BAR_ITEM_HEIGHT: f32 = 28.0;
 const MENU_BAR_ITEM_PADDING_X: f32 = 10.0;
+const MENU_BAR_ITEM_GAP: f32 = 1.0;
 const MENU_BAR_TEXT_SIZE: f32 = 13.0;
 const MENU_BAR_MIN_MENU_WIDTH: f32 = 176.0;
 
@@ -45,7 +46,7 @@ pub struct MenuBar<'a> {
     pub items: &'a [MenuBarItem<'a>],
     pub fill: Option<Color32>,
     pub stroke: Option<Stroke>,
-    pub corner_radius: u8,
+    pub corner_radius: Option<u8>,
     pub padding_x: i8,
     pub padding_y: i8,
     pub shadow: Option<egui::Shadow>,
@@ -58,7 +59,7 @@ impl<'a> MenuBar<'a> {
             items,
             fill: None,
             stroke: None,
-            corner_radius: tokens::RADIUS_MD,
+            corner_radius: None,
             padding_x: 4,
             padding_y: 3,
             shadow: None,
@@ -76,7 +77,7 @@ impl<'a> MenuBar<'a> {
     }
 
     pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -105,12 +106,13 @@ struct MenuBarMemory {
 
 impl ComponentUi<'_> {
     pub fn menu_bar<'a>(&mut self, props: impl Into<MenuBar<'a>>) -> (Response, MenuBarState) {
-        draw_menu_bar(self.raw_mut(), props.into())
+        draw_menu_bar(self.ui_mut(), props.into())
     }
 }
 
 fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let corner_radius = props.corner_radius.unwrap_or(tokens::radius_md(runtime));
     let mut active_menu = load_menu_bar_memory(ui, props.id)
         .active_menu
         .filter(|index| *index < props.items.len());
@@ -123,37 +125,56 @@ fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
     let mut clicked_trigger = None;
     let mut trigger_rects = Vec::with_capacity(props.items.len());
     let mut trigger_responses = Vec::with_capacity(props.items.len());
+    let item_widths = props
+        .items
+        .iter()
+        .map(|item| menu_bar_item_width(ui, item.label, runtime))
+        .collect::<Vec<_>>();
+    let group_size = menu_bar_group_size(&item_widths, props.padding_x, props.padding_y);
+    let (bar_rect, bar_response) = ui.allocate_exact_size(group_size, egui::Sense::hover());
 
-    let bar_response = egui::Frame::new()
-        .fill(props.fill.unwrap_or(tokens::card_background(dark_mode)))
-        .stroke(
-            props
-                .stroke
-                .unwrap_or(Stroke::new(1.0, tokens::separator(dark_mode))),
-        )
-        .corner_radius(CornerRadius::same(props.corner_radius))
-        .inner_margin(Margin::symmetric(props.padding_x, props.padding_y))
-        .shadow(props.shadow.unwrap_or(egui::Shadow::NONE))
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.x = 1.0;
-            ui.spacing_mut().item_spacing.y = 0.0;
+    let shadow = props.shadow.unwrap_or(egui::Shadow::NONE);
+    if shadow != egui::Shadow::NONE {
+        ui.painter()
+            .add(shadow.as_shape(bar_rect, CornerRadius::same(corner_radius)));
+    }
 
-            let _ = ui.horizontal(|ui| {
-                for (index, item) in props.items.iter().copied().enumerate() {
-                    let response = draw_menu_bar_trigger(
-                        ui,
-                        item.label,
-                        active_menu == Some(index) && item.can_open(),
-                    );
-                    if response.clicked() {
-                        clicked_trigger = Some(index);
-                    }
-                    trigger_rects.push(response.rect);
-                    trigger_responses.push(response);
-                }
-            });
-        })
-        .response;
+    ui.painter().rect(
+        bar_rect,
+        CornerRadius::same(corner_radius),
+        props.fill.unwrap_or(tokens::card_background(runtime)),
+        props
+            .stroke
+            .unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
+        StrokeKind::Outside,
+    );
+
+    for (index, (item, rect)) in props
+        .items
+        .iter()
+        .copied()
+        .zip(menu_bar_item_rects(
+            bar_rect,
+            &item_widths,
+            props.padding_x,
+            props.padding_y,
+        ))
+        .enumerate()
+    {
+        let response = draw_menu_bar_trigger(
+            ui,
+            props.id.with(("trigger", index)),
+            rect,
+            item.label,
+            active_menu == Some(index) && item.can_open(),
+            runtime,
+        );
+        if response.clicked() {
+            clicked_trigger = Some(index);
+        }
+        trigger_rects.push(response.rect);
+        trigger_responses.push(response);
+    }
 
     if let Some(index) = clicked_trigger {
         active_menu = resolve_active_menu(active_menu, Some(index), None, &openable);
@@ -175,23 +196,18 @@ fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
 
     if let Some(active_index) = active_menu {
         let mut popup_open = true;
-        let popup_response = ui
-            .scope(|ui| {
-                ui.style_mut().spacing.menu_margin = Margin::symmetric(0, 2);
-                Popup::menu(&trigger_responses[active_index])
-                    .id(props.id.with("popup"))
-                    .open_bool(&mut popup_open)
-                    .gap(0.0)
-                    .show(|ui| {
-                        show_menu_entries_surface(
-                            ui,
-                            props.items[active_index].entries,
-                            &mut state.action,
-                            props.items[active_index].width.max(MENU_BAR_MIN_MENU_WIDTH),
-                        );
-                    })
-            })
-            .inner;
+        let popup_response = Popup::menu(&trigger_responses[active_index])
+            .id(props.id.with("popup"))
+            .open_bool(&mut popup_open)
+            .gap(0.0)
+            .show(|ui| {
+                show_menu_entries_surface(
+                    ui,
+                    props.items[active_index].entries,
+                    &mut state.action,
+                    props.items[active_index].width.max(MENU_BAR_MIN_MENU_WIDTH),
+                );
+            });
 
         if popup_response.is_none() || !popup_open || state.action.is_some() {
             active_menu = None;
@@ -208,36 +224,28 @@ fn draw_menu_bar(ui: &mut Ui, props: MenuBar<'_>) -> (Response, MenuBarState) {
     (bar_response, state)
 }
 
-fn draw_menu_bar_trigger(ui: &mut Ui, label: &str, active: bool) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+fn draw_menu_bar_trigger(
+    ui: &mut Ui,
+    id: Id,
+    rect: Rect,
+    label: &str,
+    active: bool,
+    runtime: crate::theme::ThemeRuntime,
+) -> Response {
     let font_id: FontId = typography::proportional(MENU_BAR_TEXT_SIZE);
-    let text_width = ui.fonts_mut(|fonts| {
-        fonts
-            .layout_no_wrap(
-                label.to_owned(),
-                font_id.clone(),
-                tokens::text_secondary(dark_mode),
-            )
-            .size()
-            .x
-    });
-    let desired_size = egui::vec2(
-        (text_width + MENU_BAR_ITEM_PADDING_X * 2.0).ceil(),
-        MENU_BAR_ITEM_HEIGHT,
-    );
-    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    let response = ui.interact(rect, id, egui::Sense::click());
 
     let fill = if response.is_pointer_button_down_on() {
-        tokens::row_active_bg(dark_mode)
+        tokens::row_active_bg(runtime)
     } else if active || response.hovered() {
-        tokens::row_selected_bg(dark_mode)
+        tokens::row_selected_bg(runtime)
     } else {
         tokens::TRANSPARENT
     };
 
     ui.painter().rect(
         rect,
-        CornerRadius::same(tokens::RADIUS_SM),
+        CornerRadius::same(tokens::radius_sm(runtime)),
         fill,
         Stroke::NONE,
         StrokeKind::Outside,
@@ -248,13 +256,55 @@ fn draw_menu_bar_trigger(ui: &mut Ui, label: &str, active: bool) -> Response {
         label,
         font_id,
         if active || response.hovered() {
-            tokens::text_primary(dark_mode)
+            tokens::text_primary(runtime)
         } else {
-            tokens::text_secondary(dark_mode)
+            tokens::text_secondary(runtime)
         },
     );
 
     response.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+fn menu_bar_item_width(ui: &mut Ui, label: &str, runtime: crate::theme::ThemeRuntime) -> f32 {
+    let font_id: FontId = typography::proportional(MENU_BAR_TEXT_SIZE);
+    let text_width = ui.fonts_mut(|fonts| {
+        fonts
+            .layout_no_wrap(label.to_owned(), font_id, tokens::text_secondary(runtime))
+            .size()
+            .x
+    });
+    (text_width + MENU_BAR_ITEM_PADDING_X * 2.0).ceil()
+}
+
+fn menu_bar_group_size(item_widths: &[f32], padding_x: i8, padding_y: i8) -> egui::Vec2 {
+    let items_width = item_widths.iter().sum::<f32>()
+        + (MENU_BAR_ITEM_GAP * item_widths.len().saturating_sub(1) as f32);
+    egui::vec2(
+        items_width + (f32::from(padding_x) * 2.0),
+        MENU_BAR_ITEM_HEIGHT + (f32::from(padding_y) * 2.0),
+    )
+}
+
+fn menu_bar_item_rects(
+    bar_rect: Rect,
+    item_widths: &[f32],
+    padding_x: i8,
+    padding_y: i8,
+) -> Vec<Rect> {
+    let mut rects = Vec::with_capacity(item_widths.len());
+    let mut left = bar_rect.left() + f32::from(padding_x);
+    let top = bar_rect.top() + f32::from(padding_y);
+
+    for width in item_widths.iter().copied() {
+        let rect = Rect::from_min_size(
+            egui::pos2(left, top),
+            egui::vec2(width, MENU_BAR_ITEM_HEIGHT),
+        );
+        rects.push(rect);
+        left = rect.right() + MENU_BAR_ITEM_GAP;
+    }
+
+    rects
 }
 
 fn resolve_active_menu(
@@ -336,7 +386,10 @@ fn store_menu_bar_memory(ui: &mut Ui, id: Id, state: MenuBarMemory) {
 
 #[cfg(test)]
 mod tests {
-    use super::{menu_index_at_pointer, resolve_active_menu, MenuBar, MenuBarItem};
+    use super::{
+        menu_bar_group_size, menu_bar_item_rects, menu_index_at_pointer, resolve_active_menu,
+        MenuBar, MenuBarItem,
+    };
     use crate::components::{ComponentUiExt, DropdownMenuEntry};
     use egui::{pos2, vec2, CentralPanel, Context, Id, RawInput, Rect};
 
@@ -408,5 +461,22 @@ mod tests {
 
         assert!(rect.width() > 0.0);
         assert!(rect.height() > 0.0);
+    }
+
+    #[test]
+    fn menu_bar_padding_is_uniform() {
+        let widths = [40.0, 52.0, 60.0];
+        let bar_rect = Rect::from_min_size(pos2(16.0, 20.0), menu_bar_group_size(&widths, 4, 3));
+        let item_rects = menu_bar_item_rects(bar_rect, &widths, 4, 3);
+        let first = item_rects
+            .first()
+            .copied()
+            .expect("missing first menu item");
+        let last = item_rects.last().copied().expect("missing last menu item");
+
+        assert_eq!(first.left() - bar_rect.left(), 4.0);
+        assert_eq!(bar_rect.right() - last.right(), 4.0);
+        assert_eq!(first.top() - bar_rect.top(), 3.0);
+        assert_eq!(bar_rect.bottom() - first.bottom(), 3.0);
     }
 }

@@ -141,17 +141,17 @@ impl<'a> From<&'a str> for Label<'a> {
 impl ComponentUi<'_> {
     pub fn label<'a>(&mut self, props: impl Into<Label<'a>>) -> egui::Response {
         let props = self.overrides.label.apply(props.into());
-        draw_label(self.raw_mut(), props)
+        draw_label(self.ui_mut(), props)
     }
 }
 
 fn draw_label(ui: &mut Ui, props: Label<'_>) -> egui::Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let color = props.color_override.unwrap_or(match props.tone {
-        LabelTone::Primary => tokens::text_primary(dark_mode),
-        LabelTone::Secondary => tokens::text_secondary(dark_mode),
-        LabelTone::Muted => tokens::text_muted(dark_mode),
-        LabelTone::Destructive => tokens::text_destructive(dark_mode),
+        LabelTone::Primary => tokens::text_primary(runtime),
+        LabelTone::Secondary => tokens::text_secondary(runtime),
+        LabelTone::Muted => tokens::text_muted(runtime),
+        LabelTone::Destructive => tokens::text_destructive(runtime),
     });
 
     let font_id = match props.weight {
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn theme_setup_supports_weighted_labels_and_helper_text() {
         let context = Context::default();
-        crate::theme::install(&context, crate::theme::ThemeMode::Dark);
+        crate::theme::install(&context, crate::theme::ThemeSpec::default(), crate::theme::ThemeMode::Dark);
 
         let frame_output = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {

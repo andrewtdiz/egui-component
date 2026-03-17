@@ -1,4 +1,5 @@
-use super::{api::ComponentUi, Kbd, KbdGroup, TextInput};
+use super::{api::ComponentUi, api::ComponentUiExt, Kbd, KbdGroup, TextInput};
+use crate::layout;
 use crate::primitives::{
     content::muted_empty_state,
     row::{row_chrome, RowChrome},
@@ -6,7 +7,7 @@ use crate::primitives::{
 };
 use crate::ui::{tokens, typography};
 use egui::{
-    containers::scroll_area::ScrollSource, Align, Align2, Direction, FontFamily, FontId, Id, Key,
+    containers::scroll_area::ScrollSource, Align, Align2, FontFamily, FontId, Id, Key,
     Layout, Rect, Response, Sense, Stroke, Ui, UiBuilder,
 };
 
@@ -126,17 +127,18 @@ fn draw_command_preview(
     items: &[CommandItem<'_>],
     props: Command<'_>,
 ) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let overrides = ui.overrides();
     surface_frame_builder(
         SurfaceFrame::new(
-            command_preview_fill(dark_mode),
-            Stroke::new(1.0, tokens::separator(dark_mode)),
+            command_preview_fill(runtime),
+            Stroke::new(1.0, tokens::separator(runtime)),
         )
-        .corner_radius(tokens::RADIUS_MD)
+        .corner_radius(tokens::radius_md(runtime))
         .padding(12, 12),
     )
-    .show(ui.raw_mut(), |ui| {
-        let mut ui = ComponentUi::new(ui);
+    .show(ui.ui_mut(), |ui| {
+        let mut ui = ComponentUi::with_overrides(ui, overrides);
         let canvas_size = egui::vec2(ui.available_width(), props.preview_height);
         let (canvas_rect, _) = ui.allocate_exact_size(canvas_size, Sense::hover());
         let panel_outer_width = (props.width + (f32::from(COMMAND_PANEL_PADDING_X) * 2.0))
@@ -155,16 +157,18 @@ fn draw_command_preview(
         let mut preview_props = props;
         preview_props.width =
             (panel_outer_width - (f32::from(COMMAND_PANEL_PADDING_X) * 2.0)).max(1.0);
-        ui.scope_builder(
-            UiBuilder::new()
-                .max_rect(palette_rect)
-                .layout(Layout::top_down(Align::Min)),
-            |ui| {
-                let mut ui = ComponentUi::new(ui);
-                draw_command_panel(&mut ui, query, items, preview_props)
-            },
-        )
-        .inner
+        let overrides = ui.overrides();
+        ui.ui_mut()
+            .scope_builder(
+                UiBuilder::new()
+                    .max_rect(palette_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    draw_command_panel(&mut ui, query, items, preview_props)
+                },
+            )
+            .inner
     })
     .inner
 }
@@ -175,18 +179,19 @@ fn draw_command_panel(
     items: &[CommandItem<'_>],
     props: Command<'_>,
 ) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let overrides = ui.overrides();
     surface_frame_builder(
         SurfaceFrame::new(
-            tokens::card_background(dark_mode),
-            Stroke::new(1.0, tokens::separator(dark_mode)),
+            tokens::card_background(runtime),
+            Stroke::new(1.0, tokens::separator(runtime)),
         )
-        .corner_radius(tokens::RADIUS_LG)
+        .corner_radius(tokens::radius_lg(runtime))
         .padding(COMMAND_PANEL_PADDING_X, COMMAND_PANEL_PADDING_Y)
-        .shadow(tokens::tailwind_shadow_lg()),
+        .shadow(tokens::tailwind_shadow_lg(runtime)),
     )
-    .show(ui.raw_mut(), |ui| {
-        let mut ui = ComponentUi::new(ui);
+    .show(ui.ui_mut(), |ui| {
+        let mut ui = ComponentUi::with_overrides(ui, overrides);
         ui.set_min_width(props.width);
         ui.set_max_width(props.width);
         let input_response = ui.text_input(
@@ -211,7 +216,7 @@ fn draw_command_results(
     props: Command<'_>,
     input_focused: bool,
 ) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let query_lower = query.to_ascii_lowercase();
     let visible_items = items
         .iter()
@@ -219,12 +224,12 @@ fn draw_command_results(
         .filter(|item| command_item_matches(*item, query_lower.as_str()))
         .collect::<Vec<_>>();
     let show_group_column = visible_items.iter().any(|item| !item.group.is_empty());
-    let group_color = tokens::text_muted(dark_mode);
+    let group_color = tokens::text_muted(runtime);
     let group_font = typography::small_font();
     let group_width = if show_group_column {
         visible_items
             .iter()
-            .map(|item| text_width(ui.raw_mut(), item.group, &group_font, group_color))
+            .map(|item| text_width(ui.ui_mut(), item.group, &group_font, group_color))
             .fold(60.0, f32::max)
             .min(96.0)
     } else {
@@ -233,16 +238,17 @@ fn draw_command_results(
     let shortcut_width = visible_items
         .iter()
         .filter_map(|item| item.shortcut)
-        .map(|shortcut| shortcut_group_width(ui.raw_mut(), &parse_shortcut_keys(shortcut)))
+        .map(|shortcut| shortcut_group_width(ui.ui_mut(), &parse_shortcut_keys(shortcut)))
         .fold(0.0, f32::max);
     let query_has_text = !query.trim().is_empty();
     let selected_index = resolve_selected_index(
-        ui.raw_mut(),
+        ui.ui_mut(),
         props.id,
         query_has_text,
         input_focused,
         visible_items.len(),
     );
+    let overrides = ui.overrides();
 
     let _ = egui::ScrollArea::vertical()
         .id_salt(props.id)
@@ -252,30 +258,34 @@ fn draw_command_results(
         })
         .max_height(props.max_height)
         .auto_shrink([false, false])
-        .show(ui.raw_mut(), |ui| {
-            let mut ui = ComponentUi::new(ui);
-            ui.spacing_mut().item_spacing.y = 1.0;
+        .show(ui.ui_mut(), |ui| {
+            let mut ui = ComponentUi::with_overrides(ui, overrides);
+            let _ = layout::column().gap(1.0).show(ui.ui_mut(), |ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
+                if visible_items.is_empty() {
+                    let _ = layout::sized_box()
+                        .width(ui.available_width())
+                        .height(40.0)
+                        .show(ui.ui_mut(), |ui| {
+                            let _ = layout::align()
+                                .justify(layout::Justify::Center)
+                                .align(layout::Align::Center)
+                                .show(ui, |ui| muted_empty_state(ui, "No commands"));
+                        });
+                    return;
+                }
 
-            if visible_items.is_empty() {
-                let empty_size = egui::vec2(ui.available_width(), 40.0);
-                let _ = ui.allocate_ui_with_layout(
-                    empty_size,
-                    Layout::centered_and_justified(Direction::LeftToRight),
-                    |ui| muted_empty_state(ui.raw_mut(), "No commands"),
-                );
-                return;
-            }
-
-            for (index, item) in visible_items.iter().copied().enumerate() {
-                draw_command_row(
-                    &mut ui,
-                    item,
-                    group_width,
-                    shortcut_width,
-                    show_group_column,
-                    selected_index == Some(index),
-                );
-            }
+                for (index, item) in visible_items.iter().copied().enumerate() {
+                    draw_command_row(
+                        &mut ui,
+                        item,
+                        group_width,
+                        shortcut_width,
+                        show_group_column,
+                        selected_index == Some(index),
+                    );
+                }
+            });
         });
 }
 
@@ -287,21 +297,21 @@ fn draw_command_row(
     show_group_column: bool,
     selected: bool,
 ) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let shortcut_keys = item.shortcut.map(parse_shortcut_keys).unwrap_or_default();
     let desired_size = egui::vec2(ui.available_width(), COMMAND_ROW_HEIGHT);
     let (rect, response) = row_chrome(
-        ui.raw_mut(),
-        RowChrome::new(desired_size).corner_radius(tokens::RADIUS_MD),
+        ui.ui_mut(),
+        RowChrome::new(desired_size).corner_radius(tokens::radius_md(runtime)),
         |response| {
             if selected {
-                tokens::primary_bg(dark_mode)
+                tokens::primary_bg(runtime)
             } else {
                 tokens::row_bg(
                     false,
                     response.is_pointer_button_down_on(),
                     response.hovered(),
-                    dark_mode,
+                    runtime,
                 )
             }
         },
@@ -350,11 +360,11 @@ fn draw_command_row(
 
     if let Some(group_rect) = group_rect {
         let group_color = if selected {
-            tokens::primary_fg(dark_mode)
+            tokens::primary_fg(runtime)
         } else if emphasized {
-            tokens::text_secondary(dark_mode)
+            tokens::text_secondary(runtime)
         } else {
-            tokens::text_muted(dark_mode)
+            tokens::text_muted(runtime)
         };
         ui.painter().with_clip_rect(group_rect).text(
             egui::pos2(group_rect.left(), group_rect.center().y),
@@ -366,11 +376,11 @@ fn draw_command_row(
     }
 
     let label_color = if selected {
-        tokens::primary_fg(dark_mode)
+        tokens::primary_fg(runtime)
     } else if emphasized {
-        tokens::text_primary(dark_mode)
+        tokens::text_primary(runtime)
     } else {
-        tokens::text_secondary(dark_mode)
+        tokens::text_secondary(runtime)
     };
     ui.painter().with_clip_rect(label_rect).text(
         egui::pos2(label_rect.left(), label_rect.center().y),
@@ -381,17 +391,21 @@ fn draw_command_row(
     );
 
     if let Some(shortcut_rect) = shortcut_rect {
-        let _ = ui.scope_builder(
+        let overrides = ui.overrides();
+        let _ = ui.ui_mut().scope_builder(
             UiBuilder::new()
-                .max_rect(shortcut_rect)
-                .layout(Layout::right_to_left(Align::Center)),
+                .max_rect(shortcut_rect),
             |ui| {
-                let mut ui = ComponentUi::new(ui);
                 ui.set_min_width(shortcut_rect.width());
                 ui.set_max_width(shortcut_rect.width());
-                let _ = ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    render_shortcut_keycaps(ui, &shortcut_keys, selected, emphasized)
-                });
+                let _ = layout::align()
+                    .justify(layout::Justify::End)
+                    .align(layout::Align::Center)
+                    .show(ui, |ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
+                        let _ =
+                            render_shortcut_keycaps(&mut ui, &shortcut_keys, selected, emphasized);
+                    });
             },
         );
     }
@@ -406,11 +420,11 @@ fn command_item_matches(item: CommandItem<'_>, query: &str) -> bool {
     searchable.contains(query)
 }
 
-fn command_preview_fill(dark_mode: bool) -> egui::Color32 {
-    if dark_mode {
-        tokens::app_background(dark_mode)
+fn command_preview_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::app_background(runtime)
     } else {
-        tokens::muted_surface(dark_mode)
+        tokens::muted_surface(runtime)
     }
 }
 
@@ -429,23 +443,24 @@ fn render_shortcut_keycaps(
     selected: bool,
     emphasized: bool,
 ) -> egui::InnerResponse<()> {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let text_color = shortcut_text_color(ui, selected, emphasized);
     let key_fill = if selected {
-        tokens::primary_fg(dark_mode).gamma_multiply(0.14)
+        tokens::primary_fg(runtime).gamma_multiply(0.14)
     } else if emphasized {
-        tokens::input_hover_background(dark_mode)
+        tokens::input_hover_background(runtime)
     } else {
-        tokens::input_background(dark_mode)
+        tokens::input_background(runtime)
     };
     let key_stroke = if selected {
-        Stroke::new(1.0, tokens::primary_fg(dark_mode).gamma_multiply(0.28))
+        Stroke::new(1.0, tokens::primary_fg(runtime).gamma_multiply(0.28))
     } else if emphasized {
-        Stroke::new(1.0, tokens::input_hover_border(dark_mode))
+        Stroke::new(1.0, tokens::input_hover_border(runtime))
     } else {
-        Stroke::new(1.0, tokens::input_border(dark_mode))
+        Stroke::new(1.0, tokens::input_border(runtime))
     };
     ui.kbd_group(KbdGroup::new().gap(COMMAND_KEYCAP_GAP), |ui| {
+        let mut ui = ui.components();
         for key in keys {
             let _ = ui.kbd(
                 Kbd::new(key)
@@ -462,13 +477,13 @@ fn render_shortcut_keycaps(
 }
 
 fn shortcut_text_color(ui: &ComponentUi<'_>, selected: bool, emphasized: bool) -> egui::Color32 {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     if selected {
-        tokens::primary_fg(dark_mode)
+        tokens::primary_fg(runtime)
     } else if emphasized {
-        tokens::text_secondary(dark_mode)
+        tokens::text_secondary(runtime)
     } else {
-        tokens::text_muted(dark_mode)
+        tokens::text_muted(runtime)
     }
 }
 
@@ -491,7 +506,7 @@ fn shortcut_group_width(ui: &mut Ui, keys: &[&str]) -> f32 {
 }
 
 fn command_keycap_width(ui: &mut Ui, text: &str) -> f32 {
-    let text_color = tokens::text_muted(ui.visuals().dark_mode);
+    let text_color = tokens::text_muted(crate::theme::runtime_for_ui(ui));
     let font_id = FontId::new(COMMAND_KEYCAP_TEXT_SIZE, FontFamily::Monospace);
     let width = text_width(ui, text, &font_id, text_color);
     (width + (COMMAND_KEYCAP_PADDING_X * 2.0)).max(COMMAND_KEYCAP_MIN_WIDTH)

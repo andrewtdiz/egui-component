@@ -5,7 +5,7 @@ use egui::{Color32, CornerRadius, Rect, Stroke, StrokeKind, Ui};
 pub struct ControlFrame {
     fill: Color32,
     stroke: Stroke,
-    corner_radius: u8,
+    corner_radius: Option<u8>,
     stroke_kind: StrokeKind,
 }
 
@@ -14,13 +14,13 @@ impl ControlFrame {
         Self {
             fill,
             stroke,
-            corner_radius: tokens::RADIUS_MD,
+            corner_radius: None,
             stroke_kind: StrokeKind::Outside,
         }
     }
 
     pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -36,30 +36,30 @@ impl ControlFrame {
 
 pub(crate) fn with_input_chrome<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
-        let dark_mode = ui.visuals().dark_mode;
+        let runtime = crate::theme::runtime_for_ui(ui);
         let style = ui.style_mut();
-        style.visuals.text_edit_bg_color = Some(tokens::input_background(dark_mode));
-        style.visuals.code_bg_color = tokens::input_background(dark_mode);
-        style.visuals.selection.bg_fill = tokens::text_selection_bg(dark_mode);
-        style.visuals.selection.stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
+        style.visuals.text_edit_bg_color = Some(tokens::input_background(runtime));
+        style.visuals.code_bg_color = tokens::input_background(runtime);
+        style.visuals.selection.bg_fill = tokens::text_selection_bg(runtime);
+        style.visuals.selection.stroke = Stroke::new(1.0, tokens::text_primary(runtime));
         let visuals = &mut style.visuals.widgets;
-        visuals.noninteractive.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.inactive.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.hovered.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.active.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.open.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.inactive.bg_fill = tokens::input_background(dark_mode);
-        visuals.inactive.weak_bg_fill = tokens::input_background(dark_mode);
-        visuals.hovered.bg_fill = tokens::input_hover_background(dark_mode);
-        visuals.hovered.weak_bg_fill = tokens::input_hover_background(dark_mode);
-        visuals.active.bg_fill = tokens::input_focus_background(dark_mode);
-        visuals.active.weak_bg_fill = tokens::input_focus_background(dark_mode);
-        visuals.open.bg_fill = tokens::input_focus_background(dark_mode);
-        visuals.open.weak_bg_fill = tokens::input_focus_background(dark_mode);
-        visuals.inactive.bg_stroke = Stroke::new(1.0, tokens::input_border(dark_mode));
-        visuals.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(dark_mode));
-        visuals.active.bg_stroke = tokens::input_focus_stroke(dark_mode);
-        visuals.open.bg_stroke = tokens::input_focus_stroke(dark_mode);
+        visuals.noninteractive.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.inactive.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.hovered.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.active.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.open.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.inactive.bg_fill = tokens::input_background(runtime);
+        visuals.inactive.weak_bg_fill = tokens::input_background(runtime);
+        visuals.hovered.bg_fill = tokens::input_hover_background(runtime);
+        visuals.hovered.weak_bg_fill = tokens::input_hover_background(runtime);
+        visuals.active.bg_fill = tokens::input_focus_background(runtime);
+        visuals.active.weak_bg_fill = tokens::input_focus_background(runtime);
+        visuals.open.bg_fill = tokens::input_focus_background(runtime);
+        visuals.open.weak_bg_fill = tokens::input_focus_background(runtime);
+        visuals.inactive.bg_stroke = Stroke::new(1.0, tokens::input_border(runtime));
+        visuals.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(runtime));
+        visuals.active.bg_stroke = tokens::input_focus_stroke(runtime);
+        visuals.open.bg_stroke = tokens::input_focus_stroke(runtime);
         add(ui)
     })
     .inner
@@ -67,16 +67,17 @@ pub(crate) fn with_input_chrome<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) 
 
 pub(crate) fn with_slider_chrome<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
+        let runtime = crate::theme::runtime_for_ui(ui);
         let style = ui.style_mut();
         style.spacing.slider_rail_height = 4.0;
         style.visuals.selection.bg_fill = tokens::TRANSPARENT;
         style.visuals.selection.stroke = Stroke::NONE;
         let visuals = &mut style.visuals.widgets;
-        visuals.noninteractive.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.inactive.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.hovered.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.active.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-        visuals.open.corner_radius = CornerRadius::same(tokens::RADIUS_MD);
+        visuals.noninteractive.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.inactive.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.hovered.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.active.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
+        visuals.open.corner_radius = CornerRadius::same(tokens::radius_md(runtime));
         visuals.inactive.bg_fill = tokens::TRANSPARENT;
         visuals.inactive.weak_bg_fill = tokens::TRANSPARENT;
         visuals.hovered.bg_fill = tokens::TRANSPARENT;
@@ -102,9 +103,10 @@ pub(crate) fn with_slider_chrome<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R)
 }
 
 pub fn control_frame(ui: &mut Ui, rect: Rect, frame: ControlFrame) {
+    let runtime = crate::theme::runtime_for_ui(ui);
     ui.painter().rect(
         rect,
-        CornerRadius::same(frame.corner_radius),
+        CornerRadius::same(frame.corner_radius.unwrap_or(tokens::radius_md(runtime))),
         frame.fill,
         frame.stroke,
         frame.stroke_kind,

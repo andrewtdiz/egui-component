@@ -17,7 +17,7 @@ pub(crate) fn run_showcase_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            theme::install(&creation_context.egui_ctx, ThemeMode::Dark);
+            theme::install(&creation_context.egui_ctx, theme::ThemeSpec::default(), ThemeMode::Dark);
             Ok(Box::new(ShowcaseWindowApp {
                 surface: ShowcaseSurface::new(),
             }))
@@ -38,11 +38,11 @@ impl ShowcaseSurface {
     }
 
     pub(crate) fn draw(&mut self, egui_context: &egui::Context) {
-        let dark_mode = self.story.dark_mode();
+        let runtime = crate::theme::runtime_for_context(egui_context);
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
-                    .fill(tokens::app_background(dark_mode))
+                    .fill(tokens::app_background(runtime))
                     .inner_margin(egui::Margin::ZERO)
                     .outer_margin(egui::Margin::ZERO)
                     .stroke(egui::Stroke::NONE),
@@ -50,7 +50,7 @@ impl ShowcaseSurface {
             .show(egui_context, |ui| {
                 let rect = ui.max_rect();
                 ui.painter()
-                    .rect_filled(rect, 0.0, tokens::app_background(dark_mode));
+                    .rect_filled(rect, 0.0, tokens::app_background(runtime));
                 ui.set_min_size(rect.size());
                 render_component_showcase(ui, &mut self.story);
             });

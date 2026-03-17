@@ -4,21 +4,23 @@
 
 ## Runtime Shape
 
-- `theme::install` and `theme::set_mode` own shared fonts, visuals, and icon/image loader setup.
-- `ui.components()` wraps `egui::Ui` in `ComponentUi`, which applies the component style profile and exposes typed widget methods.
+- `theme::install`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme` own shared fonts, visuals, icon/image loader setup, and the semantic theme contract.
+- `layout::*` owns public flow-layout authoring for rows, columns, padding, alignment, and sized boxes.
+- `ui.components()` exposes typed widget methods for the current `egui::Ui`.
 - Each public widget lives in `src/components/*.rs` as a small builder plus a `ComponentUi` entry point.
 
 ## Styling Layers
 
-- `src/ui/tokens.rs` is the source of truth for colors, radii, spacing, and shared state styling.
-- `src/ui/style.rs` applies global defaults for spacing and interactive sizing.
-- Components should resolve local widget states from tokens instead of hardcoding colors or repaint rules ad hoc.
+- `src/theme.rs` is the source of truth for semantic colors, preset palettes, radii, shadows, and scoped theme behavior.
+- `src/ui/tokens.rs` is internal resolver glue from semantic roles to component states plus shared layout constants.
+- `src/ui/style.rs` applies global defaults for spacing, interactive sizing, and raw `egui::Visuals` derived from the active semantic theme.
 
 ## Composition Model
 
-- `src/primitives/*.rs` contains reusable chrome helpers for rows, surfaces, popups, and layout framing.
+- `src/layout.rs` contains the public flow-layout layer used for explicit gap, padding, alignment, and sizing.
+- `src/primitives/*.rs` contains reusable chrome helpers for surfaces, popups, and exact-rect control painting.
 - Primitive components stay narrow and typed.
-- Composed components should build from existing primitives/components and use closures for optional regions such as headers, bodies, or footers.
+- Composed components should use `layout::*` for flow layout, exact rect math for geometry-sensitive controls, and re-enter `ui.components()` only when they need typed widgets inside closures.
 
 ## Registry And Showcase
 

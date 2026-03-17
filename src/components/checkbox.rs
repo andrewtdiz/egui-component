@@ -1,4 +1,5 @@
 use super::api::ComponentUi;
+use crate::layout;
 use crate::ui::tokens;
 use egui::{CornerRadius, CursorIcon, Response, RichText, Sense, Stroke, StrokeKind, Ui};
 
@@ -41,16 +42,15 @@ impl<'a> From<&'a str> for Checkbox<'a> {
 
 impl ComponentUi<'_> {
     pub fn checkbox<'a>(&mut self, value: &mut bool, props: impl Into<Checkbox<'a>>) -> Response {
-        draw_checkbox(self.raw_mut(), value, props.into())
+        draw_checkbox(self.ui_mut(), value, props.into())
     }
 }
 
 fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     match props.label {
         Some(label_text) => {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 10.0;
+            layout::row().gap(10.0).show(ui, |ui| {
                 let mut control =
                     draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand);
                 let label = ui
@@ -58,7 +58,7 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
                         ui.style_mut().interaction.selectable_labels = false;
                         ui.add(
                             egui::Label::new(
-                                RichText::new(label_text).color(tokens::text_primary(dark_mode)),
+                                RichText::new(label_text).color(tokens::text_primary(runtime)),
                             )
                             .selectable(false)
                             .sense(Sense::click()),
@@ -79,7 +79,7 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
 }
 
 fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let (rect, mut response) = ui.allocate_exact_size(
         egui::vec2(CHECKBOX_CONTROL_SIZE, CHECKBOX_CONTROL_SIZE),
         Sense::click(),
@@ -96,32 +96,32 @@ fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
 
     let (fill, mut stroke) = if *value {
         let checked_fill = if pressed {
-            tokens::primary_active_bg(dark_mode)
+            tokens::primary_active_bg(runtime)
         } else if hovered {
-            tokens::primary_hover_bg(dark_mode)
+            tokens::primary_hover_bg(runtime)
         } else {
-            tokens::primary_bg(dark_mode)
+            tokens::primary_bg(runtime)
         };
         (checked_fill, Stroke::new(1.0, checked_fill))
     } else if pressed {
         (
-            tokens::input_focus_background(dark_mode),
-            Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
+            tokens::input_focus_background(runtime),
+            Stroke::new(1.0, tokens::input_hover_border(runtime)),
         )
     } else if hovered {
         (
-            tokens::input_hover_background(dark_mode),
-            Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
+            tokens::input_hover_background(runtime),
+            Stroke::new(1.0, tokens::input_hover_border(runtime)),
         )
     } else {
         (
-            tokens::input_background(dark_mode),
-            Stroke::new(1.0, tokens::input_border(dark_mode)),
+            tokens::input_background(runtime),
+            Stroke::new(1.0, tokens::input_border(runtime)),
         )
     };
 
     if focused {
-        stroke = tokens::input_focus_stroke(dark_mode);
+        stroke = tokens::input_focus_stroke(runtime);
     }
 
     ui.painter().rect(
@@ -133,7 +133,7 @@ fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
     );
 
     if *value {
-        let check_stroke = Stroke::new(1.8, tokens::primary_fg(dark_mode));
+        let check_stroke = Stroke::new(1.8, tokens::primary_fg(runtime));
         let start = egui::pos2(rect.left() + rect.width() * 0.24, rect.center().y + 0.2);
         let middle = egui::pos2(
             rect.left() + rect.width() * 0.44,

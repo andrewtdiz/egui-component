@@ -1,4 +1,5 @@
 use super::api::ComponentUi;
+use crate::layout;
 use crate::primitives::{
     control::{control_frame, ControlFrame},
     popup::{popup_panel, PopupPanel},
@@ -52,7 +53,7 @@ impl ComponentUi<'_> {
         selected_index: &mut Option<usize>,
         props: impl Into<Select<'a>>,
     ) -> egui::Response {
-        draw_select(self.raw_mut(), selected_index, props.into())
+        draw_select(self.ui_mut(), selected_index, props.into())
     }
 }
 
@@ -65,20 +66,20 @@ struct ResolvedSelectStyle {
 }
 
 fn resolve_select_style(
-    dark_mode: bool,
+    runtime: crate::theme::ThemeRuntime,
     focused: bool,
     hovered: bool,
     has_selection: bool,
 ) -> ResolvedSelectStyle {
     ResolvedSelectStyle {
-        fill: tokens::input_bg(dark_mode, focused, hovered),
-        stroke: tokens::input_stroke(dark_mode, focused, hovered),
+        fill: tokens::input_bg(runtime, focused, hovered),
+        stroke: tokens::input_stroke(runtime, focused, hovered),
         text_color: if has_selection {
-            tokens::text_primary(dark_mode)
+            tokens::text_primary(runtime)
         } else {
-            tokens::text_muted(dark_mode)
+            tokens::text_muted(runtime)
         },
-        icon_color: tokens::text_secondary(dark_mode),
+        icon_color: tokens::text_secondary(runtime),
     }
 }
 
@@ -87,7 +88,7 @@ fn draw_select(
     selected_index: &mut Option<usize>,
     props: Select<'_>,
 ) -> egui::Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     if selected_index.is_some_and(|index| index >= props.options.len()) {
         *selected_index = None;
     }
@@ -102,7 +103,6 @@ fn draw_select(
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .gap(4.0)
         .show(|ui| {
-            ui.style_mut().spacing.item_spacing.y = 2.0;
             let row_width = (props.width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
             popup_panel(
                 ui,
@@ -110,20 +110,21 @@ fn draw_select(
                 |ui| {
                     ui.set_min_width(row_width);
                     ui.set_max_width(row_width);
-
-                    for (index, label) in props.options.iter().copied().enumerate() {
-                        let option_response = draw_option_row(
-                            ui,
-                            label,
-                            current_selection == Some(index),
-                            row_width,
-                            dark_mode,
-                        );
-                        if option_response.clicked() {
-                            next_selection = Some(index);
-                            ui.close();
+                    let _ = layout::column().gap(2.0).show(ui, |ui| {
+                        for (index, label) in props.options.iter().copied().enumerate() {
+                            let option_response = draw_option_row(
+                                ui,
+                                label,
+                                current_selection == Some(index),
+                                row_width,
+                                runtime,
+                            );
+                            if option_response.clicked() {
+                                next_selection = Some(index);
+                                ui.close();
+                            }
                         }
-                    }
+                    });
                 },
             );
         });
@@ -140,12 +141,12 @@ fn draw_select(
 
 fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> egui::Response {
     ui.push_id(props.trigger_id, |ui| {
-        let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
+        let desired_size = egui::vec2(props.width, tokens::SPACING_INTERACT_HEIGHT);
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
         let hovered = response.hovered();
-        let dark_mode = ui.visuals().dark_mode;
-        let style = resolve_select_style(dark_mode, focused, hovered, selected_text.is_some());
+        let runtime = crate::theme::runtime_for_ui(ui);
+        let style = resolve_select_style(runtime, focused, hovered, selected_text.is_some());
         control_frame(ui, rect, ControlFrame::new(style.fill, style.stroke));
         let row = IconLabelRow::new(
             selected_text.unwrap_or(props.placeholder),
@@ -166,20 +167,20 @@ fn draw_option_row(
     label: &str,
     selected: bool,
     row_width: f32,
-    dark_mode: bool,
+    runtime: crate::theme::ThemeRuntime,
 ) -> egui::Response {
     let desired_size = egui::vec2(row_width.max(96.0), MENU_ROW_HEIGHT);
     let (rect, response) = row_chrome(
         ui,
         RowChrome::new(desired_size)
-            .corner_radius(tokens::RADIUS_SM)
+            .corner_radius(tokens::radius_sm(runtime))
             .stroke(egui::Stroke::NONE),
         |response| {
             tokens::row_bg(
                 selected,
                 response.is_pointer_button_down_on(),
                 response.hovered(),
-                dark_mode,
+                runtime,
             )
         },
     );
@@ -187,9 +188,9 @@ fn draw_option_row(
         label,
         typography::label_font(),
         if selected {
-            tokens::row_selected_text(dark_mode)
+            tokens::row_selected_text(runtime)
         } else {
-            tokens::text_secondary(dark_mode)
+            tokens::text_secondary(runtime)
         },
     );
     let _ = icon_label_row(ui, rect, &row);

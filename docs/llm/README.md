@@ -22,8 +22,10 @@ Read these files in order:
 
 The public runtime surface is built around three ideas:
 
-- `theme::install(&Context, ThemeMode)` installs the shared fonts, visuals, and icon loading.
-- `ui.components()` wraps an `egui::Ui` in `ComponentUi`.
+- `theme::install(&Context, ThemeSpec, ThemeMode)` installs the shared fonts, visuals, semantic theme, and icon loading.
+- `theme::set_theme`, `theme::set_mode`, and `theme::with_theme` are the only supported theme mutation paths.
+- `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
+- `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
 - Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
 ## Non-Negotiable Design Contract
@@ -32,8 +34,10 @@ When writing or editing components in this repo, keep these rules fixed unless t
 
 - Do not invent new colors when an existing token already covers the state.
 - Do not change default padding, spacing, radius, or widget heights just because a component looks slightly off.
-- Do not bypass `src/ui/tokens.rs` for interactive colors.
-- Do not bypass `src/ui/style.rs` for global spacing and radius defaults.
+- Do not bypass `src/theme.rs` for semantic theme source-of-truth.
+- Treat `src/ui/tokens.rs` as internal semantic resolver glue, not a public theme contract.
+- Do not bypass `src/ui/style.rs` for global spacing and runtime style defaults.
+- Do not mutate `spacing_mut().item_spacing` or `style_mut().spacing` directly in component code when `layout::*` can express the intent.
 - Keep components visually aligned with shadcn-style expectations: restrained variants, token-driven states, and composition over ad hoc styling.
 
 Current global layout/style anchors:
@@ -42,7 +46,7 @@ Current global layout/style anchors:
 - Button padding: `12.0 x 7.0`
 - Default interactive height: `34.0`
 - Input padding: `10 x 6`
-- Radius sm/md/lg: `6 / 8 / 10`
+- Default root radius: `10`, derived radii `sm/md/lg/xl = 6 / 8 / 10 / 14`
 - Default text sizes: body `14`, heading `16`, small `12`, most component labels `12`
 
 ## File Map
@@ -50,17 +54,19 @@ Current global layout/style anchors:
 Use these files as the source of truth:
 
 - `src/components/api.rs`
-  Defines `ComponentUi`, `ComponentUiExt`, and scoped override plumbing.
+  Defines `ComponentUiExt`, the typed facade, and scoped override plumbing.
+- `src/layout.rs`
+  Public flow-layout helpers used for row, column, inset, alignment, sized boxes, and spacers.
 - `src/primitives/*.rs`
-  Public authoring primitives for chrome, popup framing, row layouts, and surface helpers.
+  Public authoring primitives for chrome, popup framing, and exact-rect surface helpers.
 - `src/components/*.rs`
   One file per component or component family.
+- `src/theme.rs`
+  Public Tailwind/shadcn semantic theme model, presets, scoped theme APIs, and source-of-truth colors.
 - `src/ui/tokens.rs`
-  Color, spacing, radius, and state tokens.
+  Internal resolver layer that maps semantic theme roles onto component states and shared layout constants.
 - `src/ui/style.rs`
   Global component-theme defaults.
-- `src/theme.rs`
-  Theme setup entry points.
 - `src/catalog.rs`
   Public component registry used by the showcase and parser helpers.
 - `src/dev/showcase/component_showcase.rs`
@@ -102,7 +108,6 @@ Composed or higher-level pieces:
 
 Wrapper utilities:
 
-- `ComponentUi`
 - `ComponentUiExt`
 - `ButtonOverride`
 - `CardOverride`
@@ -130,6 +135,7 @@ ui.with_override(
         LabelOverride::new().tone(LabelTone::Muted),
     ),
     |ui| {
+        let mut ui = ui.components();
         let _ = ui.button("Cancel");
         let _ = ui.label("Secondary copy");
     },
@@ -148,7 +154,7 @@ The expected implementation path is:
 
 1. Run `cargo xtask new-component`.
 2. Fill in the typed builder and keep shorthands minimal.
-3. Compose `src/primitives/` helpers instead of painting new chrome inline.
+3. Compose `layout::*` for flow layout and `src/primitives/` helpers for chrome instead of mutating layout state inline.
 4. Update the generated doc stub in `docs/llm/components/`.
 5. Run sync and validation before finishing.
 

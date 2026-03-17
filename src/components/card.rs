@@ -1,4 +1,4 @@
-use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
+use super::api::{with_component_overrides, ComponentOverride, ComponentOverrides, ComponentUi};
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
 use egui::{Color32, Stroke, Ui};
@@ -7,7 +7,7 @@ use egui::{Color32, Stroke, Ui};
 pub struct Card {
     pub fill: Option<Color32>,
     pub stroke: Option<Stroke>,
-    pub corner_radius: u8,
+    pub corner_radius: Option<u8>,
     pub padding_x: i8,
     pub padding_y: i8,
 }
@@ -17,7 +17,7 @@ impl Card {
         Self {
             fill: None,
             stroke: None,
-            corner_radius: tokens::RADIUS_LG,
+            corner_radius: None,
             padding_x: 12,
             padding_y: 12,
         }
@@ -34,7 +34,7 @@ impl Card {
     }
 
     pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -88,7 +88,7 @@ impl CardOverride {
             props.stroke = Some(stroke);
         }
         if let Some(corner_radius) = self.corner_radius {
-            props.corner_radius = corner_radius;
+            props.corner_radius = Some(corner_radius);
         }
         if let Some(padding_x) = self.padding_x {
             props.padding_x = padding_x;
@@ -148,13 +148,12 @@ impl ComponentUi<'_> {
     pub fn card<R>(
         &mut self,
         props: impl Into<Card>,
-        add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+        add: impl FnOnce(&mut Ui) -> R,
     ) -> egui::InnerResponse<R> {
-        let overrides = self.overrides;
+        let overrides = self.overrides();
         let props = overrides.card.apply(props.into());
-        draw_card(self.raw_mut(), props, |ui| {
-            let mut components = ComponentUi::with_overrides(ui, overrides);
-            add(&mut components)
+        draw_card(self.ui_mut(), props, |ui| {
+            with_component_overrides(ui, overrides, add)
         })
     }
 }
@@ -164,16 +163,16 @@ fn draw_card<R>(
     props: Card,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     surface_frame(
         ui,
         SurfaceFrame::new(
-            props.fill.unwrap_or(tokens::muted_surface(dark_mode)),
+            props.fill.unwrap_or(tokens::muted_surface(runtime)),
             props
                 .stroke
-                .unwrap_or(Stroke::new(1.0, tokens::separator(dark_mode))),
+                .unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
         )
-        .corner_radius(props.corner_radius)
+        .corner_radius(props.corner_radius.unwrap_or(tokens::radius_lg(runtime)))
         .padding(props.padding_x, props.padding_y),
         add,
     )

@@ -1,7 +1,10 @@
-use super::{api::ComponentUi, Button, ButtonVariant, Label, LabelTone, LabelWeight};
+use super::{
+    api::{with_component_overrides, ComponentUi, ComponentUiExt},
+    Button, ButtonVariant, Label, LabelTone, LabelWeight,
+};
 use crate::primitives::surface::{surface_frame_builder, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{Align, Id, Layout, Response, Sense, Stroke, UiBuilder};
+use egui::{Align, Id, Layout, Response, Sense, Stroke, Ui, UiBuilder};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DialogueIntent {
@@ -127,7 +130,7 @@ impl ComponentUi<'_> {
         &mut self,
         open: &mut bool,
         props: impl Into<DialogueModal>,
-        add_contents: impl FnOnce(&mut ComponentUi<'_>, &mut bool),
+        add_contents: impl FnOnce(&mut Ui, &mut bool),
     ) {
         let props = props.into();
         if !*open {
@@ -135,24 +138,26 @@ impl ComponentUi<'_> {
         }
 
         let mut close_requested = false;
-        let dark_mode = self.visuals().dark_mode;
+        let runtime = crate::theme::runtime_for_ui(self);
+        let overrides = self.overrides();
         let frame = surface_frame_builder(
             SurfaceFrame::new(
-                tokens::card_background(dark_mode),
-                Stroke::new(1.0, tokens::separator(dark_mode)),
+                tokens::card_background(runtime),
+                Stroke::new(1.0, tokens::separator(runtime)),
             )
-            .corner_radius(tokens::RADIUS_LG)
+            .corner_radius(tokens::radius_lg(runtime))
             .padding(12, 12)
-            .shadow(tokens::tailwind_shadow_lg()),
+            .shadow(tokens::tailwind_shadow_lg(runtime)),
         );
         let dialogue_modal_response = egui::Modal::new(props.id)
             .frame(frame)
-            .backdrop_color(tokens::dialogue_backdrop(dark_mode))
+            .backdrop_color(tokens::dialogue_backdrop(runtime))
             .show(self.ctx(), |ui| {
                 ui.set_min_width(props.width);
                 ui.set_max_width(props.width);
-                let mut components = ComponentUi::new(ui);
-                add_contents(&mut components, &mut close_requested);
+                with_component_overrides(ui, overrides, |ui| {
+                    add_contents(ui, &mut close_requested);
+                });
             });
 
         if close_requested || dialogue_modal_response.should_close() {
@@ -194,6 +199,7 @@ impl ComponentUi<'_> {
         close_requested: &mut bool,
     ) {
         let props = props.into();
+        let overrides = self.overrides();
         let close_button_size = 28.0;
         let header_gap = self.spacing().item_spacing.x;
         let row_width = self.available_width();
@@ -211,21 +217,24 @@ impl ComponentUi<'_> {
             ),
         );
 
-        let _ = self.scope_builder(
+        let _ = self.ui_mut().scope_builder(
             UiBuilder::new()
                 .max_rect(title_rect)
                 .layout(Layout::top_down(Align::Min)),
             |ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.dialogue_title(props.title, props.intent);
             },
         );
 
         if self
+            .ui_mut()
             .scope_builder(
                 UiBuilder::new()
                     .max_rect(close_rect)
                     .layout(Layout::centered_and_justified(egui::Direction::LeftToRight)),
                 |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
                     ui.button(
                         Button::icon_only("x")
                             .variant(ButtonVariant::Ghost)
@@ -258,6 +267,7 @@ impl ComponentUi<'_> {
             open,
             DialogueModal::new(props.id).width(props.width),
             |ui, close_requested| {
+                let mut ui = ui.components();
                 ui.dialogue_header_with_close(
                     DialogueHeader::new(props.title)
                         .description(props.description)
@@ -266,10 +276,12 @@ impl ComponentUi<'_> {
                 );
                 ui.add_space(12.0);
                 let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-                let _ = ui.allocate_ui_with_layout(
+                let overrides = ui.overrides();
+                let _ = ui.ui_mut().allocate_ui_with_layout(
                     footer_size,
                     Layout::right_to_left(Align::Center),
                     |ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
                         if ui
                             .button(
                                 Button::new(props.confirm_label).variant(ButtonVariant::Primary),

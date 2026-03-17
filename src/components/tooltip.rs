@@ -1,7 +1,7 @@
 use super::{api::ComponentUi, Button, ButtonVariant, LabelTone};
 use crate::ui::tokens;
-use egui::CursorIcon;
-use egui::Response;
+use egui::util::IdTypeMap;
+use egui::{CursorIcon, Response};
 
 const TOOLTIP_GAP: f32 = 6.0;
 const TOOLTIP_PADDING_X: i8 = 6;
@@ -56,7 +56,7 @@ impl ComponentUi<'_> {
     pub fn tooltip<'a>(&mut self, props: impl Into<Tooltip<'a>>) -> Response {
         let props = props.into();
         let overrides = self.overrides;
-        self.raw_mut()
+        self.ui_mut()
             .scope(|ui| {
                 let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let response = ui
@@ -72,7 +72,7 @@ impl ComponentUi<'_> {
                 let delay_secs = props.delay_ms as f64 / 1000.0;
 
                 let show_tooltip = if response.enabled() && response.hovered() {
-                    let hover_started_at = response.ctx.data_mut(|data| {
+                    let hover_started_at = response.ctx.data_mut(|data: &mut IdTypeMap| {
                         if let Some(hover_started_at) = data.get_temp::<f64>(hover_started_id) {
                             hover_started_at
                         } else {
@@ -94,12 +94,12 @@ impl ComponentUi<'_> {
                 } else {
                     response
                         .ctx
-                        .data_mut(|data| data.remove::<f64>(hover_started_id));
+                        .data_mut(|data: &mut IdTypeMap| data.remove::<f64>(hover_started_id));
                     false
                 };
 
                 if show_tooltip {
-                    let tooltip_frame = tooltip_frame(ui.style());
+                    let tooltip_frame = tooltip_frame(ui.style(), crate::theme::runtime_for_ui(&ui));
                     let mut tooltip = egui::Tooltip::for_widget(&response).gap(TOOLTIP_GAP);
                     tooltip.popup = tooltip.popup.frame(tooltip_frame);
                     match props.placement {
@@ -144,13 +144,13 @@ impl ComponentUi<'_> {
     }
 }
 
-fn tooltip_frame(style: &egui::Style) -> egui::Frame {
+fn tooltip_frame(style: &egui::Style, runtime: crate::theme::ThemeRuntime) -> egui::Frame {
     egui::Frame::popup(style)
         .inner_margin(egui::Margin::symmetric(
             TOOLTIP_PADDING_X,
             TOOLTIP_PADDING_Y,
         ))
-        .shadow(tokens::tailwind_shadow_sm())
+        .shadow(tokens::tailwind_shadow_sm(runtime))
 }
 
 #[cfg(test)]
@@ -163,16 +163,16 @@ mod tests {
     #[test]
     fn tooltip_frame_overrides_popup_padding_and_shadow() {
         let context = Context::default();
-        crate::theme::install(&context, ThemeMode::Dark);
+        crate::theme::install(&context, crate::theme::ThemeSpec::default(), ThemeMode::Dark);
         let style = context.style();
         let popup_frame = egui::Frame::popup(&style);
-        let frame = tooltip_frame(&style);
+        let frame = tooltip_frame(&style, crate::theme::runtime_for_context(&context));
 
         assert_eq!(
             frame.inner_margin,
             Margin::symmetric(TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y)
         );
-        assert_eq!(frame.shadow, tokens::tailwind_shadow_sm());
+        assert_eq!(frame.shadow, tokens::tailwind_shadow_sm(crate::theme::runtime_for_context(&context)));
         assert_eq!(frame.fill, popup_frame.fill);
         assert_eq!(frame.stroke, popup_frame.stroke);
         assert_eq!(frame.corner_radius, popup_frame.corner_radius);

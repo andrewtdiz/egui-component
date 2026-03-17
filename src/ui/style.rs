@@ -1,25 +1,28 @@
-use crate::theme::ThemeMode;
+use crate::theme::{self, RadiusRole, ThemeRuntime};
 use crate::ui::{tokens, typography};
 use egui::{
     CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
 };
 
-pub(crate) fn install(context: &egui::Context, mode: ThemeMode) {
+pub(crate) fn install(context: &egui::Context, runtime: ThemeRuntime) {
     context.set_fonts(component_font_definitions());
-    set_mode(context, mode);
+    set_theme_runtime(context, runtime);
 }
 
-pub(crate) fn set_mode(context: &egui::Context, mode: ThemeMode) {
+pub(crate) fn set_theme_runtime(context: &egui::Context, runtime: ThemeRuntime) {
     let mut style = (*context.style()).clone();
-    style.visuals = mode_visuals(mode);
-    apply_typography(&mut style);
-    apply_component_style_profile(&mut style);
+    apply_to_style(&mut style, runtime);
     context.set_style(style);
 }
 
-pub(crate) fn apply_component_profile(ui: &mut Ui) {
-    let style = ui.style_mut();
-    apply_component_style_profile(style);
+pub(crate) fn apply_to_ui(ui: &mut Ui, runtime: ThemeRuntime) {
+    apply_to_style(ui.style_mut(), runtime);
+}
+
+fn apply_to_style(style: &mut Style, runtime: ThemeRuntime) {
+    style.visuals = mode_visuals(runtime);
+    apply_typography(style);
+    apply_component_style_profile(style, runtime);
 }
 
 fn component_font_definitions() -> FontDefinitions {
@@ -95,7 +98,7 @@ fn apply_typography(style: &mut Style) {
         .insert(TextStyle::Small, typography::small_font());
 }
 
-fn apply_component_style_profile(style: &mut Style) {
+fn apply_component_style_profile(style: &mut Style, runtime: ThemeRuntime) {
     style.spacing.interact_size.y = tokens::SPACING_INTERACT_HEIGHT;
     style.spacing.item_spacing.y = tokens::SPACING_ITEM_Y;
     style.spacing.button_padding = egui::vec2(
@@ -109,10 +112,10 @@ fn apply_component_style_profile(style: &mut Style) {
     style.interaction.selectable_labels = false;
     style.interaction.multi_widget_text_select = false;
 
-    let corner_radius = CornerRadius::same(tokens::RADIUS_MD);
-    style.visuals.selection.bg_fill = tokens::row_selected_bg(style.visuals.dark_mode);
+    let corner_radius = CornerRadius::same(theme::resolved_radius(runtime, RadiusRole::Md));
+    style.visuals.selection.bg_fill = tokens::row_selected_bg(runtime);
     style.visuals.selection.stroke = Stroke::NONE;
-    style.visuals.popup_shadow = tokens::tailwind_shadow_md();
+    style.visuals.popup_shadow = tokens::tailwind_shadow_md(runtime);
     style.visuals.widgets.noninteractive.corner_radius = corner_radius;
     style.visuals.widgets.inactive.corner_radius = corner_radius;
     style.visuals.widgets.hovered.corner_radius = corner_radius;
@@ -125,48 +128,48 @@ fn apply_component_style_profile(style: &mut Style) {
     style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
 }
 
-fn mode_visuals(mode: ThemeMode) -> Visuals {
-    let dark_mode = mode.is_dark();
+fn mode_visuals(runtime: ThemeRuntime) -> Visuals {
+    let dark_mode = runtime.mode.is_dark();
     let mut visuals = if dark_mode {
         Visuals::dark()
     } else {
         Visuals::light()
     };
 
-    visuals.override_text_color = Some(tokens::text_primary(dark_mode));
-    visuals.hyperlink_color = tokens::text_secondary(dark_mode);
-    visuals.faint_bg_color = tokens::muted_surface(dark_mode);
-    visuals.extreme_bg_color = tokens::app_background(dark_mode);
-    visuals.code_bg_color = tokens::muted_surface(dark_mode);
-    visuals.warn_fg_color = tokens::text_primary(dark_mode);
-    visuals.error_fg_color = tokens::text_destructive(dark_mode);
-    visuals.window_fill = tokens::card_background(dark_mode);
-    visuals.panel_fill = tokens::app_background(dark_mode);
-    visuals.window_stroke = Stroke::new(1.0, tokens::separator(dark_mode));
-    visuals.selection.bg_fill = tokens::row_selected_bg(dark_mode);
+    visuals.override_text_color = Some(tokens::text_primary(runtime));
+    visuals.hyperlink_color = tokens::text_secondary(runtime);
+    visuals.faint_bg_color = tokens::muted_surface(runtime);
+    visuals.extreme_bg_color = tokens::app_background(runtime);
+    visuals.code_bg_color = tokens::muted_surface(runtime);
+    visuals.warn_fg_color = tokens::text_primary(runtime);
+    visuals.error_fg_color = tokens::text_destructive(runtime);
+    visuals.window_fill = tokens::card_background(runtime);
+    visuals.panel_fill = tokens::app_background(runtime);
+    visuals.window_stroke = Stroke::new(1.0, tokens::separator(runtime));
+    visuals.selection.bg_fill = tokens::row_selected_bg(runtime);
     visuals.selection.stroke = Stroke::NONE;
-    visuals.popup_shadow = tokens::tailwind_shadow_md();
-    visuals.widgets.noninteractive.bg_fill = tokens::card_background(dark_mode);
-    visuals.widgets.noninteractive.weak_bg_fill = tokens::card_background(dark_mode);
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tokens::separator(dark_mode));
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, tokens::text_secondary(dark_mode));
-    visuals.widgets.inactive.bg_fill = tokens::input_background(dark_mode);
-    visuals.widgets.inactive.weak_bg_fill = tokens::input_background(dark_mode);
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, tokens::input_border(dark_mode));
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    visuals.widgets.hovered.bg_fill = tokens::input_hover_background(dark_mode);
-    visuals.widgets.hovered.weak_bg_fill = tokens::input_hover_background(dark_mode);
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(dark_mode));
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    visuals.widgets.active.bg_fill = tokens::input_focus_background(dark_mode);
-    visuals.widgets.active.weak_bg_fill = tokens::input_focus_background(dark_mode);
-    visuals.widgets.active.bg_stroke = tokens::input_focus_stroke(dark_mode);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    visuals.widgets.open.bg_fill = tokens::input_focus_background(dark_mode);
-    visuals.widgets.open.weak_bg_fill = tokens::input_focus_background(dark_mode);
-    visuals.widgets.open.bg_stroke = tokens::input_focus_stroke(dark_mode);
-    visuals.widgets.open.fg_stroke = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    visuals.menu_corner_radius = CornerRadius::same(tokens::RADIUS_MD);
+    visuals.popup_shadow = tokens::tailwind_shadow_md(runtime);
+    visuals.widgets.noninteractive.bg_fill = tokens::card_background(runtime);
+    visuals.widgets.noninteractive.weak_bg_fill = tokens::card_background(runtime);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tokens::separator(runtime));
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, tokens::text_secondary(runtime));
+    visuals.widgets.inactive.bg_fill = tokens::input_background(runtime);
+    visuals.widgets.inactive.weak_bg_fill = tokens::input_background(runtime);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, tokens::input_border(runtime));
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
+    visuals.widgets.hovered.bg_fill = tokens::input_hover_background(runtime);
+    visuals.widgets.hovered.weak_bg_fill = tokens::input_hover_background(runtime);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(runtime));
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
+    visuals.widgets.active.bg_fill = tokens::input_focus_background(runtime);
+    visuals.widgets.active.weak_bg_fill = tokens::input_focus_background(runtime);
+    visuals.widgets.active.bg_stroke = tokens::input_focus_stroke(runtime);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
+    visuals.widgets.open.bg_fill = tokens::input_focus_background(runtime);
+    visuals.widgets.open.weak_bg_fill = tokens::input_focus_background(runtime);
+    visuals.widgets.open.bg_stroke = tokens::input_focus_stroke(runtime);
+    visuals.widgets.open.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
+    visuals.menu_corner_radius = CornerRadius::same(theme::resolved_radius(runtime, RadiusRole::Md));
     visuals.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.85 };
     visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     visuals
@@ -174,8 +177,8 @@ fn mode_visuals(mode: ThemeMode) -> Visuals {
 
 #[cfg(test)]
 mod tests {
-    use super::{component_font_definitions, install, set_mode};
-    use crate::theme::ThemeMode;
+    use super::{component_font_definitions, install, set_theme_runtime};
+    use crate::theme::{BaseColor, ThemeMode, ThemeRuntime, ThemeSpec};
     use crate::ui::{tokens, typography};
     use egui::{Context, TextStyle};
 
@@ -196,39 +199,39 @@ mod tests {
     #[test]
     fn installed_style_uses_shared_text_defaults() {
         let context = Context::default();
-        install(&context, ThemeMode::Dark);
+        install(&context, ThemeRuntime::new(ThemeSpec::default(), ThemeMode::Dark));
 
         let style = context.style();
         assert_eq!(style.text_styles[&TextStyle::Body], typography::body_font());
-        assert_eq!(
-            style.text_styles[&TextStyle::Button],
-            typography::body_font()
-        );
-        assert_eq!(
-            style.text_styles[&TextStyle::Heading],
-            typography::heading_font()
-        );
-        assert_eq!(
-            style.text_styles[&TextStyle::Small],
-            typography::small_font()
-        );
+        assert_eq!(style.text_styles[&TextStyle::Button], typography::body_font());
+        assert_eq!(style.text_styles[&TextStyle::Heading], typography::heading_font());
+        assert_eq!(style.text_styles[&TextStyle::Small], typography::small_font());
     }
 
     #[test]
-    fn switching_theme_mode_updates_context_visuals() {
+    fn switching_theme_runtime_updates_context_visuals() {
         let context = Context::default();
-        install(&context, ThemeMode::Light);
-
-        assert_eq!(
-            context.style().visuals.panel_fill,
-            tokens::app_background(false)
+        install(
+            &context,
+            ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light),
         );
 
-        set_mode(&context, ThemeMode::Dark);
+        assert_eq!(
+            context.style().visuals.panel_fill,
+            tokens::app_background(ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light))
+        );
+
+        set_theme_runtime(
+            &context,
+            crate::theme::ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark),
+        );
 
         assert_eq!(
             context.style().visuals.panel_fill,
-            tokens::app_background(true)
+            tokens::app_background(crate::theme::ThemeRuntime::new(
+                ThemeSpec::preset(BaseColor::Neutral),
+                ThemeMode::Dark,
+            ))
         );
     }
 }

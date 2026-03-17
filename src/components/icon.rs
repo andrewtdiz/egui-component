@@ -37,7 +37,7 @@ impl<'a> From<&'a str> for Icon<'a> {
 
 impl ComponentUi<'_> {
     pub fn icon<'a>(&mut self, props: impl Into<Icon<'a>>) -> Response {
-        draw_icon(self.raw_mut(), props.into())
+        draw_icon(self.ui_mut(), props.into())
     }
 }
 
@@ -45,7 +45,7 @@ fn draw_icon(ui: &mut Ui, props: Icon<'_>) -> Response {
     if let Some(image) = icons::image(ui.ctx(), props.name, props.size) {
         let tint = props
             .tint
-            .unwrap_or(tokens::text_secondary(ui.visuals().dark_mode));
+            .unwrap_or(tokens::text_secondary(crate::theme::runtime_for_ui(ui)));
         ui.add(image.tint(tint))
     } else {
         let (_rect, response) =

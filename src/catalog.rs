@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ComponentKind {
     // xtask:component-kinds:start
+    AudioPlayback,
     Button,
     ButtonGroup,
     Card,
@@ -20,6 +21,7 @@ pub enum ComponentKind {
     Label,
     MenuBar,
     NumberInput,
+    Pagination,
     Progress,
     Select,
     Separator,
@@ -183,6 +185,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
+        kind: ComponentKind::AudioPlayback,
+        id: "audio-playback",
+        label: "Audio Playback",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Combobox,
         id: "combobox",
         label: "Combobox",
@@ -210,6 +218,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::MenuBar,
         id: "menu-bar",
         label: "Menu Bar",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Pagination,
+        id: "pagination",
+        label: "Pagination",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {

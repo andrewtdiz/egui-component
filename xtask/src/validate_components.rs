@@ -41,12 +41,33 @@ const REQUIRED_MARKERS: &[(&str, &str, &str)] = &[
     ),
 ];
 
+const LAYOUT_STATE_ALLOWLIST: &[&str] = &[
+    "src/components/api.rs",
+    "src/components/button.rs",
+    "src/components/combobox.rs",
+    "src/components/dialogue.rs",
+    "src/components/field.rs",
+    "src/components/image.rs",
+    "src/components/image_tile.rs",
+    "src/components/input.rs",
+    "src/components/slider.rs",
+    "src/components/tooltip.rs",
+];
+
+const DISALLOWED_LAYOUT_PATTERNS: &[&str] = &[
+    "spacing_mut().item_spacing",
+    "style_mut().spacing",
+    "ui.spacing().interact_size",
+    "ui.spacing().button_padding",
+];
+
 pub fn run(repo_root: &Path) -> Result<()> {
     for (path, start_marker, end_marker) in REQUIRED_MARKERS {
         support::ensure_markers(&repo_root.join(path), start_marker, end_marker)?;
     }
 
     validate_no_raw_colors(repo_root)?;
+    validate_no_implicit_layout_state(repo_root)?;
     validate_registry_coverage(repo_root)?;
     support::run_checked(repo_root, "cargo", &["test", "--no-run"])?;
     support::run_checked(
@@ -55,6 +76,52 @@ pub fn run(repo_root: &Path) -> Result<()> {
         &["test", "--features", "showcase", "--no-run"],
     )?;
     Ok(())
+}
+
+fn validate_no_implicit_layout_state(repo_root: &Path) -> Result<()> {
+    let components_dir = repo_root.join("src/components");
+    let mut offenders = Vec::new();
+
+    for entry in fs::read_dir(&components_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+            continue;
+        }
+
+        let relative_path = path
+            .strip_prefix(repo_root)
+            .unwrap_or(path.as_path())
+            .to_string_lossy()
+            .replace('\\', "/");
+        if LAYOUT_STATE_ALLOWLIST
+            .iter()
+            .any(|allowed| *allowed == relative_path)
+        {
+            continue;
+        }
+
+        let contents = support::read(&path)?;
+        let runtime_only = contents
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or(contents.as_str());
+
+        for pattern in DISALLOWED_LAYOUT_PATTERNS {
+            if runtime_only.contains(pattern) {
+                offenders.push(format!("{relative_path}: {pattern}"));
+            }
+        }
+    }
+
+    if offenders.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "implicit layout state usage found outside the allowlist: {}",
+            offenders.join(", ")
+        )
+    }
 }
 
 fn validate_no_raw_colors(repo_root: &Path) -> Result<()> {

@@ -38,11 +38,11 @@ impl From<(RangeInclusive<f32>, f32)> for Slider {
 
 impl ComponentUi<'_> {
     pub fn slider(&mut self, value: &mut f32, props: impl Into<Slider>) -> Response {
-        draw_slider(self.raw_mut(), value, props.into())
+        draw_slider(self.ui_mut(), value, props.into())
     }
 
     pub fn number_input(&mut self, value: &mut f32, props: impl Into<NumberInput>) -> Response {
-        draw_number_input(self.raw_mut(), value, props.into())
+        draw_number_input(self.ui_mut(), value, props.into())
     }
 }
 
@@ -66,7 +66,7 @@ fn paint_slider(ui: &Ui, rect: Rect, response: &Response, value: f32, range: &Ra
         return;
     }
 
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let handle_travel_inset = rect.height() / 2.5;
     let thumb_radius = (handle_travel_inset - 0.8).max(6.0);
     let rail_height = 4.0;
@@ -88,7 +88,7 @@ fn paint_slider(ui: &Ui, rect: Rect, response: &Response, value: f32, range: &Ra
     ui.painter().rect_filled(
         rail_rect,
         rail_radius,
-        tokens::slider_track_inactive(dark_mode),
+        tokens::slider_track_inactive(runtime),
     );
 
     let active_width = (thumb_x - rail_rect.left()).max(rail_height);
@@ -99,24 +99,24 @@ fn paint_slider(ui: &Ui, rect: Rect, response: &Response, value: f32, range: &Ra
     ui.painter().rect_filled(
         active_rect,
         rail_radius,
-        tokens::slider_track_active(dark_mode),
+        tokens::slider_track_active(runtime),
     );
 
     let thumb_pressed = response.is_pointer_button_down_on() || response.dragged();
     let thumb_hovered = response.hovered() || response.has_focus();
     let thumb_fill = if thumb_pressed {
-        tokens::slider_thumb_active_fill(dark_mode)
+        tokens::slider_thumb_active_fill(runtime)
     } else if thumb_hovered {
-        tokens::slider_thumb_hover_fill(dark_mode)
+        tokens::slider_thumb_hover_fill(runtime)
     } else {
-        tokens::slider_thumb_fill(dark_mode)
+        tokens::slider_thumb_fill(runtime)
     };
     let thumb_border = if thumb_pressed {
-        tokens::slider_thumb_active_border(dark_mode)
+        tokens::slider_thumb_active_border(runtime)
     } else if thumb_hovered {
-        tokens::slider_thumb_hover_border(dark_mode)
+        tokens::slider_thumb_hover_border(runtime)
     } else {
-        tokens::slider_thumb_border(dark_mode)
+        tokens::slider_thumb_border(runtime)
     };
     ui.painter().circle(
         thumb_center,
@@ -226,8 +226,8 @@ impl From<(Id, f32)> for NumberInput {
 
 fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Response {
     with_input_chrome(ui, |ui| {
-        let dark_mode = ui.visuals().dark_mode;
-        ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(dark_mode);
+        let runtime = crate::theme::runtime_for_ui(ui);
+        ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(runtime);
         ui.push_id(props.id, |ui| {
             let mut drag_value = egui::DragValue::new(value)
                 .range(props.range)
@@ -256,7 +256,7 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
                         typography::label_font(),
                         props
                             .prefix_tint
-                            .unwrap_or(tokens::text_secondary(dark_mode)),
+                            .unwrap_or(tokens::text_secondary(runtime)),
                     );
                 }
             }

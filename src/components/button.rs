@@ -272,7 +272,7 @@ impl<'a> From<&'a str> for Button<'a> {
 impl ComponentUi<'_> {
     pub fn button<'a>(&mut self, props: impl Into<Button<'a>>) -> egui::Response {
         let props = self.overrides.button.apply(props.into());
-        draw_button(self.raw_mut(), props)
+        draw_button(self.ui_mut(), props)
     }
 }
 
@@ -295,16 +295,16 @@ struct ResolvedButtonStyle {
 }
 
 fn resolve_button_style(
-    dark_mode: bool,
+    runtime: crate::theme::ThemeRuntime,
     variant: ButtonVariant,
     size: ControlSize,
     color_override: Option<Color>,
     icon_tint_override: Option<Color32>,
 ) -> ResolvedButtonStyle {
-    let secondary_fg = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    let link_idle = Stroke::new(1.0, tokens::text_secondary(dark_mode));
-    let link_active = Stroke::new(1.0, tokens::text_primary(dark_mode));
-    let primary_fg = Stroke::new(1.0, tokens::primary_fg(dark_mode));
+    let secondary_fg = Stroke::new(1.0, tokens::text_primary(runtime));
+    let link_idle = Stroke::new(1.0, tokens::text_secondary(runtime));
+    let link_active = Stroke::new(1.0, tokens::text_primary(runtime));
+    let primary_fg = Stroke::new(1.0, tokens::primary_fg(runtime));
     let (button_padding, min_size) = match size {
         ControlSize::Sm => (
             egui::vec2(10.0, 5.0),
@@ -321,41 +321,41 @@ fn resolve_button_style(
 
     let mut resolved = match variant {
         ButtonVariant::Primary => ResolvedButtonStyle {
-            inactive_fill: tokens::primary_bg(dark_mode),
-            hovered_fill: tokens::primary_hover_bg(dark_mode),
-            active_fill: tokens::primary_active_bg(dark_mode),
+            inactive_fill: tokens::primary_bg(runtime),
+            hovered_fill: tokens::primary_hover_bg(runtime),
+            active_fill: tokens::primary_active_bg(runtime),
             inactive_stroke: Stroke::NONE,
             hovered_stroke: Stroke::NONE,
             active_stroke: Stroke::NONE,
             inactive_fg: primary_fg,
             hovered_fg: primary_fg,
             active_fg: primary_fg,
-            label_color: Some(tokens::primary_fg(dark_mode)),
-            icon_tint: tokens::primary_fg(dark_mode),
+            label_color: Some(tokens::primary_fg(runtime)),
+            icon_tint: tokens::primary_fg(runtime),
             frame: true,
             button_padding,
             min_size,
         },
         ButtonVariant::Secondary => ResolvedButtonStyle {
-            inactive_fill: tokens::button_secondary_bg(dark_mode),
-            hovered_fill: tokens::button_secondary_hover_bg(dark_mode),
-            active_fill: tokens::button_secondary_active_bg(dark_mode),
-            inactive_stroke: Stroke::new(1.0, tokens::button_secondary_border(dark_mode)),
-            hovered_stroke: Stroke::new(1.0, tokens::button_secondary_hover_border(dark_mode)),
-            active_stroke: Stroke::new(1.0, tokens::button_secondary_active_border(dark_mode)),
+            inactive_fill: tokens::button_secondary_bg(runtime),
+            hovered_fill: tokens::button_secondary_hover_bg(runtime),
+            active_fill: tokens::button_secondary_active_bg(runtime),
+            inactive_stroke: Stroke::new(1.0, tokens::button_secondary_border(runtime)),
+            hovered_stroke: Stroke::new(1.0, tokens::button_secondary_hover_border(runtime)),
+            active_stroke: Stroke::new(1.0, tokens::button_secondary_active_border(runtime)),
             inactive_fg: secondary_fg,
             hovered_fg: secondary_fg,
             active_fg: secondary_fg,
             label_color: None,
-            icon_tint: tokens::text_primary(dark_mode),
+            icon_tint: tokens::text_primary(runtime),
             frame: true,
             button_padding,
             min_size,
         },
         ButtonVariant::Ghost => ResolvedButtonStyle {
             inactive_fill: tokens::TRANSPARENT,
-            hovered_fill: tokens::button_secondary_hover_bg(dark_mode),
-            active_fill: tokens::button_secondary_active_bg(dark_mode),
+            hovered_fill: tokens::button_secondary_hover_bg(runtime),
+            active_fill: tokens::button_secondary_active_bg(runtime),
             inactive_stroke: Stroke::NONE,
             hovered_stroke: Stroke::NONE,
             active_stroke: Stroke::NONE,
@@ -363,7 +363,7 @@ fn resolve_button_style(
             hovered_fg: secondary_fg,
             active_fg: secondary_fg,
             label_color: None,
-            icon_tint: tokens::text_primary(dark_mode),
+            icon_tint: tokens::text_primary(runtime),
             frame: true,
             button_padding,
             min_size,
@@ -379,7 +379,7 @@ fn resolve_button_style(
             hovered_fg: link_active,
             active_fg: link_active,
             label_color: None,
-            icon_tint: tokens::text_secondary(dark_mode),
+            icon_tint: tokens::text_secondary(runtime),
             frame: false,
             button_padding,
             min_size,
@@ -398,8 +398,8 @@ fn resolve_button_style(
             resolved.inactive_fill = fill;
             resolved.hovered_fill = hover_fill;
             resolved.active_fill = active_fill;
-            resolved.label_color = Some(Color32::from_rgb(250, 250, 250));
-            resolved.icon_tint = Color32::from_rgb(250, 250, 250);
+            resolved.label_color = Some(tokens::button_primary_fill_fg(runtime));
+            resolved.icon_tint = tokens::button_primary_fill_fg(runtime);
         }
     }
 
@@ -408,9 +408,9 @@ fn resolve_button_style(
 
 fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
     ui.scope(|ui| {
-        let dark_mode = ui.visuals().dark_mode;
+        let runtime = crate::theme::runtime_for_ui(ui);
         let resolved = resolve_button_style(
-            dark_mode,
+            runtime,
             props.variant,
             props.size,
             props.color,
@@ -539,7 +539,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
                 props.icon_size,
                 resolved.button_padding.x,
                 if !ui.is_enabled() {
-                    tokens::text_muted(dark_mode)
+                    tokens::text_muted(runtime)
                 } else {
                     resolved.icon_tint
                 },
@@ -555,7 +555,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
             let text_galley = ui.painter().layout_no_wrap(
                 props.label.to_owned(),
                 font_id,
-                tokens::text_primary(dark_mode),
+                tokens::text_primary(runtime),
             );
             let text_half_width = text_galley.size().x * 0.5;
             let underline_y = response.rect.center().y + text_galley.size().y * 0.36;
@@ -564,7 +564,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
                     egui::pos2(response.rect.center().x - text_half_width, underline_y),
                     egui::pos2(response.rect.center().x + text_half_width, underline_y),
                 ],
-                Stroke::new(1.0, tokens::text_primary(dark_mode)),
+                Stroke::new(1.0, tokens::text_primary(runtime)),
             );
         }
 

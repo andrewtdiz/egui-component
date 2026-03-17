@@ -53,19 +53,19 @@ impl From<(f32, f32)> for Progress {
 
 impl ComponentUi<'_> {
     pub fn progress(&mut self, value: f32, props: impl Into<Progress>) -> Response {
-        draw_progress(self.raw_mut(), value, props.into())
+        draw_progress(self.ui_mut(), value, props.into())
     }
 }
 
 fn draw_progress(ui: &mut Ui, value: f32, props: Progress) -> Response {
     ui.scope(|ui| {
-        let dark_mode = ui.visuals().dark_mode;
-        ui.visuals_mut().extreme_bg_color = tokens::input_background(dark_mode);
+        let runtime = crate::theme::runtime_for_ui(ui);
+        ui.visuals_mut().extreme_bg_color = tokens::input_background(runtime);
         ui.add_sized(
             [props.width, props.height],
             egui::ProgressBar::new(value.clamp(0.0, 1.0))
                 .text("")
-                .fill(tokens::primary_bg(dark_mode)),
+                .fill(tokens::primary_bg(runtime)),
         )
     })
     .inner

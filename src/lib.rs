@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod components;
+pub mod layout;
 pub mod icons {
     pub use crate::ui::icons::{image, setup, svg_source};
 }
@@ -19,10 +20,13 @@ pub use catalog::{
 };
 #[cfg(feature = "showcase")]
 pub use error::{ComponentLibraryError, Result};
-pub use theme::ThemeMode;
+pub use theme::{BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette, ThemeShadows, ThemeSpec};
 
 pub mod prelude {
     pub use crate::components::{
+        AudioPlayback,
+        AudioPlaybackResult,
+        AudioPlaybackState,
         Button,
         ButtonGroup,
         ButtonLabelWeight,
@@ -37,7 +41,6 @@ pub mod prelude {
         Combobox,
         Command,
         CommandItem,
-        ComponentUi,
         ComponentUiExt,
         ControlSize,
         Dialogue,
@@ -67,6 +70,7 @@ pub mod prelude {
         MenuBarState,
         NumberInput,
         NumberInputAxis,
+        Pagination,
         Progress,
         Select,
         Slider,
@@ -81,5 +85,5 @@ pub mod prelude {
         // xtask:prelude-exports:start
         // xtask:prelude-exports:end
     };
-    pub use crate::theme::ThemeMode;
+    pub use crate::theme::{BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette, ThemeShadows, ThemeSpec};
 }

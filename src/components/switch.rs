@@ -1,6 +1,7 @@
 use super::{api::ComponentUi, common::ControlSize};
+use crate::layout;
 use crate::ui::tokens;
-use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
+use egui::{CornerRadius, Response, Stroke, StrokeKind, Ui};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Switch<'a> {
@@ -52,27 +53,24 @@ impl<'a> From<&'a str> for Switch<'a> {
 
 impl ComponentUi<'_> {
     pub fn switch<'a>(&mut self, value: &mut bool, props: impl Into<Switch<'a>>) -> Response {
-        draw_switch(self.raw_mut(), value, props.into())
+        draw_switch(self.ui_mut(), value, props.into())
     }
 }
 
 fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
     match props.label {
         Some(label) => {
-            ui.horizontal(|ui| {
+            layout::row().gap(10.0).show(ui, |ui| {
                 let label_response = ui.add(
                     egui::Label::new(
                         egui::RichText::new(label)
                             .size(12.0)
-                            .color(tokens::text_primary(ui.visuals().dark_mode)),
+                            .color(tokens::text_primary(crate::theme::runtime_for_ui(ui))),
                     )
                     .selectable(false),
                 );
-                let switch_response = ui
-                    .with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        draw_switch_control(ui, value, props.size)
-                    })
-                    .inner;
+                let _ = layout::spacer().show(ui);
+                let switch_response = draw_switch_control(ui, value, props.size);
                 label_response.union(switch_response)
             })
             .inner
@@ -82,7 +80,7 @@ fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
 }
 
 fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: ControlSize) -> Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let metrics = match size {
         ControlSize::Md => SwitchMetrics {
             width: 42.0,
@@ -107,8 +105,8 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: ControlSize) -> Resp
     }
 
     let t = ui.ctx().animate_bool(response.id, *value);
-    let on_fill = tokens::primary_bg(dark_mode);
-    let fill = tokens::switch_off_bg(dark_mode).lerp_to_gamma(on_fill, t);
+    let on_fill = tokens::primary_bg(runtime);
+    let fill = tokens::switch_off_bg(runtime).lerp_to_gamma(on_fill, t);
     ui.painter().rect(
         rect,
         CornerRadius::same(metrics.corner_radius),
@@ -122,7 +120,7 @@ fn draw_switch_control(ui: &mut Ui, value: &mut bool, size: ControlSize) -> Resp
         t,
     );
     let knob_color =
-        tokens::switch_knob_off(dark_mode).lerp_to_gamma(tokens::primary_fg(dark_mode), t);
+        tokens::switch_knob_off(runtime).lerp_to_gamma(tokens::primary_fg(runtime), t);
     ui.painter().circle_filled(
         egui::pos2(knob_x, rect.center().y),
         metrics.knob_radius,

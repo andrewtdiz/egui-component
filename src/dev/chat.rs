@@ -37,7 +37,7 @@ pub(crate) fn run_chat_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            theme::install(&creation_context.egui_ctx, ThemeMode::Dark);
+            theme::install(&creation_context.egui_ctx, theme::ThemeSpec::default(), ThemeMode::Dark);
             Ok(Box::new(ChatWindowApp {
                 state: ChatExampleState::default(),
             }))
@@ -116,47 +116,40 @@ impl Default for ChatExampleState {
 
 impl ChatExampleState {
     fn draw(&mut self, context: &Context) {
+        let dark_runtime = crate::theme::runtime_for_context(context).with_mode(crate::theme::ThemeMode::Dark);
         SidePanel::left("chat_sidebar")
             .resizable(false)
             .exact_width(SIDEBAR_WIDTH)
             .frame(
                 Frame::new()
-                    .fill(tokens::muted_surface(true))
+                    .fill(tokens::muted_surface(dark_runtime))
                     .stroke(Stroke::NONE)
                     .inner_margin(Margin::symmetric(8, 10)),
             )
-            .show(context, |ui| {
-                theme::apply_component_theme(ui);
-                self.draw_sidebar(ui);
-            });
+            .show(context, |ui| self.draw_sidebar(ui));
 
         TopBottomPanel::bottom("chat_composer")
             .resizable(false)
             .frame(
                 Frame::new()
-                    .fill(tokens::app_background(true))
+                    .fill(tokens::app_background(dark_runtime))
                     .stroke(Stroke::NONE)
                     .inner_margin(Margin::symmetric(14, 10)),
             )
-            .show(context, |ui| {
-                theme::apply_component_theme(ui);
-                self.draw_composer(ui);
-            });
+            .show(context, |ui| self.draw_composer(ui));
 
         CentralPanel::default()
             .frame(
                 Frame::new()
-                    .fill(tokens::app_background(true))
+                    .fill(tokens::app_background(dark_runtime))
                     .stroke(Stroke::NONE)
                     .inner_margin(Margin::symmetric(18, 10)),
             )
-            .show(context, |ui| {
-                theme::apply_component_theme(ui);
-                self.draw_conversation(context, ui);
-            });
+            .show(context, |ui| self.draw_conversation(context, ui));
     }
 
     fn draw_sidebar(&mut self, ui: &mut Ui) {
+        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         ui.spacing_mut().item_spacing.y = 6.0;
 
         ui.horizontal(|ui| {
@@ -164,7 +157,7 @@ impl ChatExampleState {
             ui.label(
                 RichText::new("Threads")
                     .size(15.0)
-                    .color(tokens::text_primary(true)),
+                    .color(tokens::text_primary(dark_runtime)),
             );
         });
         ui.add_space(6.0);
@@ -187,7 +180,7 @@ impl ChatExampleState {
         ui.label(
             RichText::new("Recent chats")
                 .size(typography::SMALL_SIZE)
-                .color(tokens::text_muted(true))
+                .color(tokens::text_muted(dark_runtime))
                 .family(FontFamily::Proportional),
         );
         ui.add_space(2.0);
@@ -221,6 +214,7 @@ impl ChatExampleState {
     }
 
     fn draw_conversation(&mut self, context: &Context, ui: &mut Ui) {
+        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         let thread_id = self.current_thread().id;
         self.conversation_scroll.ensure_thread(thread_id);
         let stick_to_end = self.conversation_scroll.stick_to_end;
@@ -239,7 +233,7 @@ impl ChatExampleState {
                     ui.label(
                         RichText::new(thread.title.as_str())
                             .size(22.0)
-                            .color(tokens::text_primary(true)),
+                            .color(tokens::text_primary(dark_runtime)),
                     );
                     ui.add_space(10.0);
 
@@ -277,6 +271,7 @@ impl ChatExampleState {
     }
 
     fn draw_composer(&mut self, ui: &mut Ui) {
+        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         let can_send = !self.composer_text.trim().is_empty() && self.streaming.is_none();
         let composer_width = ui.available_width().min(COMPOSER_MAX_WIDTH);
         let mut send_clicked = false;
@@ -286,7 +281,7 @@ impl ChatExampleState {
 
             let text_edit = egui::TextEdit::multiline(&mut self.composer_text)
                 .hint_text(
-                    RichText::new("Ask for follow-up changes").color(tokens::text_muted(true)),
+                    RichText::new("Ask for follow-up changes").color(tokens::text_muted(dark_runtime)),
                 )
                 .frame(false)
                 .font(typography::body_font())
@@ -618,13 +613,14 @@ fn draw_thread_row(
     selected: bool,
     is_placeholder: bool,
 ) -> egui::Response {
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     let desired_size = egui::vec2(ui.available_width(), THREAD_ROW_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
     let fill = tokens::row_bg(
         selected,
         response.is_pointer_button_down_on(),
         response.hovered(),
-        true,
+        crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark),
     );
 
     ui.painter().rect(
@@ -649,21 +645,21 @@ fn draw_thread_row(
         Align2::LEFT_TOP,
         thread.title.as_str(),
         typography::semibold_font(typography::LABEL_SIZE),
-        tokens::text_primary(true),
+        tokens::text_primary(dark_runtime),
     );
     ui.painter().text(
         preview_pos,
         Align2::LEFT_TOP,
         preview_text,
         typography::small_font(),
-        tokens::text_muted(true),
+        tokens::text_muted(dark_runtime),
     );
     ui.painter().text(
         time_pos,
         Align2::RIGHT_TOP,
         thread.updated_at.as_str(),
         typography::small_font(),
-        tokens::text_muted(true),
+        tokens::text_muted(dark_runtime),
     );
 
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -677,17 +673,19 @@ fn draw_message(ui: &mut Ui, message: &ChatMessage) {
 }
 
 fn draw_user_message(ui: &mut Ui, message: &ChatMessage) {
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
         ui.set_max_width(460.0);
         ui.label(
             RichText::new(message.body.as_str())
                 .size(14.0)
-                .color(tokens::text_primary(true)),
+                .color(tokens::text_primary(dark_runtime)),
         );
     });
 }
 
 fn draw_assistant_message(ui: &mut Ui, message: &ChatMessage) {
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     let mut body = message.body.clone();
     if message.streaming {
         body.push_str("  ");
@@ -701,7 +699,7 @@ fn draw_assistant_message(ui: &mut Ui, message: &ChatMessage) {
         ui.label(
             RichText::new(paragraph.trim_end())
                 .size(14.0)
-                .color(tokens::text_secondary(true)),
+                .color(tokens::text_secondary(dark_runtime)),
         );
         ui.add_space(8.0);
     }
@@ -711,14 +709,14 @@ fn draw_assistant_message(ui: &mut Ui, message: &ChatMessage) {
         ui.label(
             RichText::new("Mock commands")
                 .size(typography::SMALL_SIZE)
-                .color(tokens::text_muted(true)),
+                .color(tokens::text_muted(dark_runtime)),
         );
 
         if message.commands.is_empty() {
             ui.label(
                 RichText::new("Waiting for generated command suggestions...")
                     .size(12.0)
-                    .color(tokens::text_muted(true)),
+                    .color(tokens::text_muted(dark_runtime)),
             );
         } else {
             for command in &message.commands {
@@ -729,7 +727,7 @@ fn draw_assistant_message(ui: &mut Ui, message: &ChatMessage) {
 }
 
 fn draw_command_row(ui: &mut Ui, command: &str) {
-    let dark_mode = true;
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         paint_sidebar_icon(ui, "sparkles");
@@ -737,16 +735,17 @@ fn draw_command_row(ui: &mut Ui, command: &str) {
             RichText::new(command)
                 .size(12.5)
                 .family(FontFamily::Monospace)
-                .color(tokens::text_primary(dark_mode)),
+                .color(tokens::text_primary(dark_runtime)),
         );
     });
 }
 
 fn draw_empty_state(ui: &mut Ui) {
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     ui.label(
         RichText::new("Start a new thread")
             .size(16.0)
-            .color(tokens::text_primary(true)),
+            .color(tokens::text_primary(dark_runtime)),
     );
     ui.add_space(4.0);
     ui.label(
@@ -754,7 +753,7 @@ fn draw_empty_state(ui: &mut Ui) {
             "Type a message below and the assistant will fake-stream a response with a mock commands section.",
         )
         .size(13.0)
-        .color(tokens::text_secondary(true)),
+        .color(tokens::text_secondary(dark_runtime)),
     );
 }
 
@@ -771,8 +770,9 @@ fn center_column(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui)) {
 }
 
 fn paint_sidebar_icon(ui: &mut Ui, icon_name: &str) {
+    let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
     if let Some(image) = icons::image(ui.ctx(), icon_name, 14.0) {
-        let _ = ui.add(image.tint(tokens::text_muted(true)));
+        let _ = ui.add(image.tint(tokens::text_muted(dark_runtime)));
     }
 }
 
@@ -791,7 +791,6 @@ fn draw_jump_to_end_button(context: &Context, conversation_rect: egui::Rect) -> 
         .fixed_pos(button_rect.min)
         .interactable(true)
         .show(context, |ui| {
-            theme::apply_component_theme(ui);
             draw_round_icon_button(
                 ui,
                 "arrow-down",
@@ -811,7 +810,7 @@ fn draw_round_icon_button(
     enabled: bool,
     size: f32,
 ) -> egui::Response {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let sense = if enabled {
         Sense::click()
     } else {
@@ -820,26 +819,26 @@ fn draw_round_icon_button(
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), sense);
     let (base_fill, hover_fill, active_fill, icon_fill) = match variant {
         ButtonVariant::Primary => (
-            tokens::primary_bg(dark_mode),
-            tokens::primary_hover_bg(dark_mode),
-            tokens::primary_active_bg(dark_mode),
-            tokens::primary_fg(dark_mode),
+            tokens::primary_bg(runtime),
+            tokens::primary_hover_bg(runtime),
+            tokens::primary_active_bg(runtime),
+            tokens::primary_fg(runtime),
         ),
         ButtonVariant::Secondary => (
-            tokens::muted_surface(dark_mode),
-            tokens::row_hover_bg(dark_mode),
-            tokens::row_selected_bg(dark_mode),
-            tokens::text_primary(dark_mode),
+            tokens::muted_surface(runtime),
+            tokens::row_hover_bg(runtime),
+            tokens::row_selected_bg(runtime),
+            tokens::text_primary(runtime),
         ),
         ButtonVariant::Ghost | ButtonVariant::Link => (
             tokens::TRANSPARENT,
-            tokens::row_hover_bg(dark_mode),
-            tokens::row_active_bg(dark_mode),
-            tokens::text_secondary(dark_mode),
+            tokens::row_hover_bg(runtime),
+            tokens::row_active_bg(runtime),
+            tokens::text_secondary(runtime),
         ),
     };
     let fill = if !enabled {
-        tokens::muted_surface(dark_mode)
+        tokens::muted_surface(runtime)
     } else if response.is_pointer_button_down_on() {
         active_fill
     } else if response.hovered() {
@@ -850,7 +849,7 @@ fn draw_round_icon_button(
     let icon_tint = if enabled {
         icon_fill
     } else {
-        tokens::text_muted(dark_mode)
+        tokens::text_muted(runtime)
     };
 
     if fill != tokens::TRANSPARENT {

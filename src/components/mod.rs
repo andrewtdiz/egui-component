@@ -1,5 +1,6 @@
 mod api;
 // xtask:component-modules:start
+mod audio_playback;
 mod button;
 mod button_group;
 mod card;
@@ -20,6 +21,7 @@ mod input;
 mod kbd;
 mod label;
 mod menu_bar;
+mod pagination;
 mod progress;
 mod select;
 mod separator;
@@ -32,6 +34,7 @@ mod tooltip;
 
 pub use api::{ComponentUi, ComponentUiExt};
 // xtask:component-exports:start
+pub use audio_playback::{AudioPlayback, AudioPlaybackResult, AudioPlaybackState};
 pub use button::{Button, ButtonLabelWeight, ButtonOverride, ButtonVariant};
 pub use button_group::ButtonGroup;
 pub use card::{Card, CardOverride};
@@ -54,6 +57,7 @@ pub use input::{TextInput, TextInputOverride};
 pub use kbd::{Kbd, KbdGroup};
 pub use label::{Label, LabelOverride, LabelTone, LabelWeight};
 pub use menu_bar::{MenuBar, MenuBarItem, MenuBarState};
+pub use pagination::Pagination;
 pub use progress::Progress;
 pub use select::Select;
 pub use slider::{NumberInput, NumberInputAxis, Slider};

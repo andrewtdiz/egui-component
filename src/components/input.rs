@@ -84,13 +84,13 @@ impl ComponentUi<'_> {
         props: impl Into<TextInput<'a>>,
     ) -> egui::Response {
         let props = self.overrides.text_input.apply(props.into());
-        draw_text_input(self.raw_mut(), value, props)
+        draw_text_input(self.ui_mut(), value, props)
     }
 }
 
 fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egui::Response {
     with_input_chrome(ui, |ui| {
-        let dark_mode = ui.visuals().dark_mode;
+        let runtime = crate::theme::runtime_for_ui(ui);
         let mut text_edit = egui::TextEdit::singleline(value)
             .horizontal_align(Align::Min)
             .vertical_align(Align::Center)
@@ -102,7 +102,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
         if let Some(placeholder) = props.placeholder {
             text_edit = text_edit.hint_text(
                 egui::RichText::new(placeholder)
-                    .color(tokens::text_muted(dark_mode))
+                    .color(tokens::text_muted(runtime))
                     .weak(),
             );
         }
@@ -110,13 +110,13 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
         let response = ui.add_sized([props.width, ui.spacing().interact_size.y], text_edit);
         let focused = response.has_focus();
         let hovered = response.hovered();
-        let fill = tokens::input_bg(dark_mode, focused, hovered);
-        let stroke = tokens::input_stroke(dark_mode, focused, hovered);
+        let fill = tokens::input_bg(runtime, focused, hovered);
+        let stroke = tokens::input_stroke(runtime, focused, hovered);
         ui.painter().set(
             background_slot,
             egui::epaint::RectShape::new(
                 response.rect,
-                CornerRadius::same(tokens::RADIUS_MD),
+                CornerRadius::same(tokens::radius_md(runtime)),
                 fill,
                 stroke,
                 StrokeKind::Inside,

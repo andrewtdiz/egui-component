@@ -1,11 +1,12 @@
 use super::{api::ComponentUi, Button, ButtonVariant};
+use crate::layout;
 use crate::primitives::{
     popup::{popup_panel, PopupPanel},
     row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
 };
 use crate::ui::{icons, tokens, typography};
 use egui::{
-    Align2, CornerRadius, CursorIcon, FontFamily, FontId, Margin, Popup, Rect, Response, Stroke,
+    Align2, CornerRadius, CursorIcon, FontFamily, FontId, Popup, Rect, Response, Stroke,
     StrokeKind, Ui,
 };
 
@@ -199,24 +200,21 @@ impl ComponentUi<'_> {
             .button(Button::new(props.trigger_label).variant(props.trigger_variant))
             .on_hover_cursor(CursorIcon::PointingHand);
 
-        let _ = self.raw_mut().scope(|ui| {
-            ui.style_mut().spacing.menu_margin = Margin::symmetric(0, 2);
-            Popup::menu(&response).show(|ui| {
-                if props.entries.is_empty() {
-                    let entries = props
-                        .options
-                        .iter()
-                        .copied()
-                        .enumerate()
-                        .map(|(index, label)| {
-                            DropdownMenuEntry::Action(DropdownMenuAction::new(index, label))
-                        })
-                        .collect::<Vec<_>>();
-                    show_menu_entries_surface(ui, &entries, &mut state.action, row_width);
-                } else {
-                    show_menu_entries_surface(ui, props.entries, &mut state.action, row_width);
-                }
-            })
+        let _ = Popup::menu(&response).show(|ui| {
+            if props.entries.is_empty() {
+                let entries = props
+                    .options
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, label)| {
+                        DropdownMenuEntry::Action(DropdownMenuAction::new(index, label))
+                    })
+                    .collect::<Vec<_>>();
+                show_menu_entries_surface(ui, &entries, &mut state.action, row_width);
+            } else {
+                show_menu_entries_surface(ui, props.entries, &mut state.action, row_width);
+            }
         });
 
         (response, state)
@@ -230,19 +228,20 @@ pub(crate) fn show_menu_entries_surface(
     row_width: f32,
 ) {
     let mut ui = ComponentUi::new(ui);
-    ui.style_mut().spacing.item_spacing.y = 0.0;
     ui.set_min_width(row_width);
     ui.set_max_width(row_width);
 
     popup_panel(
-        ui.raw_mut(),
+        ui.ui_mut(),
         PopupPanel::new(row_width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
         |ui| {
-            let mut ui = ComponentUi::new(ui);
             let inner_width = inner_row_width(row_width);
             ui.set_min_width(inner_width);
             ui.set_max_width(inner_width);
-            draw_entries(&mut ui, entries, action, row_width);
+            let _ = layout::column().gap(0.0).show(ui, |ui| {
+                let mut ui = ComponentUi::new(ui);
+                draw_entries(&mut ui, entries, action, row_width);
+            });
         },
     );
 }
@@ -265,7 +264,7 @@ fn draw_entries(
             }
             DropdownMenuEntry::Submenu(submenu) => {
                 let (submenu_button, _) = draw_menu_row(
-                    ui.raw_mut(),
+                    ui.ui_mut(),
                     submenu.label,
                     submenu.icon,
                     row_width,
@@ -273,21 +272,26 @@ fn draw_entries(
                     true,
                 );
                 let _ = egui::containers::menu::SubMenu::new().show(
-                    ui.raw_mut(),
+                    ui.ui_mut(),
                     &submenu_button,
                     |ui| {
-                        let mut ui = ComponentUi::new(ui);
-                        ui.style_mut().spacing.item_spacing.y = 0.0;
                         popup_panel(
-                            ui.raw_mut(),
+                            ui,
                             PopupPanel::new(row_width)
                                 .padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
                             |ui| {
-                                let mut ui = ComponentUi::new(ui);
                                 let inner_width = inner_row_width(row_width);
                                 ui.set_min_width(inner_width);
                                 ui.set_max_width(inner_width);
-                                draw_entries(&mut ui, submenu.entries, selected_action, row_width);
+                                let _ = layout::column().gap(0.0).show(ui, |ui| {
+                                    let mut ui = ComponentUi::new(ui);
+                                    draw_entries(
+                                        &mut ui,
+                                        submenu.entries,
+                                        selected_action,
+                                        row_width,
+                                    );
+                                });
                             },
                         );
                     },
@@ -304,7 +308,7 @@ fn draw_action_row(
     row_width: f32,
 ) {
     let (response, trailing_rect) = draw_menu_row(
-        ui.raw_mut(),
+        ui.ui_mut(),
         action.label,
         action.icon,
         row_width,
@@ -312,7 +316,7 @@ fn draw_action_row(
         false,
     );
     if let (Some(shortcut), Some(trailing_rect)) = (action.shortcut, trailing_rect) {
-        draw_shortcut_keycaps(ui.raw_mut(), trailing_rect, shortcut);
+        draw_shortcut_keycaps(ui.ui_mut(), trailing_rect, shortcut);
     }
     if response.clicked() {
         *selected_action = Some(action.id);
@@ -328,7 +332,7 @@ fn draw_menu_row(
     shortcut: Option<&str>,
     submenu: bool,
 ) -> (Response, Option<Rect>) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let desired_size = egui::vec2(inner_row_width(menu_width), MENU_ROW_HEIGHT);
     let (rect, response) = row_chrome(
         ui,
@@ -338,15 +342,15 @@ fn draw_menu_row(
                 false,
                 response.is_pointer_button_down_on(),
                 response.hovered(),
-                dark_mode,
+                runtime,
             )
         },
     );
 
     let label_color = if response.hovered() || response.is_pointer_button_down_on() {
-        tokens::text_primary(dark_mode)
+        tokens::text_primary(runtime)
     } else {
-        tokens::text_secondary(dark_mode)
+        tokens::text_secondary(runtime)
     };
     let trailing_width = if submenu {
         MENU_TRAILING_ICON_SIZE
@@ -401,8 +405,8 @@ fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
         return;
     }
 
-    let dark_mode = ui.visuals().dark_mode;
-    let text_color = tokens::text_muted(dark_mode);
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let text_color = tokens::text_muted(runtime);
     let font_id = FontId::new(MENU_KEYCAP_TEXT_SIZE, FontFamily::Monospace);
     let total_width = shortcut_group_width_from_keycaps(&keycaps);
     let mut left = trailing_rect.right() - total_width;
@@ -416,9 +420,9 @@ fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
         );
         ui.painter().rect(
             key_rect,
-            CornerRadius::same(tokens::RADIUS_SM),
-            tokens::input_background(dark_mode),
-            Stroke::new(1.0, tokens::input_border(dark_mode)),
+            CornerRadius::same(tokens::radius_sm(runtime)),
+            tokens::input_background(runtime),
+            Stroke::new(1.0, tokens::input_border(runtime)),
             StrokeKind::Outside,
         );
         ui.painter().text(
@@ -436,7 +440,7 @@ fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {
     }
 }
 fn draw_submenu_indicator(ui: &mut Ui, trailing_rect: Rect) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     if let Some(image) = icons::image(ui.ctx(), "chevron-right", MENU_TRAILING_ICON_SIZE) {
         let icon_rect = Rect::from_center_size(
             trailing_rect.center(),
@@ -445,7 +449,7 @@ fn draw_submenu_indicator(ui: &mut Ui, trailing_rect: Rect) {
         // Paint directly so the submenu indicator never participates in layout after the row
         // itself has already been allocated.
         image
-            .tint(tokens::text_muted(dark_mode))
+            .tint(tokens::text_muted(runtime))
             .paint_at(ui, icon_rect);
     }
 }
@@ -479,7 +483,7 @@ fn measure_shortcut_keycaps<'a>(ui: &mut Ui, shortcut: &'a str) -> Vec<ShortcutK
         return Vec::new();
     }
 
-    let text_color = tokens::text_muted(ui.visuals().dark_mode);
+    let text_color = tokens::text_muted(crate::theme::runtime_for_ui(ui));
     let font_id = FontId::new(MENU_KEYCAP_TEXT_SIZE, FontFamily::Monospace);
     keys.into_iter()
         .map(|key| {

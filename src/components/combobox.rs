@@ -50,7 +50,6 @@ impl ComponentUi<'_> {
         props: impl Into<Combobox<'a>>,
     ) -> Response {
         let props = props.into();
-        let dark_mode = self.visuals().dark_mode;
         let input_response = self.text_input(
             query,
             TextInput::new()
@@ -69,8 +68,8 @@ impl ComponentUi<'_> {
                 })
                 .max_height(props.max_height)
                 .auto_shrink([false, false])
-                .show(ui.raw_mut(), |ui| {
-                    let mut ui = ComponentUi::new(ui);
+                .show(ui, |ui| {
+                    let runtime = crate::theme::runtime_for_ui(ui);
                     let query_lower = query.to_ascii_lowercase();
                     let mut shown = 0usize;
 
@@ -83,13 +82,13 @@ impl ComponentUi<'_> {
 
                         shown += 1;
                         let selected = *selected_index == index;
-                        if draw_option_row(ui.raw_mut(), option, selected, dark_mode).clicked() {
+                        if draw_option_row(ui, option, selected, runtime).clicked() {
                             *selected_index = index;
                         }
                     }
 
                     if shown == 0 {
-                        let _ = muted_empty_state(ui.raw_mut(), "No matches");
+                        let _ = muted_empty_state(ui, "No matches");
                     }
                 });
         });
@@ -104,19 +103,19 @@ impl ComponentUi<'_> {
     }
 }
 
-fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> Response {
+fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, runtime: crate::theme::ThemeRuntime) -> Response {
     let desired_size = egui::vec2(ui.available_width().max(96.0), ui.spacing().interact_size.y);
     let (rect, response) = row_chrome(
         ui,
         RowChrome::new(desired_size)
-            .corner_radius(tokens::RADIUS_SM)
+            .corner_radius(tokens::radius_sm(runtime))
             .stroke(egui::Stroke::NONE),
         |response| {
             tokens::row_bg(
                 selected,
                 response.is_pointer_button_down_on(),
                 response.hovered(),
-                dark_mode,
+                runtime,
             )
         },
     );
@@ -124,9 +123,9 @@ fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, dark_mode: bool) -> 
         text,
         typography::label_font(),
         if selected {
-            tokens::row_selected_text(dark_mode)
+            tokens::row_selected_text(runtime)
         } else {
-            tokens::text_secondary(dark_mode)
+            tokens::text_secondary(runtime)
         },
     );
     let _ = icon_label_row(ui, rect, &row);

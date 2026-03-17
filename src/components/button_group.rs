@@ -1,4 +1,5 @@
 use super::api::ComponentUi;
+use crate::layout;
 use crate::ui::{tokens, typography};
 use egui::{Align2, CornerRadius, CursorIcon, FontId, Id, Sense, Stroke, StrokeKind, Ui};
 
@@ -20,7 +21,7 @@ impl ComponentUi<'_> {
         selected_index: &mut usize,
         props: impl Into<ButtonGroup<'a>>,
     ) {
-        draw_button_group(self.raw_mut(), selected_index, props.into());
+        draw_button_group(self.ui_mut(), selected_index, props.into());
     }
 }
 
@@ -32,14 +33,13 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
 
     let clamped_index = (*selected_index).min(props.options.len() - 1);
     *selected_index = clamped_index;
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
 
     ui.push_id(props.id, |ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.horizontal(|ui| {
-            let button_padding_x = ui.spacing().button_padding.x;
+        layout::row().gap(0.0).show(ui, |ui| {
+            let button_padding_x = tokens::SPACING_BUTTON_PADDING_X;
             let text_font: FontId = typography::label_font();
-            let height = (ui.spacing().interact_size.y - 4.0).max(24.0);
+            let height = (tokens::SPACING_INTERACT_HEIGHT - 4.0).max(24.0);
             let mut segment_rects = Vec::with_capacity(props.options.len());
 
             for (index, label) in props.options.iter().copied().enumerate() {
@@ -49,7 +49,7 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                         .layout_no_wrap(
                             label.to_owned(),
                             text_font.clone(),
-                            tokens::text_primary(dark_mode),
+                            tokens::text_primary(runtime),
                         )
                         .size()
                         .x
@@ -60,29 +60,29 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                 segment_rects.push(rect);
 
                 let fill = if selected {
-                    tokens::row_selected_bg(dark_mode)
+                    tokens::row_selected_bg(runtime)
                 } else if response.is_pointer_button_down_on() {
-                    tokens::button_secondary_active_bg(dark_mode)
+                    tokens::button_secondary_active_bg(runtime)
                 } else if response.hovered() {
-                    tokens::button_secondary_hover_bg(dark_mode)
+                    tokens::button_secondary_hover_bg(runtime)
                 } else {
-                    tokens::button_secondary_bg(dark_mode)
+                    tokens::button_secondary_bg(runtime)
                 };
                 let corner = if props.options.len() == 1 {
-                    CornerRadius::same(tokens::RADIUS_MD)
+                    CornerRadius::same(tokens::radius_md(runtime))
                 } else if index == 0 {
                     CornerRadius {
-                        nw: tokens::RADIUS_MD,
+                        nw: tokens::radius_md(runtime),
                         ne: 0,
-                        sw: tokens::RADIUS_MD,
+                        sw: tokens::radius_md(runtime),
                         se: 0,
                     }
                 } else if index == props.options.len() - 1 {
                     CornerRadius {
                         nw: 0,
-                        ne: tokens::RADIUS_MD,
+                        ne: tokens::radius_md(runtime),
                         sw: 0,
-                        se: tokens::RADIUS_MD,
+                        se: tokens::radius_md(runtime),
                     }
                 } else {
                     CornerRadius::ZERO
@@ -96,9 +96,9 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                     label,
                     text_font.clone(),
                     if selected {
-                        tokens::row_selected_text(dark_mode)
+                        tokens::row_selected_text(runtime)
                     } else {
-                        tokens::text_primary(dark_mode)
+                        tokens::text_primary(runtime)
                     },
                 );
 
@@ -111,10 +111,10 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
 
             if let (Some(first), Some(last)) = (segment_rects.first(), segment_rects.last()) {
                 let group_rect = first.union(*last);
-                let border = Stroke::new(1.0, tokens::button_secondary_border(dark_mode));
+                let border = Stroke::new(1.0, tokens::button_secondary_border(runtime));
                 ui.painter().rect(
                     group_rect,
-                    CornerRadius::same(tokens::RADIUS_MD),
+                    CornerRadius::same(tokens::radius_md(runtime)),
                     tokens::TRANSPARENT,
                     border,
                     StrokeKind::Outside,

@@ -19,7 +19,7 @@ impl ColorInput {
 
 impl ComponentUi<'_> {
     pub fn color_input(&mut self, value: &mut Color32, props: impl Into<ColorInput>) -> Response {
-        draw_color_input(self.raw_mut(), value, props.into())
+        draw_color_input(self.ui_mut(), value, props.into())
     }
 }
 

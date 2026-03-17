@@ -36,7 +36,7 @@ impl From<Color32> for Color {
 
 impl ComponentUi<'_> {
     pub fn color(&mut self, props: impl Into<Color>) -> Response {
-        draw_color(self.raw_mut(), props.into())
+        draw_color(self.ui_mut(), props.into())
     }
 }
 

@@ -1,12 +1,16 @@
-use super::{api::ComponentUi, Image};
+use super::{
+    api::{with_component_overrides, ComponentUi},
+    Image,
+};
 use crate::{
-    primitives::surface::{surface_frame_builder, SurfaceFrame},
-    ui::{icons, tokens},
+    primitives::{
+        playback_button_response,
+        surface::{surface_frame_builder, SurfaceFrame},
+        PlaybackButtonState, PlaybackButtonStyle,
+    },
+    ui::tokens,
 };
-use egui::{
-    CornerRadius, CursorIcon, Layout, Rect, Response, Sense, Stroke, StrokeKind, Ui, UiBuilder,
-    Vec2,
-};
+use egui::{CornerRadius, CursorIcon, Layout, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2};
 
 const PLAYBACK_BUTTON_SIZE: f32 = 30.0;
 const PLAYBACK_ICON_SIZE: f32 = 12.0;
@@ -109,7 +113,7 @@ impl ComponentUi<'_> {
     pub fn image_tile_with_body<'a>(
         &mut self,
         props: impl Into<ImageTile<'a>>,
-        add_body: impl FnOnce(&mut ComponentUi<'_>),
+        add_body: impl FnOnce(&mut Ui),
     ) -> (Response, ImageTileState) {
         draw_image_tile(self, props.into(), true, add_body)
     }
@@ -119,20 +123,20 @@ fn draw_image_tile(
     ui: &mut ComponentUi<'_>,
     props: ImageTile<'_>,
     show_body: bool,
-    add_body: impl FnOnce(&mut ComponentUi<'_>),
+    add_body: impl FnOnce(&mut Ui),
 ) -> (Response, ImageTileState) {
-    let overrides = ui.overrides;
-    let dark_mode = ui.visuals().dark_mode;
-    let style = resolve_image_tile_style(dark_mode, props.selected);
+    let overrides = ui.overrides();
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let style = resolve_image_tile_style(runtime, props.selected);
     let image_size = props.resolved_image_size();
     let mut playback_response = None;
 
     let tile = surface_frame_builder(
         SurfaceFrame::new(style.tile_fill, style.tile_stroke)
-            .corner_radius(tokens::RADIUS_LG)
+            .corner_radius(tokens::radius_lg(runtime))
             .padding(tokens::INPUT_PADDING_X, tokens::INPUT_PADDING_Y),
     )
-    .show(ui.raw_mut(), |ui| {
+    .show(ui.ui_mut(), |ui| {
         let _ = ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
             ui.set_min_width(image_size.x);
             ui.set_max_width(image_size.x);
@@ -140,7 +144,7 @@ fn draw_image_tile(
             let image_rect = if props.image_frame {
                 surface_frame_builder(
                     SurfaceFrame::new(style.image_fill, style.image_stroke)
-                        .corner_radius(tokens::RADIUS_MD),
+                        .corner_radius(tokens::radius_md(runtime)),
                 )
                 .show(ui, |ui| {
                     let mut components = ComponentUi::with_overrides(ui, overrides);
@@ -148,7 +152,7 @@ fn draw_image_tile(
                         props
                             .image
                             .fit_to_exact_size(image_size)
-                            .corner_radius(tokens::RADIUS_MD),
+                            .corner_radius(tokens::radius_md(runtime)),
                     );
                 })
                 .response
@@ -160,7 +164,7 @@ fn draw_image_tile(
                         props
                             .image
                             .fit_to_exact_size(image_size)
-                            .corner_radius(tokens::RADIUS_LG),
+                            .corner_radius(tokens::radius_lg(runtime)),
                     )
                     .rect
             };
@@ -172,8 +176,7 @@ fn draw_image_tile(
 
             if show_body {
                 ui.add_space(tokens::SPACING_ITEM_Y);
-                let mut components = ComponentUi::with_overrides(ui, overrides);
-                add_body(&mut components);
+                with_component_overrides(ui, overrides, add_body);
             }
         });
     });
@@ -197,9 +200,9 @@ fn draw_image_tile(
     };
 
     if outline_stroke != Stroke::NONE {
-        ui.raw_mut().painter().rect_stroke(
+        ui.ui_mut().painter().rect_stroke(
             tile_rect,
-            CornerRadius::same(tokens::RADIUS_LG),
+            CornerRadius::same(tokens::radius_lg(runtime)),
             outline_stroke,
             StrokeKind::Outside,
         );
@@ -233,34 +236,31 @@ struct ImageTileStyle {
     playback_icon_tint: egui::Color32,
 }
 
-fn resolve_image_tile_style(dark_mode: bool, selected: bool) -> ImageTileStyle {
+fn resolve_image_tile_style(runtime: crate::theme::ThemeRuntime, selected: bool) -> ImageTileStyle {
+    let light_runtime = runtime.with_mode(crate::theme::ThemeMode::Light);
     ImageTileStyle {
         tile_fill: if selected {
-            if dark_mode {
-                egui::Color32::from_rgb(21, 74, 39)
-            } else {
-                egui::Color32::from_rgb(224, 241, 220)
-            }
+            tokens::image_tile_selected_fill(runtime)
         } else {
-            tokens::muted_surface(dark_mode)
+            tokens::muted_surface(runtime)
         },
         tile_stroke: Stroke::new(
             1.0,
             if selected {
-                egui::Color32::from_rgb(88, 164, 76)
+                tokens::image_tile_selected_stroke(runtime)
             } else {
-                tokens::separator(dark_mode)
+                tokens::separator(runtime)
             },
         ),
-        tile_hover_stroke: Stroke::new(1.0, tokens::input_hover_border(dark_mode)),
-        tile_active_stroke: tokens::input_focus_stroke(dark_mode),
-        image_fill: tokens::card_background(dark_mode),
-        image_stroke: Stroke::new(1.0, tokens::separator(dark_mode)),
-        playback_fill: tokens::primary_bg(false),
-        playback_hover_fill: tokens::primary_hover_bg(false),
-        playback_active_fill: tokens::primary_active_bg(false),
-        playback_stroke: Stroke::new(1.0, tokens::separator(false)),
-        playback_icon_tint: tokens::primary_fg(false),
+        tile_hover_stroke: Stroke::new(1.0, tokens::input_hover_border(runtime)),
+        tile_active_stroke: tokens::input_focus_stroke(runtime),
+        image_fill: tokens::card_background(runtime),
+        image_stroke: Stroke::new(1.0, tokens::separator(runtime)),
+        playback_fill: tokens::primary_bg(light_runtime),
+        playback_hover_fill: tokens::primary_hover_bg(light_runtime),
+        playback_active_fill: tokens::primary_active_bg(light_runtime),
+        playback_stroke: Stroke::new(1.0, tokens::separator(light_runtime)),
+        playback_icon_tint: tokens::primary_fg(light_runtime),
     }
 }
 
@@ -271,46 +271,25 @@ fn draw_playback_button(
     style: &ImageTileStyle,
 ) -> Response {
     let button_rect = playback_button_rect(image_rect);
-    ui.scope_builder(
-        UiBuilder::new()
-            .max_rect(button_rect)
-            .layout(Layout::centered_and_justified(egui::Direction::LeftToRight)),
-        |ui| {
-            let (rect, response) =
-                ui.allocate_exact_size(Vec2::splat(PLAYBACK_BUTTON_SIZE), Sense::click());
-
-            let fill = if response.is_pointer_button_down_on() {
-                style.playback_active_fill
-            } else if response.hovered() {
-                style.playback_hover_fill
-            } else {
-                style.playback_fill
-            };
-
-            ui.painter()
-                .circle_filled(rect.center(), rect.width() * 0.5, fill);
-            ui.painter()
-                .circle_stroke(rect.center(), rect.width() * 0.5, style.playback_stroke);
-
-            let icon_name = match playback_state {
-                ImageTilePlaybackState::Paused => "play",
-                ImageTilePlaybackState::Playing => "pause",
-            };
-            if let Some(icon) = icons::image(ui.ctx(), icon_name, PLAYBACK_ICON_SIZE) {
-                let icon_rect =
-                    Rect::from_center_size(rect.center(), Vec2::splat(PLAYBACK_ICON_SIZE));
-                let icon_rect = if playback_state == ImageTilePlaybackState::Paused {
-                    icon_rect.translate(egui::vec2(1.0, 0.0))
-                } else {
-                    icon_rect
-                };
-                let _ = icon.tint(style.playback_icon_tint).paint_at(ui, icon_rect);
-            }
-
-            response.on_hover_cursor(CursorIcon::PointingHand)
+    playback_button_response(
+        ui,
+        button_rect,
+        ui.auto_id_with("image_tile_playback"),
+        match playback_state {
+            ImageTilePlaybackState::Paused => PlaybackButtonState::Paused,
+            ImageTilePlaybackState::Playing => PlaybackButtonState::Playing,
+        },
+        PlaybackButtonStyle {
+            icon_size: PLAYBACK_ICON_SIZE,
+            fill: style.playback_fill,
+            hover_fill: style.playback_hover_fill,
+            active_fill: style.playback_active_fill,
+            stroke: style.playback_stroke,
+            icon_tint: style.playback_icon_tint,
+            paused_icon_name: "play",
+            playing_icon_name: "pause",
         },
     )
-    .inner
 }
 
 fn playback_button_rect(image_rect: Rect) -> Rect {
@@ -482,7 +461,7 @@ mod tests {
 
         let _ = context.run(input, |context| {
             CentralPanel::default().show(context, |ui| {
-                let style = resolve_image_tile_style(ui.visuals().dark_mode, false);
+                let style = resolve_image_tile_style(crate::theme::runtime_for_ui(ui), false);
                 image_rect = ui.allocate_exact_size(vec2(216.0, 144.0), Sense::hover()).0;
                 clicked =
                     draw_playback_button(ui, image_rect, ImageTilePlaybackState::Paused, &style)

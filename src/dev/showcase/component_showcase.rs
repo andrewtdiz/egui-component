@@ -1,12 +1,12 @@
 use crate::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use crate::components::{
-    Button, ButtonOverride, ButtonVariant, Checkbox, Color, CommandItem, ComponentUi,
-    ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu, DropdownMenuEntry, Image, ImageTile,
-    ImageTilePlaybackState, ImageTileSize, Kbd, KbdGroup, Label, LabelTone, LabelWeight, MenuBar,
-    MenuBarItem, NumberInput, NumberInputAxis, Select, TabOption, TabsVariant, Toolbar, Tooltip,
-    TooltipPlacement,
+    AudioPlayback, AudioPlaybackState, Button, ButtonOverride, ButtonVariant, Checkbox, Color,
+    CommandItem, ComponentUi, ComponentUiExt, ControlSize, DialogueIntent, DropdownMenu,
+    DropdownMenuEntry, Image, ImageTile, ImageTilePlaybackState, ImageTileSize, Kbd, KbdGroup,
+    Label, LabelTone, LabelWeight, MenuBar, MenuBarItem, NumberInput, NumberInputAxis, Pagination,
+    Select, TabOption, TabsVariant, Toolbar, Tooltip, TooltipPlacement,
 };
-use crate::theme::{self, ThemeMode};
+use crate::layout;
 use crate::ui::{tokens, typography};
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Sense, Stroke, StrokeKind, Ui};
 
@@ -19,6 +19,7 @@ const TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::new(1, "Code"),
     TabOption::new(2, "History"),
 ];
+const PAGINATION_PAGE_COUNT: usize = 12;
 const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
     TabOption::with_icon(0, "Templates", "layout-template"),
     TabOption::with_icon(1, "Layouts", "layout-grid"),
@@ -278,6 +279,11 @@ const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
         section_override: None,
     },
     ShowcaseMetadata {
+        kind: ComponentKind::AudioPlayback,
+        description: "Horizontal audio row with play/pause, waveform, and actions",
+        section_override: None,
+    },
+    ShowcaseMetadata {
         kind: ComponentKind::Combobox,
         description: "Filterable option list",
         section_override: None,
@@ -307,12 +313,16 @@ const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
         description: "Grid-friendly media tile with custom body and playback overlay",
         section_override: Some(ShowcaseSection::Examples),
     },
+    ShowcaseMetadata {
+        kind: ComponentKind::Pagination,
+        description: "Previous/next pager with numbered pages and ellipsis",
+        section_override: None,
+    },
     // xtask:showcase-metadata:end
 ];
 
 #[derive(Debug, Clone)]
 pub struct ComponentShowcaseState {
-    dark_mode: bool,
     selected_component: ComponentKind,
     input_value: String,
     field_value: String,
@@ -329,6 +339,8 @@ pub struct ComponentShowcaseState {
     tab_index: usize,
     segmented_tab_index: usize,
     stacked_tab_index: usize,
+    audio_playback_state: AudioPlaybackState,
+    pagination_page: usize,
     button_group_index: usize,
     collapsible_open: bool,
     dropdown_action: Option<usize>,
@@ -346,7 +358,6 @@ pub struct ComponentShowcaseState {
 impl Default for ComponentShowcaseState {
     fn default() -> Self {
         Self {
-            dark_mode: true,
             selected_component: ComponentKind::Button,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
@@ -363,6 +374,8 @@ impl Default for ComponentShowcaseState {
             tab_index: 0,
             segmented_tab_index: 0,
             stacked_tab_index: 0,
+            audio_playback_state: AudioPlaybackState::Paused,
+            pagination_page: 2,
             button_group_index: 0,
             collapsible_open: true,
             dropdown_action: None,
@@ -379,41 +392,30 @@ impl Default for ComponentShowcaseState {
     }
 }
 
-impl ComponentShowcaseState {
-    pub(crate) fn dark_mode(&self) -> bool {
-        self.dark_mode
-    }
-}
-
 pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
     clamp_state(state);
+    layout::set_debug_overlay(ui.ctx(), false);
 
-    let theme_changed = egui::SidePanel::left("component_showcase_sidebar")
+    let _ = egui::SidePanel::left("component_showcase_sidebar")
         .default_width(238.0)
         .min_width(200.0)
         .max_width(320.0)
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(tokens::app_background(state.dark_mode))
+                .fill(tokens::app_background(crate::theme::runtime_for_context(ui.ctx())))
                 .inner_margin(egui::Margin::same(8))
-                .stroke(Stroke::new(1.0, tokens::separator(state.dark_mode))),
+                .stroke(Stroke::new(1.0, tokens::separator(crate::theme::runtime_for_context(ui.ctx())))),
         )
         .show_inside(ui, |ui| {
             let mut ui = ui.components();
-            draw_sidebar(&mut ui, state)
-        })
-        .inner;
-
-    if theme_changed {
-        *ui.style_mut() = ui.ctx().style().as_ref().clone();
-        theme::apply_component_theme(ui);
-    }
+            draw_sidebar(&mut ui, state);
+        });
 
     let _ = egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(tokens::app_background(state.dark_mode))
+                .fill(tokens::app_background(crate::theme::runtime_for_context(ui.ctx())))
                 .inner_margin(egui::Margin::same(12)),
         )
         .show_inside(ui, |ui| {
@@ -422,23 +424,7 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
         });
 }
 
-fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) -> bool {
-    let theme_changed = draw_sidebar_theme_toggle(ui, &mut state.dark_mode);
-    if theme_changed {
-        let mode = if state.dark_mode {
-            ThemeMode::Dark
-        } else {
-            ThemeMode::Light
-        };
-        theme::set_mode(ui.ctx(), mode);
-        *ui.style_mut() = ui.ctx().style().as_ref().clone();
-        theme::apply_component_theme(ui.raw_mut());
-        ui.ctx().request_repaint();
-    }
-
-    ui.add_space(2.0);
-    let _ = ui.separator();
-    ui.add_space(8.0);
+fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let _ = ui.label(
         Label::new("Components")
             .tone(LabelTone::Primary)
@@ -453,8 +439,6 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
     let _ = ui.separator();
     ui.add_space(8.0);
 
-    let dark_mode = state.dark_mode;
-
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_sidebar_scroll")
         .scroll_source(ScrollSource {
@@ -462,7 +446,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
             ..ScrollSource::default()
         })
         .auto_shrink([false, false])
-        .show(ui.raw_mut(), |ui| {
+        .show(ui.ui_mut(), |ui| {
             let mut ui = ui.components();
             ui.spacing_mut().item_spacing.y = 1.0;
             for section in [
@@ -480,12 +464,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
 
                 for definition in showcase_component_definitions_by_section(section) {
                     let selected = state.selected_component == definition.kind;
-                    if draw_sidebar_component_row(
-                        ui.raw_mut(),
-                        definition.label,
-                        selected,
-                        dark_mode,
-                    )
+                    if draw_sidebar_component_row(ui.ui_mut(), definition.label, selected)
                     .clicked()
                     {
                         state.selected_component = definition.kind;
@@ -495,68 +474,28 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) ->
                 ui.add_space(1.0);
             }
         });
-
-    theme_changed
-}
-
-fn draw_sidebar_theme_toggle(ui: &mut ComponentUi<'_>, dark_mode: &mut bool) -> bool {
-    let mut theme_changed = false;
-    let _ = ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        let _ = ui.label(
-            Label::new("Appearance")
-                .tone(LabelTone::Muted)
-                .size(typography::SMALL_SIZE)
-                .weight(LabelWeight::Semibold),
-        );
-        ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-            let moon_tint = if *dark_mode {
-                tokens::text_primary(*dark_mode)
-            } else {
-                tokens::text_muted(*dark_mode)
-            };
-            let _ = ui.icon(
-                crate::components::Icon::new("moon")
-                    .size(13.0)
-                    .tint(moon_tint),
-            );
-            let switch_response = ui.switch(dark_mode, crate::components::Switch::new().small());
-            let sun_tint = if *dark_mode {
-                tokens::text_muted(*dark_mode)
-            } else {
-                tokens::text_primary(*dark_mode)
-            };
-            let _ = ui.icon(
-                crate::components::Icon::new("sun")
-                    .size(13.0)
-                    .tint(sun_tint),
-            );
-            theme_changed = switch_response.changed();
-        });
-    });
-    theme_changed
 }
 
 fn draw_sidebar_component_row(
     ui: &mut Ui,
     label_text: &str,
     selected: bool,
-    dark_mode: bool,
 ) -> egui::Response {
+    let runtime = crate::theme::runtime_for_ui(ui);
     let desired_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
     let fill = if response.is_pointer_button_down_on() {
-        tokens::row_active_bg(dark_mode)
+        tokens::row_active_bg(runtime)
     } else if selected || response.hovered() {
-        tokens::row_selected_bg(dark_mode)
+        tokens::row_selected_bg(runtime)
     } else {
         tokens::TRANSPARENT
     };
 
     ui.painter().rect(
         rect,
-        CornerRadius::same(tokens::RADIUS_SM),
+        CornerRadius::same(tokens::radius_sm(runtime)),
         fill,
         Stroke::NONE,
         StrokeKind::Outside,
@@ -568,9 +507,9 @@ fn draw_sidebar_component_row(
         label_text,
         typography::label_font(),
         if selected || response.hovered() {
-            tokens::row_selected_text(dark_mode)
+            tokens::row_selected_text(runtime)
         } else {
-            tokens::text_secondary(dark_mode)
+            tokens::text_secondary(runtime)
         },
     );
 
@@ -580,6 +519,7 @@ fn draw_sidebar_component_row(
 fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let definition = catalog_component_definition(state.selected_component);
     let metadata = showcase_metadata(state.selected_component);
+    let overrides = ui.overrides();
 
     let _ = egui::ScrollArea::vertical()
         .id_salt("component_showcase_preview_scroll")
@@ -588,42 +528,47 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
             ..ScrollSource::default()
         })
         .auto_shrink([false, false])
-        .show(ui.raw_mut(), |ui| {
-            let mut ui = ui.components();
-            ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                let width = if matches!(
-                    state.selected_component,
-                    ComponentKind::Toolbar | ComponentKind::MenuBar
-                ) {
-                    ui.available_width().min(980.0)
-                } else {
-                    ui.available_width().clamp(260.0, 460.0)
-                };
+        .show(ui.ui_mut(), |ui| {
+            let mut ui = ComponentUi::with_overrides(ui, overrides);
+            let overrides = ui.overrides();
+            ui.ui_mut()
+                .with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    let width = if matches!(
+                        state.selected_component,
+                        ComponentKind::Toolbar | ComponentKind::MenuBar
+                    ) {
+                        ui.available_width().min(980.0)
+                    } else {
+                        ui.available_width().clamp(260.0, 460.0)
+                    };
 
-                let _ = ui.card((), |ui| {
-                    ui.set_width(width);
+                    let _ = ui.card((), |ui| {
+                        let mut ui = ui.components();
+                        ui.ui_mut().set_width(width);
 
-                    let _ = ui.label(
-                        Label::new(definition.label)
-                            .tone(LabelTone::Primary)
-                            .weight(LabelWeight::Semibold),
-                    );
-                    let _ = ui.label(
-                        Label::new(metadata.description)
-                            .tone(LabelTone::Muted)
-                            .size(typography::SMALL_SIZE),
-                    );
-                    ui.add_space(8.0);
-                    let _ = ui.separator();
-                    ui.add_space(10.0);
+                        let _ = ui.label(
+                            Label::new(definition.label)
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Semibold),
+                        );
+                        let _ = ui.label(
+                            Label::new(metadata.description)
+                                .tone(LabelTone::Muted)
+                                .size(typography::SMALL_SIZE),
+                        );
+                        ui.add_space(8.0);
+                        let _ = ui.separator();
+                        ui.add_space(10.0);
 
-                    render_selected_preview(ui, state);
+                        render_selected_preview(&mut ui, state);
+                    });
                 });
-            });
         });
 }
 
 fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+    let overrides = ui.overrides();
     match state.selected_component {
         // xtask:showcase-render-arms:start
         ComponentKind::Label => {
@@ -641,8 +586,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Color => {
-            let dark_mode = ui.visuals().dark_mode;
-            let border = Stroke::new(1.0, tokens::input_border(dark_mode));
+            let runtime = crate::theme::runtime_for_ui(ui);
+            let border = Stroke::new(1.0, tokens::input_border(runtime));
 
             let _ = ui.label(
                 Label::new("Solid swatches")
@@ -650,7 +595,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 for fill in TOOLBAR_SWATCHES {
                     let _ = ui.color(Color::new(fill).size(20.0));
                 }
@@ -662,7 +608,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 for fill in TOOLBAR_SWATCHES {
                     let _ = ui.color(Color::new(fill).size(20.0).stroke(border));
                 }
@@ -674,7 +621,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[0]).size(12.0));
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[1]).size(16.0));
                 let _ = ui.color(Color::new(TOOLBAR_SWATCHES[2]).size(20.0));
@@ -682,7 +630,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
         }
         ComponentKind::Image => {
-            let dark_mode = ui.visuals().dark_mode;
+            let runtime = crate::theme::runtime_for_ui(ui);
             let sample_png = egui::include_image!("../../../assets/images/clay_logo_large.png");
 
             let _ = ui.label(
@@ -694,8 +642,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.image(
                 Image::new(sample_png.clone())
                     .fit_to_exact_size(egui::vec2(180.0, 180.0))
-                    .corner_radius(tokens::RADIUS_MD)
-                    .bg_fill(tokens::input_background(dark_mode)),
+                    .corner_radius(tokens::radius_md(runtime))
+                    .bg_fill(tokens::input_background(runtime)),
             );
 
             ui.add_space(10.0);
@@ -711,7 +659,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     include_bytes!("../../../assets/images/clay_logo_large.png"),
                 )
                 .fit_to_exact_size(egui::vec2(96.0, 96.0))
-                .corner_radius(tokens::RADIUS_SM),
+                .corner_radius(tokens::radius_sm(runtime)),
             );
 
             ui.add_space(10.0);
@@ -721,7 +669,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.slider(&mut state.image_rotation_degrees, (-180.0..=180.0, 220.0));
                 let rotation_label = format!("{:.0}deg", state.image_rotation_degrees.round());
                 let _ = ui.label(
@@ -738,7 +687,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                         state.image_rotation_degrees.to_radians(),
                         egui::vec2(0.5, 0.5),
                     )
-                    .bg_fill(tokens::input_background(dark_mode)),
+                    .bg_fill(tokens::input_background(runtime)),
             );
 
             ui.add_space(8.0);
@@ -750,6 +699,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         }
         ComponentKind::Kbd => {
             let _ = ui.kbd_group(KbdGroup::new(), |ui| {
+                let mut ui = ui.components();
                 let _ = ui.kbd(Kbd::new("⌘"));
                 let _ = ui.kbd(Kbd::new("⇧"));
                 let _ = ui.kbd(Kbd::new("⌥"));
@@ -757,6 +707,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
             ui.add_space(6.0);
             let _ = ui.kbd_group(KbdGroup::new(), |ui| {
+                let mut ui = ui.components();
                 let _ = ui.kbd(Kbd::new("Ctrl"));
                 let _ = ui.label(
                     Label::new("+")
@@ -783,14 +734,16 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Button => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.button(Button::new("Primary").variant(ButtonVariant::Primary));
                 let _ = ui.button(Button::new("Secondary").variant(ButtonVariant::Secondary));
                 let _ = ui.button(Button::new("Ghost").variant(ButtonVariant::Ghost));
                 let _ = ui.button(Button::new("Link").variant(ButtonVariant::Link));
             });
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.button(
                     Button::icon_only("wand-sparkles")
                         .icon_size(15.0)
@@ -813,7 +766,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 );
             });
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.button(
                     Button::new("Create")
                         .leading_icon("plus")
@@ -836,11 +790,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 );
             });
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let dark_mode = ui.visuals().dark_mode;
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
+                let runtime = crate::theme::runtime_for_ui(&ui);
                 for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
                     let stroke = if index == 1 {
-                        Stroke::new(1.0, tokens::text_primary(dark_mode))
+                        Stroke::new(1.0, tokens::text_primary(runtime))
                     } else {
                         Stroke::NONE
                     };
@@ -861,15 +816,17 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Checkbox => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let mut checkbox_response = ui.checkbox(&mut state.checkbox_value, Checkbox::new());
-                let dark_mode = ui.visuals().dark_mode;
+                let runtime = crate::theme::runtime_for_ui(&ui);
                 let base_label_color = if state.checkbox_value {
-                    tokens::text_secondary(dark_mode)
+                    tokens::text_secondary(runtime)
                 } else {
-                    tokens::text_muted(dark_mode)
+                    tokens::text_muted(runtime)
                 };
                 let label_response = ui
+                    .ui_mut()
                     .scope(|ui| {
                         ui.style_mut().interaction.selectable_labels = false;
                         ui.add(
@@ -899,7 +856,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Slider => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.slider(&mut state.slider_value, (0.0..=100.0, 250.0));
                 let value_label = format!("{:.0}", state.slider_value.round());
                 let _ = ui.label(
@@ -910,7 +868,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
         }
         ComponentKind::NumberInput => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.number_input(
                     &mut state.number_x_value,
                     NumberInput::new(Id::new("component_showcase_number_x"))
@@ -1013,41 +972,48 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.label(Label::new("Below separator").tone(LabelTone::Secondary));
         }
         ComponentKind::Card => {
-            let dark_mode = ui.visuals().dark_mode;
+            let runtime = crate::theme::runtime_for_ui(ui);
             let _ = ui.card(
                 (
-                    tokens::input_background(dark_mode),
-                    Stroke::new(1.0, tokens::input_border(dark_mode)),
+                    tokens::input_background(runtime),
+                    Stroke::new(1.0, tokens::input_border(runtime)),
                 ),
                 |ui| {
-                    ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
-                        let _ = ui.label(
-                            Label::new("Card Title")
-                                .tone(LabelTone::Primary)
-                                .weight(LabelWeight::Bold)
-                                .size(16.0),
-                        );
-                        let _ = ui.label(
-                            Label::new("Cards wrap related content in a bordered panel.")
-                                .tone(LabelTone::Muted),
-                        );
-                        ui.add_space(6.0);
-                        let _ = ui.separator();
-                        ui.add_space(6.0);
-                        let footer_size =
-                            egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-                        let _ = ui.allocate_ui_with_layout(
-                            footer_size,
-                            Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                let _ =
-                                    ui.button(Button::new("Save").variant(ButtonVariant::Primary));
-                                let _ = ui.button(
-                                    Button::new("Cancel").variant(ButtonVariant::Secondary),
-                                );
-                            },
-                        );
-                    });
+                    let mut ui = ui.components();
+                    let overrides = ui.overrides();
+                    ui.ui_mut()
+                        .with_layout(Layout::top_down(egui::Align::Min), |ui| {
+                            let mut ui = ComponentUi::with_overrides(ui, overrides);
+                            let _ = ui.label(
+                                Label::new("Card Title")
+                                    .tone(LabelTone::Primary)
+                                    .weight(LabelWeight::Bold)
+                                    .size(16.0),
+                            );
+                            let _ = ui.label(
+                                Label::new("Cards wrap related content in a bordered panel.")
+                                    .tone(LabelTone::Muted),
+                            );
+                            ui.add_space(6.0);
+                            let _ = ui.separator();
+                            ui.add_space(6.0);
+                            let footer_size =
+                                egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                            let overrides = ui.overrides();
+                            let _ = ui.ui_mut().allocate_ui_with_layout(
+                                footer_size,
+                                Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                                    let _ = ui.button(
+                                        Button::new("Save").variant(ButtonVariant::Primary),
+                                    );
+                                    let _ = ui.button(
+                                        Button::new("Cancel").variant(ButtonVariant::Secondary),
+                                    );
+                                },
+                            );
+                        });
                 },
             );
         }
@@ -1083,6 +1049,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .leading_icon("move-3d")
                 .trailing_icon("ellipsis_vertical"),
                 |ui| {
+                    let mut ui = ui.components();
                     let _ = ui.label(Label::new("Position").tone(LabelTone::Secondary));
                     let _ = ui.label(Label::new("Rotation").tone(LabelTone::Secondary));
                     let _ = ui.label(Label::new("Scale").tone(LabelTone::Secondary));
@@ -1139,7 +1106,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Dialogue => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 if ui
                     .button(Button::new("Open Dialogue").variant(ButtonVariant::Secondary))
                     .clicked()
@@ -1160,13 +1128,16 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 crate::components::DialogueModal::new(Id::new("component_showcase_dialogue"))
                     .width(380.0),
                 |ui, close_requested| {
+                    let mut ui = ui.components();
                     ui.dialogue_header_with_close(
                         crate::components::DialogueHeader::new("Create Component")
                             .description("Adds the selected component to the active object."),
                         close_requested,
                     );
                     ui.add_space(12.0);
-                    let _ = ui.vertical(|ui| {
+                    let overrides = ui.overrides();
+                    let _ = ui.ui_mut().vertical(|ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
                         let _ = ui.label(
                             Label::new(
                                 "Pick a component from the sidebar and confirm to add it to the object.",
@@ -1177,10 +1148,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     });
                     ui.add_space(12.0);
                     let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-                    let _ = ui.allocate_ui_with_layout(
+                    let overrides = ui.overrides();
+                    let _ = ui.ui_mut().allocate_ui_with_layout(
                         footer_size,
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            let mut ui = ComponentUi::with_overrides(ui, overrides);
                             if ui
                                 .button(Button::new("Create").variant(ButtonVariant::Primary))
                                 .clicked()
@@ -1205,6 +1178,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 )
                 .width(380.0),
                 |ui, close_requested| {
+                    let mut ui = ui.components();
                     ui.dialogue_header_with_close(
                         crate::components::DialogueHeader::new("Delete Object")
                             .description("This action cannot be undone.")
@@ -1212,7 +1186,9 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                         close_requested,
                     );
                     ui.add_space(12.0);
-                    let _ = ui.vertical(|ui| {
+                    let overrides = ui.overrides();
+                    let _ = ui.ui_mut().vertical(|ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
                         let _ = ui.label(
                             Label::new(
                                 "Deleting removes the object and every child object in this hierarchy.",
@@ -1223,10 +1199,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     });
                     ui.add_space(12.0);
                     let footer_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-                    let _ = ui.allocate_ui_with_layout(
+                    let overrides = ui.overrides();
+                    let _ = ui.ui_mut().allocate_ui_with_layout(
                         footer_size,
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            let mut ui = ComponentUi::with_overrides(ui, overrides);
                             if ui
                                 .button(Button::new("Delete").variant(ButtonVariant::Primary))
                                 .clicked()
@@ -1245,7 +1223,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             );
         }
         ComponentKind::Icon => {
-            ui.horizontal(|ui| {
+            ui.ui_mut().horizontal(|ui| {
+                let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.icon(crate::components::Icon::new("bot").size(16.0));
                 let _ = ui.icon(crate::components::Icon::new("settings-2").size(16.0));
                 let _ = ui.icon(crate::components::Icon::new("sparkles").size(16.0));
@@ -1261,6 +1240,94 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         }
         ComponentKind::ImageTile => {
             draw_image_tile_preview(ui, state);
+        }
+        ComponentKind::Pagination => {
+            let _ = ui.pagination(
+                &mut state.pagination_page,
+                Pagination::new(
+                    Id::new("component_showcase_pagination"),
+                    PAGINATION_PAGE_COUNT,
+                ),
+            );
+
+            let page_summary = format!(
+                "Page {} of {}",
+                state.pagination_page, PAGINATION_PAGE_COUNT
+            );
+            let _ = ui.label(
+                Label::new(page_summary.as_str())
+                    .tone(LabelTone::Muted)
+                    .size(typography::SMALL_SIZE),
+            );
+        }
+        ComponentKind::AudioPlayback => {
+            let available_rect = ui.ui().available_rect_before_wrap();
+            let lane_width = 520.0_f32.min(available_rect.width().max(0.0));
+            let top = ui.ui().cursor().top().max(available_rect.top());
+            let bottom = available_rect.bottom().max(top);
+            let lane_rect = egui::Rect::from_min_max(
+                egui::pos2(available_rect.center().x - lane_width * 0.5, top),
+                egui::pos2(available_rect.center().x + lane_width * 0.5, bottom),
+            );
+            let mut used_rect = egui::Rect::from_min_size(lane_rect.min, egui::Vec2::ZERO);
+            let _ = ui.ui_mut().scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(lane_rect)
+                    .layout(Layout::top_down(egui::Align::Min)),
+                |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    let _ = ui.label(
+                        Label::new("Generation 1")
+                            .tone(LabelTone::Secondary)
+                            .size(typography::SMALL_SIZE),
+                    );
+                    ui.add_space(8.0);
+
+                    let (_, playback_result) = ui.audio_playback_with_actions(
+                        AudioPlayback::new(
+                            Id::new("component_showcase_audio_playback"),
+                            state.audio_playback_state,
+                        ),
+                        |ui| {
+                            let mut ui = ui.components();
+                            let _ = ui.button(
+                                Button::icon_only("share-2")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ControlSize::Sm),
+                            );
+                            let _ = ui.button(
+                                Button::icon_only("download")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ControlSize::Sm),
+                            );
+                            let _ = ui.button(
+                                Button::icon_only("ellipsis")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ControlSize::Sm),
+                            );
+                        },
+                    );
+
+                    if playback_result.play_pause_clicked {
+                        state.audio_playback_state = match state.audio_playback_state {
+                            AudioPlaybackState::Paused => AudioPlaybackState::Playing,
+                            AudioPlaybackState::Playing => AudioPlaybackState::Paused,
+                        };
+                    }
+
+                    let status = match state.audio_playback_state {
+                        AudioPlaybackState::Paused => "Playback: Paused",
+                        AudioPlaybackState::Playing => "Playback: Playing",
+                    };
+                    let _ = ui.label(
+                        Label::new(status)
+                            .tone(LabelTone::Muted)
+                            .size(typography::SMALL_SIZE),
+                    );
+                    used_rect = ui.ui().min_rect();
+                },
+            );
+            ui.ui_mut().advance_cursor_after_rect(used_rect);
         } // xtask:showcase-render-arms:end
     }
 }
@@ -1268,8 +1335,11 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 fn showcase_component_definitions_by_section(
     section: ShowcaseSection,
 ) -> impl Iterator<Item = &'static ComponentDefinition> {
-    catalog::component_definitions()
+    let mut definitions = catalog::component_definitions()
         .filter(move |definition| showcase_section(definition.kind) == section)
+        .collect::<Vec<_>>();
+    definitions.sort_unstable_by(|left, right| left.label.cmp(right.label));
+    definitions.into_iter()
 }
 
 fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefinition {
@@ -1321,7 +1391,9 @@ fn tooltip_placement_index(placement: TooltipPlacement) -> usize {
 }
 
 fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys: &[&str]) {
-    ui.horizontal(|ui| {
+    let overrides = ui.overrides();
+    ui.ui_mut().horizontal(|ui| {
+        let mut ui = ComponentUi::with_overrides(ui, overrides);
         let _ = ui.label(
             Label::new(action_label)
                 .tone(LabelTone::Secondary)
@@ -1329,6 +1401,7 @@ fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys
         );
         ui.add_space(8.0);
         let _ = ui.kbd_group(KbdGroup::new().gap(3.0), |ui| {
+            let mut ui = ui.components();
             for (index, key) in keys.iter().enumerate() {
                 if index > 0 {
                     let _ = ui.label(
@@ -1344,42 +1417,52 @@ fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys
 }
 
 fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let dark_mode = runtime.mode.is_dark();
+    let overrides = ui.overrides();
     let canvas_fill = if dark_mode {
-        tokens::app_background(dark_mode)
+        tokens::app_background(runtime)
     } else {
         TOOLBAR_CANVAS_LIGHT_FILL
     };
 
     let _ = egui::Frame::new()
         .fill(canvas_fill)
-        .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
-        .corner_radius(CornerRadius::same(tokens::RADIUS_MD))
+        .stroke(Stroke::new(1.0, tokens::separator(runtime)))
+        .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
         .inner_margin(egui::Margin::same(12))
-        .show(ui.raw_mut(), |ui| {
-            let mut ui = ui.components();
+        .show(ui.ui_mut(), |ui| {
+            let mut ui = ComponentUi::with_overrides(ui, overrides);
             let canvas_size = egui::vec2(ui.available_width(), 220.0);
             let (canvas_rect, _) = ui.allocate_exact_size(canvas_size, Sense::hover());
-            let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(canvas_rect), |ui| {
-                let _ = ui.toolbar(
-                    Toolbar::new(Id::new("component_showcase_toolbar"))
-                        .anchor(Align2::CENTER_TOP)
-                        .offset(egui::vec2(0.0, 10.0)),
-                    |ui| {
-                        ui.with_override(
-                            ButtonOverride::new()
-                                .min_size(egui::vec2(28.0, 28.0))
-                                .icon_size(12.0),
-                            |ui| draw_toolbar_contents(ui, state),
-                        )
-                    },
-                );
-            });
+            let overrides = ui.overrides();
+            let _ = ui
+                .ui_mut()
+                .scope_builder(egui::UiBuilder::new().max_rect(canvas_rect), |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    let _ = ui.toolbar(
+                        Toolbar::new(Id::new("component_showcase_toolbar"))
+                            .anchor(Align2::CENTER_TOP)
+                            .offset(egui::vec2(0.0, 10.0)),
+                        |ui| {
+                            let mut ui = ui.components();
+                            ui.with_override(
+                                ButtonOverride::new()
+                                    .min_size(egui::vec2(28.0, 28.0))
+                                    .icon_size(12.0),
+                                |ui| {
+                                    let mut ui = ui.components();
+                                    draw_toolbar_contents(&mut ui, state);
+                                },
+                            )
+                        },
+                    );
+                });
         });
 }
 
 fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let menu_items = [
         MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(220.0),
         MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(190.0),
@@ -1388,11 +1471,11 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
     ];
 
     let menu_state = egui::Frame::new()
-        .fill(tokens::app_background(dark_mode))
-        .stroke(Stroke::new(1.0, tokens::separator(dark_mode)))
-        .corner_radius(CornerRadius::same(tokens::RADIUS_MD))
+        .fill(tokens::app_background(runtime))
+        .stroke(Stroke::new(1.0, tokens::separator(runtime)))
+        .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
         .inner_margin(egui::Margin::same(12))
-        .show(ui.raw_mut(), |ui| {
+        .show(ui.ui_mut(), |ui| {
             let mut ui = ui.components();
             ui.menu_bar(MenuBar::new(
                 Id::new("component_showcase_menu_bar"),
@@ -1416,6 +1499,7 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
 fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
     let showcase_image = egui::include_image!("../../../assets/images/showcase-image.png");
     let logo_image = egui::include_image!("../../../assets/images/clay_logo_large.png");
+    let overrides = ui.overrides();
 
     let _ = ui.label(
         Label::new("Shared spacing, stacked examples")
@@ -1424,7 +1508,8 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
     );
     ui.add_space(tokens::SPACING_ITEM_Y);
 
-    let _ = ui.vertical(|ui| {
+    let _ = ui.ui_mut().vertical(|ui| {
+        let mut ui = ComponentUi::with_overrides(ui, overrides);
         ui.spacing_mut().item_spacing.y = tokens::SPACING_ITEM_Y;
 
         let _ = ui.label(
@@ -1435,13 +1520,14 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         let (_, featured_state) = ui.image_tile_with_body(
             ImageTile::new(Image::new(showcase_image.clone())).size(ImageTileSize::Lg),
             |ui| {
+                let mut ui = ui.components();
                 let _ = ui.label(
                     Label::new("Untitled Design")
                         .tone(LabelTone::Primary)
                         .weight(LabelWeight::Semibold)
                         .size(16.0),
                 );
-                draw_image_tile_metadata_row(ui, "Edited 2 days ago");
+                draw_image_tile_metadata_row(&mut ui, "Edited 2 days ago");
             },
         );
         if featured_state.tile_clicked {
@@ -1457,6 +1543,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         let (_, custom_state) = ui.image_tile_with_body(
             ImageTile::new(Image::new(logo_image.clone())).image_size(egui::vec2(180.0, 120.0)),
             |ui| {
+                let mut ui = ui.components();
                 let _ = ui.label(
                     Label::new("Custom body")
                         .tone(LabelTone::Primary)
@@ -1496,6 +1583,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .size(ImageTileSize::Md)
                 .playback_state(state.image_tile_playback_state),
             |ui| {
+                let mut ui = ui.components();
                 let _ = ui.label(
                     Label::new("Ambient Preview")
                         .tone(LabelTone::Primary)
@@ -1505,7 +1593,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                     ImageTilePlaybackState::Paused => "Paused • Click play to preview",
                     ImageTilePlaybackState::Playing => "Playing • 0:27 loop",
                 };
-                draw_image_tile_metadata_row(ui, playback_label);
+                draw_image_tile_metadata_row(&mut ui, playback_label);
             },
         );
         if audio_state.play_pause_clicked {
@@ -1539,7 +1627,9 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 }
 
 fn draw_image_tile_metadata_row(ui: &mut ComponentUi<'_>, text: &str) {
-    ui.horizontal(|ui| {
+    let overrides = ui.overrides();
+    ui.ui_mut().horizontal(|ui| {
+        let mut ui = ComponentUi::with_overrides(ui, overrides);
         ui.spacing_mut().item_spacing.x = 6.0;
         let _ = ui.icon(
             crate::components::Icon::new("globe")
@@ -1574,9 +1664,9 @@ fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
     draw_toolbar_divider(ui);
 
     for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
-        let dark_mode = ui.visuals().dark_mode;
+        let runtime = crate::theme::runtime_for_ui(ui);
         let stroke = if state.toolbar_color_index == index {
-            Stroke::new(1.0, tokens::text_primary(dark_mode))
+            Stroke::new(1.0, tokens::text_primary(runtime))
         } else {
             Stroke::NONE
         };
@@ -1606,12 +1696,12 @@ fn draw_toolbar_contents(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
 }
 
 fn draw_toolbar_divider(ui: &mut ComponentUi<'_>) {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, 16.0), Sense::hover());
     ui.painter().vline(
         rect.center().x,
         rect.y_range(),
-        Stroke::new(1.0, tokens::separator(dark_mode)),
+        Stroke::new(1.0, tokens::separator(runtime)),
     );
 }
 
@@ -1630,6 +1720,7 @@ fn clamp_state(state: &mut ComponentShowcaseState) {
     state.stacked_tab_index = state
         .stacked_tab_index
         .min(STACKED_TAB_OPTIONS.len().saturating_sub(1));
+    state.pagination_page = state.pagination_page.clamp(1, PAGINATION_PAGE_COUNT);
     state.slider_value = state.slider_value.clamp(0.0, 100.0);
     state.number_x_value = state.number_x_value.clamp(0.0, 100.0);
     state.number_y_value = state.number_y_value.clamp(0.0, 100.0);
@@ -1716,5 +1807,24 @@ mod tests {
             showcase_section(ComponentKind::ImageTile),
             ShowcaseSection::Examples
         );
+    }
+
+    #[test]
+    fn showcase_component_lists_are_alphabetical_within_sections() {
+        for section in [
+            ShowcaseSection::PrimaryPrimitive,
+            ShowcaseSection::DerivedComposed,
+            ShowcaseSection::Examples,
+        ] {
+            let labels = showcase_component_definitions_by_section(section)
+                .map(|definition| definition.label)
+                .collect::<Vec<_>>();
+            let mut sorted_labels = labels.clone();
+            sorted_labels.sort_unstable();
+            assert_eq!(
+                labels, sorted_labels,
+                "{section:?} showcase entries are not alphabetical"
+            );
+        }
     }
 }

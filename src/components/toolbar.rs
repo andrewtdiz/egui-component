@@ -1,7 +1,8 @@
-use super::api::ComponentUi;
+use super::api::{with_component_overrides, ComponentUi};
+use crate::layout;
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{Align, Align2, Color32, Id, Layout, Order, Pos2, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, Id, Order, Pos2, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Toolbar {
@@ -10,7 +11,7 @@ pub struct Toolbar {
     pub offset: Vec2,
     pub fill: Option<Color32>,
     pub stroke: Option<Stroke>,
-    pub corner_radius: u8,
+    pub corner_radius: Option<u8>,
     pub padding_x: i8,
     pub padding_y: i8,
     pub shadow: Option<egui::Shadow>,
@@ -24,7 +25,7 @@ impl Toolbar {
             offset: egui::vec2(0.0, 8.0),
             fill: None,
             stroke: None,
-            corner_radius: 14,
+            corner_radius: None,
             padding_x: 8,
             padding_y: 6,
             shadow: None,
@@ -52,7 +53,7 @@ impl Toolbar {
     }
 
     pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -78,12 +79,11 @@ impl ComponentUi<'_> {
     pub fn toolbar<R>(
         &mut self,
         props: impl Into<Toolbar>,
-        add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+        add: impl FnOnce(&mut Ui) -> R,
     ) -> egui::InnerResponse<R> {
-        let overrides = self.overrides;
-        draw_toolbar(self.raw_mut(), props.into(), |ui| {
-            let mut components = ComponentUi::with_overrides(ui, overrides);
-            add(&mut components)
+        let overrides = self.overrides();
+        draw_toolbar(self.ui_mut(), props.into(), |ui| {
+            with_component_overrides(ui, overrides, add)
         })
     }
 }
@@ -93,7 +93,7 @@ fn draw_toolbar<R>(
     props: Toolbar,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let dark_mode = ui.visuals().dark_mode;
+    let runtime = crate::theme::runtime_for_ui(ui);
     let parent_rect = ui.max_rect();
     let anchor_pos = anchored_pos(parent_rect, props.anchor) + props.offset;
 
@@ -107,20 +107,15 @@ fn draw_toolbar<R>(
             surface_frame(
                 ui,
                 SurfaceFrame::new(
-                    props.fill.unwrap_or(tokens::card_background(dark_mode)),
+                    props.fill.unwrap_or(tokens::card_background(runtime)),
                     props
                         .stroke
-                        .unwrap_or(Stroke::new(1.0, tokens::separator(dark_mode))),
+                        .unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
                 )
-                .corner_radius(props.corner_radius)
+                .corner_radius(props.corner_radius.unwrap_or(crate::theme::radius(ui, crate::theme::RadiusRole::Xl)))
                 .padding(props.padding_x, props.padding_y)
-                .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm())),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.with_layout(Layout::left_to_right(Align::Center), add)
-                        .inner
-                },
+                .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm(runtime))),
+                |ui| layout::row().gap(tokens::LAYOUT_GAP_XS).show(ui, add).inner,
             )
             .inner
         })
@@ -150,6 +145,7 @@ mod tests {
                     rect = ui
                         .components()
                         .toolbar(Toolbar::new(Id::new("toolbar_test")), |ui| {
+                            let mut ui = ui.components();
                             let _ = ui.button(Button::new("Edit").variant(ButtonVariant::Ghost));
                         })
                         .response
