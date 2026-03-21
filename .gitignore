@@ -1,0 +1,11 @@
+/target/
+target/
+Cargo.lock
+**/*.rs.bk
+.DS_Store
+*.log
+.codex-home/
+
+.agents/*
+!.agents/authoring/
+!.agents/authoring/**

@@ -1,0 +1,341 @@
+use egui::{CentralPanel, Context, Id, ScrollArea, ViewportBuilder};
+use egui_component::layout;
+use egui_component::prelude::*;
+
+fn main() -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: ViewportBuilder::default()
+            .with_title("Theme Playground")
+            .with_inner_size([1280.0, 880.0]),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Theme Playground",
+        options,
+        Box::new(|creation_context| {
+            egui_component::theme::install(
+                &creation_context.egui_ctx,
+                ThemeSpec::preset(BaseColor::Neutral),
+                ThemeMode::Dark,
+            );
+            Ok(Box::<ThemePlaygroundApp>::default())
+        }),
+    )
+}
+
+struct ThemePlaygroundApp {
+    draft_base: BaseColor,
+    draft_mode: ThemeMode,
+    draft_radius: f32,
+    applied_spec: ThemeSpec,
+    applied_mode: ThemeMode,
+    scoped_base: BaseColor,
+    scoped_mode: ThemeMode,
+    scoped_radius: f32,
+    status: String,
+}
+
+impl Default for ThemePlaygroundApp {
+    fn default() -> Self {
+        let spec = ThemeSpec::preset(BaseColor::Neutral).with_radius(10.0);
+        Self {
+            draft_base: BaseColor::Neutral,
+            draft_mode: ThemeMode::Dark,
+            draft_radius: 10.0,
+            applied_spec: spec,
+            applied_mode: ThemeMode::Dark,
+            scoped_base: BaseColor::Mauve,
+            scoped_mode: ThemeMode::Light,
+            scoped_radius: 12.0,
+            status: "Adjust the controls to explore the theme API.".to_owned(),
+        }
+    }
+}
+
+impl eframe::App for ThemePlaygroundApp {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        self.sync_theme(ctx);
+
+        CentralPanel::default().show(ctx, |ui| {
+            ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                ui.set_min_width(1180.0);
+                ui.add_space(12.0);
+
+                let _ = layout::column().gap(8.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    let _ = components.label(
+                        Label::new("Theme Playground").weight(LabelWeight::Bold).size(22.0),
+                    );
+                    let _ = components.label(
+                        Label::new("Live controls for ThemeSpec, ThemeMode, and scoped theme previews.")
+                            .tone(LabelTone::Muted)
+                            .size(13.0),
+                    );
+                });
+
+                ui.add_space(16.0);
+
+                let _ = layout::row().gap(16.0).show(ui, |ui| {
+                    self.render_controls(ui, ctx);
+                    self.render_previews(ui);
+                });
+            });
+        });
+    }
+}
+
+impl ThemePlaygroundApp {
+    fn sync_theme(&mut self, ctx: &Context) {
+        let next_spec = ThemeSpec::preset(self.draft_base).with_radius(self.draft_radius);
+        if next_spec != self.applied_spec {
+            egui_component::theme::set_theme(ctx, next_spec);
+            self.applied_spec = next_spec;
+            self.status = format!(
+                "Applied {} with radius {:.1}.",
+                self.draft_base, self.draft_radius
+            );
+        }
+
+        if self.draft_mode != self.applied_mode {
+            egui_component::theme::set_mode(ctx, self.draft_mode);
+            self.applied_mode = self.draft_mode;
+            self.status = format!("Applied {} mode.", mode_label(self.draft_mode));
+        }
+    }
+
+    fn render_controls(&mut self, ui: &mut egui::Ui, ctx: &Context) {
+        let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
+            let _ = layout::column().gap(18.0).show(ui, |ui| {
+                {
+                    let mut components = ui.components();
+                    let _ = components
+                        .label(Label::new("Theme controls").weight(LabelWeight::Bold).size(16.0));
+                    let _ = components.label(
+                        Label::new("Switch the global runtime, then compare it with a scoped override below.")
+                            .tone(LabelTone::Muted),
+                    );
+                }
+
+                self.base_color_picker(ui, ctx);
+                self.mode_picker(ui, ctx);
+                self.radius_control(ui, ctx);
+
+                let _ = layout::row().gap(8.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    if components
+                        .button(
+                            Button::new("Reapply theme")
+                                .variant(ButtonVariant::Secondary)
+                                .leading_icon("palette"),
+                        )
+                        .clicked()
+                    {
+                        let spec = ThemeSpec::preset(self.draft_base).with_radius(self.draft_radius);
+                        egui_component::theme::set_theme(ctx, spec);
+                        self.applied_spec = spec;
+                        self.status = format!(
+                            "Reapplied {} with radius {:.1}.",
+                            self.draft_base, self.draft_radius
+                        );
+                    }
+                    if components
+                        .button(
+                            Button::new("Reapply mode")
+                                .variant(ButtonVariant::Secondary)
+                                .leading_icon("moon-star"),
+                        )
+                        .clicked()
+                    {
+                        egui_component::theme::set_mode(ctx, self.draft_mode);
+                        self.applied_mode = self.draft_mode;
+                        self.status = format!("Reapplied {} mode.", mode_label(self.draft_mode));
+                    }
+                });
+
+                {
+                    let mut components = ui.components();
+                    let _ = components.label(Label::new(self.status.as_str()).tone(LabelTone::Muted));
+                }
+            });
+        });
+    }
+
+    fn base_color_picker(&mut self, ui: &mut egui::Ui, ctx: &Context) {
+        let _ = layout::column().gap(6.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new("ThemeSpec / base color")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Secondary),
+            );
+            let mut selected = Some(base_color_index(self.draft_base));
+            let changed = components
+                .select(
+                    &mut selected,
+                    Select::from_id(Id::new("base-color"), &BASE_COLOR_OPTIONS).width(300.0),
+                )
+                .changed();
+            if changed {
+                if let Some(index) = selected {
+                    self.draft_base = BaseColor::ALL[index];
+                    let spec = ThemeSpec::preset(self.draft_base).with_radius(self.draft_radius);
+                    egui_component::theme::set_theme(ctx, spec);
+                    self.applied_spec = spec;
+                    self.status = format!(
+                        "Applied {} with radius {:.1}.",
+                        self.draft_base, self.draft_radius
+                    );
+                }
+            }
+        });
+    }
+
+    fn mode_picker(&mut self, ui: &mut egui::Ui, ctx: &Context) {
+        let _ = layout::column().gap(6.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new("ThemeMode")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Secondary),
+            );
+            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                let mut components = ui.components();
+                if components
+                    .button(
+                        Button::new("Light")
+                            .variant(if self.draft_mode == ThemeMode::Light {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Secondary
+                            })
+                            .selected(self.draft_mode == ThemeMode::Light),
+                    )
+                    .clicked()
+                {
+                    self.draft_mode = ThemeMode::Light;
+                    egui_component::theme::set_mode(ctx, self.draft_mode);
+                    self.applied_mode = self.draft_mode;
+                    self.status = "Applied Light mode.".to_owned();
+                }
+                if components
+                    .button(
+                        Button::new("Dark")
+                            .variant(if self.draft_mode == ThemeMode::Dark {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Secondary
+                            })
+                            .selected(self.draft_mode == ThemeMode::Dark),
+                    )
+                    .clicked()
+                {
+                    self.draft_mode = ThemeMode::Dark;
+                    egui_component::theme::set_mode(ctx, self.draft_mode);
+                    self.applied_mode = self.draft_mode;
+                    self.status = "Applied Dark mode.".to_owned();
+                }
+            });
+        });
+    }
+
+    fn radius_control(&mut self, ui: &mut egui::Ui, ctx: &Context) {
+        let _ = layout::column().gap(6.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new("Corner radius")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Secondary),
+            );
+            let before = self.draft_radius;
+            let _ = components.slider(&mut self.draft_radius, Slider::new(4.0..=18.0).width(300.0));
+            if (before - self.draft_radius).abs() > f32::EPSILON {
+                let spec = ThemeSpec::preset(self.draft_base).with_radius(self.draft_radius);
+                egui_component::theme::set_theme(ctx, spec);
+                self.applied_spec = spec;
+                self.status = format!(
+                    "Applied {} with radius {:.1}.",
+                    self.draft_base, self.draft_radius
+                );
+            }
+        });
+    }
+
+    fn render_previews(&self, ui: &mut egui::Ui) {
+        let _ = layout::column().gap(16.0).show(ui, |ui| {
+            let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
+                let _ = layout::column().gap(14.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    let _ = components
+                        .label(Label::new("Runtime preview").weight(LabelWeight::Bold).size(16.0));
+                    let _ = components.label(
+                        Label::new("This section uses the active global theme that was applied above.")
+                            .tone(LabelTone::Muted),
+                    );
+                    let _ = layout::row().gap(10.0).show(ui, |ui| {
+                        let mut components = ui.components();
+                        let _ = components.button(
+                            Button::new("Primary action")
+                                .variant(ButtonVariant::Primary)
+                                .leading_icon("sparkles"),
+                        );
+                        let _ = components.button(
+                            Button::new("Secondary")
+                                .variant(ButtonVariant::Secondary)
+                                .trailing_hint("Enter"),
+                        );
+                    });
+                });
+            });
+
+            let scoped_spec = ThemeSpec::preset(self.scoped_base).with_radius(self.scoped_radius);
+            let _ = egui_component::theme::with_theme(ui, scoped_spec, self.scoped_mode, |ui| {
+                let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
+                    let _ = layout::column().gap(14.0).show(ui, |ui| {
+                        let mut components = ui.components();
+                        let _ = components.label(
+                            Label::new("Scoped preview")
+                                .weight(LabelWeight::Bold)
+                                .size(16.0),
+                        );
+                        let _ = components.label(
+                            Label::new("This card is rendered through theme::with_theme with its own ThemeSpec and ThemeMode.")
+                                .tone(LabelTone::Muted),
+                        );
+                        let _ = layout::row().gap(8.0).show(ui, |ui| {
+                            let mut components = ui.components();
+                            let _ = components.button(
+                                Button::new("Scoped callout")
+                                    .variant(ButtonVariant::Primary)
+                                    .leading_icon("palette"),
+                            );
+                            let _ = components.button(
+                                Button::new("Scoped reset")
+                                    .variant(ButtonVariant::Secondary)
+                                    .trailing_hint("Esc"),
+                            );
+                        });
+                    });
+                });
+            });
+        });
+    }
+}
+
+fn base_color_index(base: BaseColor) -> usize {
+    BaseColor::ALL
+        .iter()
+        .position(|candidate| *candidate == base)
+        .unwrap_or(0)
+}
+
+fn mode_label(mode: ThemeMode) -> &'static str {
+    match mode {
+        ThemeMode::Light => "Light",
+        ThemeMode::Dark => "Dark",
+    }
+}
+
+const BASE_COLOR_OPTIONS: [&str; 7] = [
+    "Neutral", "Stone", "Zinc", "Mauve", "Olive", "Mist", "Taupe",
+];

@@ -1,0 +1,33 @@
+[package]
+name = "egui-component"
+version = "0.1.0"
+edition = "2021"
+description = "A focused component library for egui."
+readme = "README.md"
+documentation = "https://docs.rs/egui-component"
+keywords = ["egui", "ui", "widgets", "components"]
+categories = ["gui"]
+include = [
+    "Cargo.toml",
+    "README.md",
+    "examples/README.md",
+    "examples/showcase.rs",
+    "src/**",
+    "assets/fonts/Segoe-UI.TTF",
+    "assets/fonts/Segoe-UI-Semibold.TTF",
+    "assets/fonts/Segoe-UI-Bold.TTF",
+    "assets/fonts/Segoe-UI-Italic.TTF",
+    "assets/icons/**",
+    "assets/images/showcase-image.png",
+]
+
+[lib]
+crate-type = ["rlib", "dylib"]
+
+[dependencies]
+egui = "0.33.3"
+egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+eframe = "0.33.3"
