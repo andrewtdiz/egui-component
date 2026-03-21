@@ -1,85 +1,163 @@
-use egui::{vec2, Align2, CentralPanel, Color32, Context, Id, ScrollArea, SidePanel, Stroke};
+use egui::{
+    vec2, Align2, CentralPanel, Color32, Context, CursorIcon, Id, Layout, ScrollArea, Sense,
+    SidePanel, Stroke, Ui, ViewportBuilder,
+};
+use egui_component::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use egui_component::layout;
 use egui_component::prelude::*;
+use egui_component::theme::{self, BaseColor, ColorRole, RadiusRole, ThemeMode, ThemeSpec};
 
-const SIDEBAR_WIDTH: f32 = 220.0;
-const THEME_PANEL_WIDTH: f32 = 220.0;
 const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../assets/images/showcase-image.png");
-const STATUS_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
+
 const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
-const COMBOBOX_OPTIONS: [&str; 5] = [
-    "Primary Action",
-    "Secondary Action",
-    "Accent Border",
-    "Muted Surface",
-    "Success State",
+const TOOLBAR_ACTION_OPTIONS: [&str; 3] = ["Edit", "BG Remover", "Eraser"];
+const TOOLBAR_SWATCHES: [Color32; 4] = [
+    Color32::from_rgb(35, 45, 75),
+    Color32::from_rgb(103, 132, 162),
+    Color32::from_rgb(122, 24, 42),
+    Color32::from_rgb(206, 164, 84),
+];
+const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
+const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
+const COMBOBOX_OPTIONS: [&str; 6] = [
+    "Material 1",
+    "Material Glass",
+    "Material Metal",
+    "Sprite Atlas",
+    "Sprite Mask",
+    "UI Text Style",
 ];
 const TAB_OPTIONS: [TabOption<'static>; 3] = [
-    TabOption::new(0, "Overview"),
-    TabOption::new(1, "Tokens"),
-    TabOption::new(2, "Publish"),
+    TabOption::new(0, "Design"),
+    TabOption::new(1, "Code"),
+    TabOption::new(2, "History"),
 ];
 const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
-    TabOption::with_icon(0, "Files", "folder-open"),
-    TabOption::with_icon(1, "History", "history"),
+    TabOption::with_icon(0, "Templates", "layout-template"),
+    TabOption::with_icon(1, "Layouts", "layout-grid"),
 ];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::with_icon(0, "Home", "house"),
     TabOption::with_icon(1, "Assets", "image"),
-    TabOption::with_icon(2, "Deploy", "rocket"),
+    TabOption::with_icon(2, "Export", "rocket"),
 ];
-const COMMAND_ITEMS: [CommandItem<'static>; 5] = [
-    CommandItem::new("Build", "cargo check").shortcut("Ctrl+Shift+B"),
-    CommandItem::new("Build", "cargo test").shortcut("Ctrl+T"),
-    CommandItem::new("Release", "cargo publish --dry-run").shortcut("Ctrl+P"),
-    CommandItem::new("Docs", "cargo doc --no-deps"),
-    CommandItem::new("Lint", "cargo clippy --all-targets"),
+const COMMAND_ITEMS: [CommandItem<'static>; 11] = [
+    CommandItem::new("", "scene: open scene search").shortcut("Ctrl+P"),
+    CommandItem::new("", "scene: save active scene").shortcut("Ctrl+S"),
+    CommandItem::new("", "gameobject: create empty").shortcut("Ctrl+Shift+N"),
+    CommandItem::new("", "gameobject: add camera"),
+    CommandItem::new("", "assets: reimport selected").shortcut("Ctrl+R"),
+    CommandItem::new("", "view: toggle gizmos"),
+    CommandItem::new("", "view: focus selection").shortcut("F"),
+    CommandItem::new("", "window: animation"),
+    CommandItem::new("", "window: inspector").shortcut("Ctrl+I"),
+    CommandItem::new("", "tools: bake lighting"),
+    CommandItem::new("", "tools: build nav mesh").shortcut("Ctrl+B"),
 ];
-const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 3] = [
-    DropdownMenuEntry::action(3, "Email"),
-    DropdownMenuEntry::action(4, "Message"),
-    DropdownMenuEntry::action(5, "Webhook"),
-];
-const DROPDOWN_ENTRIES: [DropdownMenuEntry<'static>; 7] = [
-    DropdownMenuEntry::action_with_icon(0, "Open Docs", "book-open"),
-    DropdownMenuEntry::action_with_shortcut(1, "Run Tests", "Ctrl+T"),
-    DropdownMenuEntry::submenu_with_icon("Invite", "users", &DROPDOWN_INVITE_ENTRIES),
+const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action(4, "Email"),
+    DropdownMenuEntry::action(5, "Message"),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action_with_icon(2, "Deploy", "rocket"),
-    DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action(6, "Archive"),
+    DropdownMenuEntry::action(6, "More..."),
 ];
-const DROPDOWN_ACTION_LABELS: [&str; 7] = [
-    "Open Docs",
-    "Run Tests",
-    "Deploy",
+const DROPDOWN_ENTRIES: [DropdownMenuEntry<'static>; 14] = [
+    DropdownMenuEntry::action(0, "My Account"),
+    DropdownMenuEntry::action_with_shortcut(1, "Profile", "Shift+Cmd+P"),
+    DropdownMenuEntry::action_with_shortcut(2, "Billing", "Cmd+B"),
+    DropdownMenuEntry::action_with_shortcut(3, "Settings", "Cmd+S"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::submenu("Invite users", &DROPDOWN_INVITE_ENTRIES),
+    DropdownMenuEntry::action_with_shortcut(7, "New Team", "Cmd+T"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action(8, "GitHub"),
+    DropdownMenuEntry::action(9, "Support"),
+    DropdownMenuEntry::action(10, "API"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_shortcut(11, "Log out", "Shift+Cmd+Q"),
+    DropdownMenuEntry::action(12, "Delete"),
+];
+const DROPDOWN_ACTION_LABELS: [&str; 13] = [
+    "My Account",
+    "Profile",
+    "Billing",
+    "Settings",
     "Email",
     "Message",
-    "Webhook",
-    "Archive",
+    "More...",
+    "New Team",
+    "GitHub",
+    "Support",
+    "API",
+    "Log out",
+    "Delete",
 ];
-const MENU_FILE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+const MENU_BAR_RECENT_ENTRIES: [DropdownMenuEntry<'static>; 3] = [
+    DropdownMenuEntry::action(3, "Design Tokens.fig"),
+    DropdownMenuEntry::action(4, "Toolbar Draft.rs"),
+    DropdownMenuEntry::action(5, "App Shell.md"),
+];
+const MENU_BAR_FILE_ENTRIES: [DropdownMenuEntry<'static>; 7] = [
     DropdownMenuEntry::action_with_icon(0, "New File", "file-plus"),
     DropdownMenuEntry::action_with_icon(1, "Open...", "folder-open"),
+    DropdownMenuEntry::submenu_with_icon("Open Recent", "history", &MENU_BAR_RECENT_ENTRIES),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action_with_icon(2, "Export", "download"),
+    DropdownMenuEntry::action_with_icon(6, "Save", "save"),
+    DropdownMenuEntry::action_with_icon(7, "Save As...", "file-pen"),
+    DropdownMenuEntry::action_with_icon(8, "Export", "download"),
 ];
-const MENU_EDIT_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
-    DropdownMenuEntry::action_with_icon(3, "Undo", "undo-2"),
-    DropdownMenuEntry::action_with_icon(4, "Redo", "redo-2"),
+const MENU_BAR_EDIT_ENTRIES: [DropdownMenuEntry<'static>; 5] = [
+    DropdownMenuEntry::action_with_icon(9, "Undo", "undo-2"),
+    DropdownMenuEntry::action_with_icon(10, "Redo", "redo-2"),
     DropdownMenuEntry::separator(),
-    DropdownMenuEntry::action_with_icon(5, "Duplicate", "copy"),
+    DropdownMenuEntry::action_with_icon(11, "Cut", "scissors"),
+    DropdownMenuEntry::action_with_icon(12, "Paste", "clipboard"),
 ];
-const MENU_BAR_ITEMS: [MenuBarItem<'static>; 2] = [
-    MenuBarItem::new("File", &MENU_FILE_ENTRIES),
-    MenuBarItem::new("Edit", &MENU_EDIT_ENTRIES),
+const MENU_BAR_VIEW_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action_with_icon(13, "Zoom In", "zoom-in"),
+    DropdownMenuEntry::action_with_icon(14, "Zoom Out", "zoom-out"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_icon(15, "Toggle Guides", "layout-grid"),
 ];
-const MENU_ACTION_LABELS: [&str; 6] =
-    ["New File", "Open...", "Export", "Undo", "Redo", "Duplicate"];
+const MENU_BAR_OBJECT_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
+    DropdownMenuEntry::action_with_icon(16, "Group", "group"),
+    DropdownMenuEntry::action_with_icon(17, "Ungroup", "ungroup"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_icon(18, "Bring to Front", "bring-to-front"),
+];
+const MENU_BAR_ACTION_LABELS: [&str; 19] = [
+    "New File",
+    "Open...",
+    "Open Recent",
+    "Design Tokens.fig",
+    "Toolbar Draft.rs",
+    "App Shell.md",
+    "Save",
+    "Save As...",
+    "Export",
+    "Undo",
+    "Redo",
+    "Cut",
+    "Paste",
+    "Zoom In",
+    "Zoom Out",
+    "Toggle Guides",
+    "Group",
+    "Ungroup",
+    "Bring to Front",
+];
+const PAGINATION_PAGE_COUNT: usize = 12;
+const SMALL_TEXT: f32 = 12.0;
+const SIDEBAR_WIDTH: f32 = 238.0;
+const TOOLBAR_PREVIEW_WIDTH: f32 = 820.0;
+const MENU_BAR_PREVIEW_WIDTH: f32 = 420.0;
+const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
+const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
+const NUMBER_INPUT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
+const NUMBER_INPUT_RED: Color32 = Color32::from_rgb(239, 68, 68);
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
+        viewport: ViewportBuilder::default()
             .with_title("egui-component Showcase")
             .with_inner_size([1280.0, 900.0]),
         ..Default::default()
@@ -89,7 +167,7 @@ fn main() -> eframe::Result {
         "egui-component Showcase",
         options,
         Box::new(|creation_context| {
-            egui_component::theme::install(
+            theme::install(
                 &creation_context.egui_ctx,
                 ThemeSpec::preset(BaseColor::Neutral),
                 ThemeMode::Dark,
@@ -99,272 +177,190 @@ fn main() -> eframe::Result {
     )
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ShowcaseComponent {
-    AudioPlayback,
-    Button,
-    ButtonGroup,
-    Card,
-    Checkbox,
-    Color,
-    ColorInput,
-    Collapsible,
-    Combobox,
-    Command,
-    Dialogue,
-    DropdownMenu,
-    Field,
-    Icon,
-    Image,
-    ImageTile,
-    Input,
-    Kbd,
-    Label,
-    MenuBar,
-    NumberInput,
-    Pagination,
-    Progress,
-    Select,
-    Separator,
-    Slider,
-    Switch,
-    Tabs,
-    Toolbar,
-    Tooltip,
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ShowcaseSection {
+    PrimaryPrimitive,
+    DerivedComposed,
+    Examples,
 }
 
-impl ShowcaseComponent {
-    const ALL: [Self; 30] = [
-        Self::AudioPlayback,
-        Self::Button,
-        Self::ButtonGroup,
-        Self::Card,
-        Self::Checkbox,
-        Self::Color,
-        Self::ColorInput,
-        Self::Collapsible,
-        Self::Combobox,
-        Self::Command,
-        Self::Dialogue,
-        Self::DropdownMenu,
-        Self::Field,
-        Self::Icon,
-        Self::Image,
-        Self::ImageTile,
-        Self::Input,
-        Self::Kbd,
-        Self::Label,
-        Self::MenuBar,
-        Self::NumberInput,
-        Self::Pagination,
-        Self::Progress,
-        Self::Select,
-        Self::Separator,
-        Self::Slider,
-        Self::Switch,
-        Self::Tabs,
-        Self::Toolbar,
-        Self::Tooltip,
-    ];
-
+impl ShowcaseSection {
     fn title(self) -> &'static str {
         match self {
-            Self::AudioPlayback => "Audio Playback",
-            Self::Button => "Button",
-            Self::ButtonGroup => "Button Group",
-            Self::Card => "Card",
-            Self::Checkbox => "Checkbox",
-            Self::Color => "Color",
-            Self::ColorInput => "Color Input",
-            Self::Collapsible => "Collapsible",
-            Self::Combobox => "Combobox",
-            Self::Command => "Command",
-            Self::Dialogue => "Dialogue",
-            Self::DropdownMenu => "Dropdown Menu",
-            Self::Field => "Field",
-            Self::Icon => "Icon",
-            Self::Image => "Image",
-            Self::ImageTile => "Image Tile",
-            Self::Input => "Input",
-            Self::Kbd => "Kbd",
-            Self::Label => "Label",
-            Self::MenuBar => "Menu Bar",
-            Self::NumberInput => "Number Input",
-            Self::Pagination => "Pagination",
-            Self::Progress => "Progress",
-            Self::Select => "Select",
-            Self::Separator => "Separator",
-            Self::Slider => "Slider",
-            Self::Switch => "Switch",
-            Self::Tabs => "Tabs",
-            Self::Toolbar => "Toolbar",
-            Self::Tooltip => "Tooltip",
-        }
-    }
-
-    fn summary(self) -> &'static str {
-        match self {
-            Self::AudioPlayback => "Playback row with a waveform and optional trailing actions.",
-            Self::Button => "Primary, secondary, ghost, and link button variants.",
-            Self::ButtonGroup => "Segmented row of tightly grouped button actions.",
-            Self::Card => "Framed surface container for composing content.",
-            Self::Checkbox => "Boolean input with optional label text.",
-            Self::Color => "Circular color swatch with optional border.",
-            Self::ColorInput => "Interactive RGBA color picker button.",
-            Self::Collapsible => "Expandable section with icons and nested content.",
-            Self::Combobox => "Filterable list backed by a text query.",
-            Self::Command => "Command palette surface with grouped actions.",
-            Self::Dialogue => "Modal confirmation flow with header and footer actions.",
-            Self::DropdownMenu => "Button-triggered menu with actions and submenus.",
-            Self::Field => "Label, text input, and helper text stacked together.",
-            Self::Icon => "Named icon rendering from bundled icon assets.",
-            Self::Image => "Raster image rendering with resizing and rounding.",
-            Self::ImageTile => "Media tile with optional playback and body content.",
-            Self::Input => "Single-line text input using the library theme.",
-            Self::Kbd => "Keyboard keycaps and grouped shortcut display.",
-            Self::Label => "Typed text styles with tone and weight.",
-            Self::MenuBar => "Desktop-style menubar with nested dropdown menus.",
-            Self::NumberInput => "Numeric text field with prefix and drag axes.",
-            Self::Pagination => "Page navigator with truncation and next/previous controls.",
-            Self::Progress => "Determinate progress bar.",
-            Self::Select => "Popup select input with 1-of-N choices.",
-            Self::Separator => "Simple horizontal rule for visual grouping.",
-            Self::Slider => "Horizontal numeric range input.",
-            Self::Switch => "Toggle control with optional label.",
-            Self::Tabs => "Underline, segmented, stacked, and rail tab variants.",
-            Self::Toolbar => "Floating action bar anchored inside a canvas.",
-            Self::Tooltip => "Hover-triggered popup hint surface.",
+            Self::PrimaryPrimitive => "Primary / Primitive",
+            Self::DerivedComposed => "Derived / Composed",
+            Self::Examples => "Examples",
         }
     }
 }
 
 struct ShowcaseApp {
-    selected_component: ShowcaseComponent,
+    selected_component: ComponentKind,
     theme_base: BaseColor,
     theme_mode: ThemeMode,
-    text_value: String,
+    input_value: String,
     field_value: String,
     checkbox_value: bool,
     switch_value: bool,
-    select_value: Option<usize>,
-    combobox_query: String,
-    combobox_selected: usize,
-    command_query: String,
-    current_page: usize,
-    progress: f32,
+    small_switch_value: bool,
+    toolbar_color_index: usize,
+    image_rotation_degrees: f32,
     slider_value: f32,
-    number_x: f32,
-    number_y: f32,
-    tabs_value: usize,
-    segmented_tabs_value: usize,
-    stacked_tabs_value: usize,
-    rail_tabs_value: usize,
-    toggle_rail_tabs_value: Option<usize>,
-    button_group_selection: Option<usize>,
+    number_x_value: f32,
+    number_y_value: f32,
+    progress_value: f32,
+    select_index: Option<usize>,
+    tab_index: usize,
+    segmented_tab_index: usize,
+    stacked_tab_index: usize,
+    rail_tab_index: usize,
+    toggle_rail_tab_index: Option<usize>,
+    audio_playback_state: AudioPlaybackState,
+    pagination_page: usize,
     collapsible_open: bool,
-    dialogue_open: bool,
     dropdown_action: Option<usize>,
-    menu_action: Option<usize>,
-    audio_state: AudioPlaybackState,
+    combobox_query: String,
+    combobox_index: usize,
+    command_query: String,
+    dialogue_open: bool,
+    menu_bar_action: Option<usize>,
+    tooltip_placement: TooltipPlacement,
     image_tile_selected: bool,
-    image_tile_playback: ImageTilePlaybackState,
-    accent_color: Color32,
+    image_tile_playback_state: ImageTilePlaybackState,
+    image_tile_last_action: String,
 }
 
 impl Default for ShowcaseApp {
     fn default() -> Self {
         Self {
-            selected_component: ShowcaseComponent::Button,
+            selected_component: ComponentKind::Button,
             theme_base: BaseColor::Neutral,
             theme_mode: ThemeMode::Dark,
-            text_value: "egui-component".to_owned(),
-            field_value: "mainline".to_owned(),
+            input_value: "Player_Robot".to_owned(),
+            field_value: "M_Robot_Body".to_owned(),
             checkbox_value: true,
-            switch_value: false,
-            select_value: Some(1),
-            combobox_query: String::new(),
-            combobox_selected: 0,
-            command_query: String::new(),
-            current_page: 3,
-            progress: 0.42,
-            slider_value: 64.0,
-            number_x: 12.0,
-            number_y: 24.0,
-            tabs_value: 0,
-            segmented_tabs_value: 1,
-            stacked_tabs_value: 0,
-            rail_tabs_value: 0,
-            toggle_rail_tabs_value: Some(1),
-            button_group_selection: Some(0),
+            switch_value: true,
+            small_switch_value: false,
+            toolbar_color_index: 0,
+            image_rotation_degrees: 18.0,
+            slider_value: 62.0,
+            number_x_value: 42.0,
+            number_y_value: 16.0,
+            progress_value: 0.58,
+            select_index: Some(1),
+            tab_index: 0,
+            segmented_tab_index: 0,
+            stacked_tab_index: 0,
+            rail_tab_index: 0,
+            toggle_rail_tab_index: Some(1),
+            audio_playback_state: AudioPlaybackState::Paused,
+            pagination_page: 2,
             collapsible_open: true,
-            dialogue_open: false,
             dropdown_action: None,
-            menu_action: None,
-            audio_state: AudioPlaybackState::Paused,
+            combobox_query: "mat".to_owned(),
+            combobox_index: 0,
+            command_query: String::new(),
+            dialogue_open: false,
+            menu_bar_action: None,
+            tooltip_placement: TooltipPlacement::Top,
             image_tile_selected: false,
-            image_tile_playback: ImageTilePlaybackState::Paused,
-            accent_color: Color32::from_rgb(59, 130, 246),
+            image_tile_playback_state: ImageTilePlaybackState::Paused,
+            image_tile_last_action: "No image tile actions yet".to_owned(),
         }
     }
 }
 
 impl eframe::App for ShowcaseApp {
-    fn update(&mut self, context: &Context, _frame: &mut eframe::Frame) {
-        egui_component::theme::set_theme(context, ThemeSpec::preset(self.theme_base));
-        egui_component::theme::set_mode(context, self.theme_mode);
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        clamp_state(self);
+        theme::set_theme(ctx, ThemeSpec::preset(self.theme_base));
+        theme::set_mode(ctx, self.theme_mode);
 
-        SidePanel::left("showcase_sidebar")
-            .resizable(false)
-            .exact_width(SIDEBAR_WIDTH)
-            .show(context, |ui| self.render_sidebar(ui));
+        SidePanel::left("component_showcase_sidebar")
+            .resizable(true)
+            .default_width(SIDEBAR_WIDTH)
+            .min_width(200.0)
+            .max_width(320.0)
+            .show(ctx, |ui| self.render_sidebar(ui));
 
-        SidePanel::right("theme_sidebar")
-            .resizable(false)
-            .exact_width(THEME_PANEL_WIDTH)
-            .show(context, |ui| self.render_theme_panel(ui));
-
-        CentralPanel::default().show(context, |ui| self.render_center(ui));
+        CentralPanel::default().show(ctx, |ui| self.render_center(ui));
     }
 }
 
 impl ShowcaseApp {
-    fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
-        ui.heading("Components");
-        ui.label("Select a component to preview it.");
+    fn render_sidebar(&mut self, ui: &mut Ui) {
+        ui.add_space(8.0);
+
+        let _ = layout::column().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new("Components")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Primary),
+            );
+            let _ = components.label(
+                Label::new("Old showcase layout, updated for the current component set.")
+                    .tone(LabelTone::Muted)
+                    .size(SMALL_TEXT),
+            );
+        });
+
+        ui.add_space(8.0);
+        let _ = ui.components().separator();
+        ui.add_space(8.0);
+
+        self.render_theme_controls(ui);
         ui.add_space(10.0);
+        let _ = ui.components().separator();
+        ui.add_space(8.0);
 
         ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for component in ShowcaseComponent::ALL {
-                    let selected = self.selected_component == component;
-                    let button = Button::new(component.title())
-                        .variant(if selected {
-                            ButtonVariant::Secondary
-                        } else {
-                            ButtonVariant::Ghost
-                        })
-                        .selected(selected)
-                        .min_size(vec2(ui.available_width(), 32.0));
-                    if ui.components().button(button).clicked() {
-                        self.selected_component = component;
+                for section in [
+                    ShowcaseSection::PrimaryPrimitive,
+                    ShowcaseSection::DerivedComposed,
+                    ShowcaseSection::Examples,
+                ] {
+                    let _ = ui.components().label(
+                        Label::new(section.title())
+                            .tone(LabelTone::Muted)
+                            .size(SMALL_TEXT)
+                            .weight(LabelWeight::Semibold),
+                    );
+                    ui.add_space(4.0);
+
+                    for definition in showcase_component_definitions_by_section(section) {
+                        let selected = self.selected_component == definition.kind;
+                        let button = Button::new(definition.label)
+                            .variant(if selected {
+                                ButtonVariant::Secondary
+                            } else {
+                                ButtonVariant::Ghost
+                            })
+                            .selected(selected)
+                            .min_size(vec2(ui.available_width(), 30.0));
+                        if ui.components().button(button).clicked() {
+                            self.selected_component = definition.kind;
+                        }
                     }
+
+                    ui.add_space(8.0);
                 }
             });
     }
 
-    fn render_theme_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
-        ui.heading("Theme");
-        ui.label("Apply one theme to every component preview.");
-        ui.add_space(10.0);
-
-        let _ = ui.components().card(Card::new().padding(12, 12), |ui| {
+    fn render_theme_controls(&mut self, ui: &mut Ui) {
+        let _ = ui.components().card(Card::new().padding(10, 10), |ui| {
             let mut components = ui.components();
-            let _ = components.label(Label::new("Mode").weight(LabelWeight::Semibold));
+            let _ = components.label(
+                Label::new("Theme")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Secondary),
+            );
             ui.add_space(8.0);
-            let _ = layout::row().gap(8.0).show(ui, |ui| {
+
+            let _ = layout::row().gap(6.0).show(ui, |ui| {
                 let mut components = ui.components();
                 if components
                     .button(
@@ -388,590 +384,1022 @@ impl ShowcaseApp {
                 }
             });
 
-            ui.add_space(12.0);
-            let mut components = ui.components();
-            let _ = components.label(Label::new("Preset").weight(LabelWeight::Semibold));
             ui.add_space(8.0);
-            let preset_button_width = ui.available_width();
-
             for base in BaseColor::ALL {
                 let selected = self.theme_base == base;
-                if ui
-                    .components()
-                    .button(
-                        Button::new(base.label())
-                            .variant(ButtonVariant::Secondary)
-                            .selected(selected)
-                            .min_size(vec2(preset_button_width, 30.0)),
-                    )
-                    .clicked()
-                {
+                let button = Button::new(base.label())
+                    .variant(ButtonVariant::Ghost)
+                    .selected(selected)
+                    .min_size(vec2(ui.available_width(), 26.0));
+                if ui.components().button(button).clicked() {
                     self.theme_base = base;
                 }
-                ui.add_space(6.0);
+                ui.add_space(4.0);
             }
         });
     }
 
-    fn render_center(&mut self, ui: &mut egui::Ui) {
+    fn render_center(&mut self, ui: &mut Ui) {
+        let definition = catalog_component_definition(self.selected_component);
+        let width = match self.selected_component {
+            ComponentKind::Toolbar => ui.available_width().min(920.0),
+            ComponentKind::MenuBar => ui.available_width().min(560.0),
+            _ => ui.available_width().clamp(280.0, 480.0),
+        };
+
         ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_max_width(980.0);
-                ui.add_space(16.0);
-                ui.heading(self.selected_component.title());
-                ui.label(self.selected_component.summary());
-                ui.add_space(16.0);
+                let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                    let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
+                        ui.set_width(width);
 
-                match self.selected_component {
-                    ShowcaseComponent::AudioPlayback => self.render_audio_playback(ui),
-                    ShowcaseComponent::Button => self.render_button(ui),
-                    ShowcaseComponent::ButtonGroup => self.render_button_group(ui),
-                    ShowcaseComponent::Card => self.render_card(ui),
-                    ShowcaseComponent::Checkbox => self.render_checkbox(ui),
-                    ShowcaseComponent::Color => self.render_color(ui),
-                    ShowcaseComponent::ColorInput => self.render_color_input(ui),
-                    ShowcaseComponent::Collapsible => self.render_collapsible(ui),
-                    ShowcaseComponent::Combobox => self.render_combobox(ui),
-                    ShowcaseComponent::Command => self.render_command(ui),
-                    ShowcaseComponent::Dialogue => self.render_dialogue(ui),
-                    ShowcaseComponent::DropdownMenu => self.render_dropdown_menu(ui),
-                    ShowcaseComponent::Field => self.render_field(ui),
-                    ShowcaseComponent::Icon => self.render_icon(ui),
-                    ShowcaseComponent::Image => self.render_image(ui),
-                    ShowcaseComponent::ImageTile => self.render_image_tile(ui),
-                    ShowcaseComponent::Input => self.render_input(ui),
-                    ShowcaseComponent::Kbd => self.render_kbd(ui),
-                    ShowcaseComponent::Label => self.render_label(ui),
-                    ShowcaseComponent::MenuBar => self.render_menu_bar(ui),
-                    ShowcaseComponent::NumberInput => self.render_number_input(ui),
-                    ShowcaseComponent::Pagination => self.render_pagination(ui),
-                    ShowcaseComponent::Progress => self.render_progress(ui),
-                    ShowcaseComponent::Select => self.render_select(ui),
-                    ShowcaseComponent::Separator => self.render_separator(ui),
-                    ShowcaseComponent::Slider => self.render_slider(ui),
-                    ShowcaseComponent::Switch => self.render_switch(ui),
-                    ShowcaseComponent::Tabs => self.render_tabs(ui),
-                    ShowcaseComponent::Toolbar => self.render_toolbar(ui),
-                    ShowcaseComponent::Tooltip => self.render_tooltip(ui),
-                }
-            });
-    }
-
-    fn render_audio_playback(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Audio Playback", |ui| {
-            let (_, playback_result) = ui.components().audio_playback_with_actions(
-                AudioPlayback::new(Id::new("audio_playback"), self.audio_state),
-                |ui| {
-                    let mut components = ui.components();
-                    let _ = components.button(
-                        Button::icon_only("skip-back")
-                            .variant(ButtonVariant::Ghost)
-                            .icon_size(12.0),
-                    );
-                    let _ = components.button(
-                        Button::icon_only("skip-forward")
-                            .variant(ButtonVariant::Ghost)
-                            .icon_size(12.0),
-                    );
-                },
-            );
-            if playback_result.play_pause_clicked {
-                self.audio_state = match self.audio_state {
-                    AudioPlaybackState::Paused => AudioPlaybackState::Playing,
-                    AudioPlaybackState::Playing => AudioPlaybackState::Paused,
-                };
-            }
-        });
-    }
-
-    fn render_button(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Button Variants", |ui| {
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
-                let mut components = ui.components();
-                let _ = components.button(
-                    Button::new("Primary")
-                        .variant(ButtonVariant::Primary)
-                        .leading_icon("check"),
-                );
-                let _ = components.button(
-                    Button::new("Secondary")
-                        .variant(ButtonVariant::Secondary)
-                        .trailing_hint("K"),
-                );
-                let _ = components.button(
-                    Button::new("Ghost")
-                        .variant(ButtonVariant::Ghost)
-                        .trailing_icon("chevron-right"),
-                );
-                let _ = components.button(
-                    Button::new("Docs")
-                        .variant(ButtonVariant::Link)
-                        .trailing_icon("arrow-up-right"),
-                );
-                let _ = components.button(Button::color_only(Color::new(self.accent_color)));
-            });
-        });
-    }
-
-    fn render_button_group(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Button Group", |ui| {
-            let clicked = ui.components().button_group(ButtonGroup::new(
-                Id::new("button_group"),
-                &BUTTON_GROUP_OPTIONS,
-            ));
-            if clicked.is_some() {
-                self.button_group_selection = clicked;
-            }
-            ui.add_space(10.0);
-            let status = button_group_text(self.button_group_selection, &BUTTON_GROUP_OPTIONS);
-            let mut components = ui.components();
-            let _ = components.label(Label::new(status.as_str()).tone(LabelTone::Muted));
-        });
-    }
-
-    fn render_card(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Card", |ui| {
-            let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-                let mut components = ui.components();
-                let _ = components.label(Label::new("Card Title").weight(LabelWeight::Bold));
-                let _ = components.label(
-                    Label::new("Cards are useful for grouping related UI.").tone(LabelTone::Muted),
-                );
-            });
-        });
-    }
-
-    fn render_checkbox(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Checkbox", |ui| {
-            let _ = ui.components().checkbox(
-                &mut self.checkbox_value,
-                Checkbox::new().label("Enable release checks"),
-            );
-        });
-    }
-
-    fn render_color(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Color", |ui| {
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
-                let mut components = ui.components();
-                let _ = components
-                    .color(Color::new(self.accent_color).stroke(Stroke::new(1.0, Color32::WHITE)));
-                let _ = components.color(Color::new(Color32::from_rgb(34, 197, 94)).size(24.0));
-                let _ = components.color(Color::new(Color32::from_rgb(244, 114, 182)).size(28.0));
-            });
-        });
-    }
-
-    fn render_color_input(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Color Input", |ui| {
-            let _ = ui.components().color_input(
-                &mut self.accent_color,
-                ColorInput::new().id(Id::new("accent_color")),
-            );
-        });
-    }
-
-    fn render_collapsible(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Collapsible", |ui| {
-            let _ = ui.components().collapsible(
-                &mut self.collapsible_open,
-                Collapsible::new(Id::new("collapsible"), "Component Details")
-                    .leading_icon("package")
-                    .trailing_icon("sparkles"),
-                |ui| {
-                    let _ = ui.components().card(Card::new().padding(12, 12), |ui| {
                         let mut components = ui.components();
                         let _ = components.label(
-                            Label::new("Release Configuration").weight(LabelWeight::Semibold),
+                            Label::new(definition.label)
+                                .weight(LabelWeight::Semibold)
+                                .tone(LabelTone::Primary),
                         );
                         let _ = components.label(
-                            Label::new(
-                                "This content should disappear when the collapsible closes.",
-                            )
-                            .tone(LabelTone::Muted),
+                            Label::new(showcase_description(self.selected_component))
+                                .tone(LabelTone::Muted)
+                                .size(SMALL_TEXT),
                         );
+                        ui.add_space(8.0);
+                        let _ = ui.components().separator();
                         ui.add_space(10.0);
-                        let _ = layout::row().gap(10.0).show(ui, |ui| {
-                            let mut components = ui.components();
-                            let _ = components.button(
-                                Button::new("Preview")
-                                    .variant(ButtonVariant::Secondary)
-                                    .leading_icon("eye"),
-                            );
-                            let _ = components.button(
-                                Button::new("Publish")
-                                    .variant(ButtonVariant::Primary)
-                                    .leading_icon("rocket"),
-                            );
-                        });
+
+                        self.render_selected_preview(ui);
+                    });
+                });
+            });
+    }
+
+    fn render_selected_preview(&mut self, ui: &mut Ui) {
+        match self.selected_component {
+            ComponentKind::Label => self.render_label_preview(ui),
+            ComponentKind::Color => self.render_color_preview(ui),
+            ComponentKind::Image => self.render_image_preview(ui),
+            ComponentKind::Icon => self.render_icon_preview(ui),
+            ComponentKind::Kbd => self.render_kbd_preview(ui),
+            ComponentKind::Input => self.render_input_preview(ui),
+            ComponentKind::Field => self.render_field_preview(ui),
+            ComponentKind::Button => self.render_button_preview(ui),
+            ComponentKind::ButtonGroup => self.render_button_group_preview(ui),
+            ComponentKind::Checkbox => self.render_checkbox_preview(ui),
+            ComponentKind::Switch => self.render_switch_preview(ui),
+            ComponentKind::Slider => self.render_slider_preview(ui),
+            ComponentKind::NumberInput => self.render_number_input_preview(ui),
+            ComponentKind::Select => self.render_select_preview(ui),
+            ComponentKind::Tabs => self.render_tabs_preview(ui),
+            ComponentKind::Separator => self.render_separator_preview(ui),
+            ComponentKind::Card => self.render_card_preview(ui),
+            ComponentKind::Progress => self.render_progress_preview(ui),
+            ComponentKind::Tooltip => self.render_tooltip_preview(ui),
+            ComponentKind::DropdownMenu => self.render_dropdown_menu_preview(ui),
+            ComponentKind::Collapsible => self.render_collapsible_preview(ui),
+            ComponentKind::AudioPlayback => self.render_audio_playback_preview(ui),
+            ComponentKind::Combobox => self.render_combobox_preview(ui),
+            ComponentKind::Command => self.render_command_preview(ui),
+            ComponentKind::Dialogue => self.render_dialogue_preview(ui),
+            ComponentKind::ImageTile => self.render_image_tile_preview(ui),
+            ComponentKind::MenuBar => self.render_menu_bar_preview(ui),
+            ComponentKind::Toolbar => self.render_toolbar_preview(ui),
+            ComponentKind::Pagination => self.render_pagination_preview(ui),
+        }
+    }
+
+    fn render_label_preview(&mut self, ui: &mut Ui) {
+        let mut components = ui.components();
+        let _ = components.label(
+            Label::new("Primary label")
+                .tone(LabelTone::Primary)
+                .weight(LabelWeight::Semibold),
+        );
+        let _ = components.label(Label::new("Secondary label").tone(LabelTone::Secondary));
+        let _ = components.label(Label::new("Muted helper text").tone(LabelTone::Muted));
+        let _ = components.label(
+            Label::new("Destructive text")
+                .tone(LabelTone::Destructive)
+                .weight(LabelWeight::Semibold),
+        );
+    }
+
+    fn render_color_preview(&mut self, ui: &mut Ui) {
+        let border = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+
+        let _ = ui.components().label(
+            Label::new("Solid swatches")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            for fill in TOOLBAR_SWATCHES {
+                let _ = components.color(Color::new(fill).size(20.0));
+            }
+        });
+
+        ui.add_space(10.0);
+        let _ = ui.components().label(
+            Label::new("Bordered swatches")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            for fill in TOOLBAR_SWATCHES {
+                let _ = components.color(
+                    Color::new(fill)
+                        .size(20.0)
+                        .stroke(border),
+                );
+            }
+        });
+    }
+
+    fn render_image_preview(&mut self, ui: &mut Ui) {
+        let image = showcase_image("primary");
+        let image_bg = input_background(ui);
+        let md_radius = radius_md(ui);
+        let sm_radius = radius_sm(ui);
+
+        let _ = ui.components().label(
+            Label::new("bytes:// PNG")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let _ = ui.components().image(
+            image.clone()
+                .fit_to_exact_size(vec2(180.0, 180.0))
+                .corner_radius(md_radius)
+                .bg_fill(image_bg),
+        );
+
+        ui.add_space(10.0);
+        let _ = ui.components().label(
+            Label::new("Rotation")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.slider(&mut self.image_rotation_degrees, (-180.0..=180.0, 220.0));
+            let rotation_label = format!("{:.0}deg", self.image_rotation_degrees.round());
+            let _ = components.label(
+                Label::new(rotation_label.as_str())
+                    .tone(LabelTone::Secondary)
+                    .weight(LabelWeight::Semibold),
+            );
+        });
+        ui.add_space(6.0);
+        let _ = ui.components().image(
+            image.fit_to_exact_size(vec2(96.0, 96.0))
+                .rotate(self.image_rotation_degrees.to_radians(), vec2(0.5, 0.5))
+                .corner_radius(sm_radius)
+                .bg_fill(image_bg),
+        );
+    }
+
+    fn render_icon_preview(&mut self, ui: &mut Ui) {
+        let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.icon(Icon::new("bot").size(16.0));
+            let _ = components.icon(Icon::new("settings-2").size(16.0));
+            let _ = components.icon(Icon::new("sparkles").size(16.0));
+            let _ = components.icon(Icon::new("gamepad-2").size(16.0));
+            let _ = components.icon(Icon::new("wand-sparkles").size(16.0));
+        });
+    }
+
+    fn render_kbd_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().kbd_group((), |ui| {
+            let mut components = ui.components();
+            let _ = components.kbd(Kbd::new("⌘"));
+            let _ = components.kbd(Kbd::new("⇧"));
+            let _ = components.kbd(Kbd::new("⌥"));
+            let _ = components.kbd(Kbd::new("⌃"));
+        });
+        ui.add_space(6.0);
+        let _ = ui.components().kbd_group(KbdGroup::new(), |ui| {
+            let mut components = ui.components();
+            let _ = components.kbd(Kbd::new("Ctrl"));
+            let _ = components.label(Label::new("+").tone(LabelTone::Muted));
+            let _ = components.kbd(Kbd::new("B"));
+        });
+    }
+
+    fn render_input_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().text_input(
+            &mut self.input_value,
+            TextInput::new()
+                .width(280.0)
+                .placeholder("Type component name"),
+        );
+    }
+
+    fn render_field_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().field(
+            &mut self.field_value,
+            Field::new("Material")
+                .width(280.0)
+                .helper_text("Assigned material for selected mesh"),
+        );
+    }
+
+    fn render_button_preview(&mut self, ui: &mut Ui) {
+        let selected_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Foreground));
+
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.button(Button::new("Primary").variant(ButtonVariant::Primary));
+            let _ = components.button(Button::new("Secondary").variant(ButtonVariant::Secondary));
+            let _ = components.button(Button::new("Ghost").variant(ButtonVariant::Ghost));
+            let _ = components.button(Button::new("Link").variant(ButtonVariant::Link));
+        });
+
+        ui.add_space(8.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.button(
+                Button::icon_only("wand-sparkles")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Primary),
+            );
+            let _ = components.button(
+                Button::icon_only("wand-sparkles")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Secondary),
+            );
+            let _ = components.button(
+                Button::icon_only("wand-sparkles")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Ghost),
+            );
+            let _ = components.button(
+                Button::icon_only("wand-sparkles")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Link),
+            );
+        });
+
+        ui.add_space(8.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
+                let stroke = if index == 1 { selected_stroke } else { Stroke::NONE };
+                let _ = components.button(
+                    Button::color_only(Color::new(fill).size(18.0).stroke(stroke))
+                        .variant(ButtonVariant::Ghost),
+                );
+            }
+        });
+    }
+
+    fn render_button_group_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().button_group(ButtonGroup::new(
+            Id::new("component_showcase_button_group"),
+            &BUTTON_GROUP_OPTIONS,
+        ));
+    }
+
+    fn render_checkbox_preview(&mut self, ui: &mut Ui) {
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.checkbox(&mut self.checkbox_value, Checkbox::new());
+
+            let label_color = if self.checkbox_value {
+                text_secondary(ui)
+            } else {
+                text_muted(ui)
+            };
+            let response = ui
+                .scope(|ui| {
+                    ui.style_mut().interaction.selectable_labels = false;
+                    ui.add(
+                        egui::Label::new(egui::RichText::new("Receive Shadows").color(label_color))
+                            .selectable(false)
+                            .sense(Sense::click()),
+                    )
+                })
+                .inner
+                .on_hover_cursor(CursorIcon::PointingHand);
+            if response.clicked() {
+                self.checkbox_value = !self.checkbox_value;
+            }
+        });
+    }
+
+    fn render_switch_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().switch(&mut self.switch_value, "Enable Post FX");
+        let _ = ui.components().switch(
+            &mut self.small_switch_value,
+            Switch::new()
+                .label("Use Compact Handles")
+                .size(ControlSize::Sm),
+        );
+    }
+
+    fn render_slider_preview(&mut self, ui: &mut Ui) {
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.slider(&mut self.slider_value, (0.0..=100.0, 250.0));
+            let value_label = format!("{:.0}", self.slider_value.round());
+            let _ = components.label(
+                Label::new(value_label.as_str())
+                    .tone(LabelTone::Secondary)
+                    .weight(LabelWeight::Semibold),
+            );
+        });
+    }
+
+    fn render_number_input_preview(&mut self, ui: &mut Ui) {
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.number_input(
+                &mut self.number_x_value,
+                NumberInput::new(Id::new("component_showcase_number_x"))
+                    .width(110.0)
+                    .range(0.0..=100.0)
+                    .decimals(1)
+                    .prefix("X")
+                    .prefix_tint(NUMBER_INPUT_GREEN)
+                    .prefix_align_left()
+                    .axis(NumberInputAxis::Horizontal),
+            );
+            let _ = components.number_input(
+                &mut self.number_y_value,
+                NumberInput::new(Id::new("component_showcase_number_y"))
+                    .width(110.0)
+                    .range(0.0..=100.0)
+                    .decimals(1)
+                    .prefix("Y")
+                    .prefix_tint(NUMBER_INPUT_RED)
+                    .prefix_align_left()
+                    .axis(NumberInputAxis::Vertical),
+            );
+        });
+    }
+
+    fn render_select_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().select(
+            &mut self.select_index,
+            Select::from_id(Id::new("component_showcase_select"), &SELECT_OPTIONS).width(280.0),
+        );
+
+        let selected_label = self
+            .select_index
+            .and_then(|index| SELECT_OPTIONS.get(index).copied())
+            .unwrap_or("None");
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(selected_label)
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_tabs_preview(&mut self, ui: &mut Ui) {
+        ui.components()
+            .tabs(Id::new("component_showcase_tabs"), &mut self.tab_index, &TAB_OPTIONS);
+
+        let selected_tab = TAB_OPTIONS
+            .iter()
+            .find(|option| option.value == self.tab_index)
+            .map(|option| option.label)
+            .unwrap_or(TAB_OPTIONS[0].label);
+        ui.add_space(6.0);
+        let _ = ui.components().label(
+            Label::new(selected_tab)
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+
+        ui.add_space(18.0);
+        ui.components().segmented_tabs(
+            Id::new("component_showcase_segmented_tabs"),
+            &mut self.segmented_tab_index,
+            &TAB_OPTIONS,
+        );
+
+        ui.add_space(18.0);
+        ui.components().stacked_tabs(
+            Id::new("component_showcase_stacked_tabs"),
+            &mut self.stacked_tab_index,
+            &STACKED_TAB_OPTIONS,
+        );
+
+        ui.add_space(18.0);
+        ui.components().rail_tabs(
+            Id::new("component_showcase_rail_tabs"),
+            &mut self.rail_tab_index,
+            &RAIL_TAB_OPTIONS,
+        );
+
+        ui.add_space(18.0);
+        ui.components().toggle_rail_tabs(
+            Id::new("component_showcase_toggle_rail_tabs"),
+            &mut self.toggle_rail_tab_index,
+            &RAIL_TAB_OPTIONS,
+        );
+    }
+
+    fn render_separator_preview(&mut self, ui: &mut Ui) {
+        let mut components = ui.components();
+        let _ = components.label(Label::new("Above separator").tone(LabelTone::Secondary));
+        let _ = components.separator();
+        let _ = components.label(Label::new("Below separator").tone(LabelTone::Secondary));
+    }
+
+    fn render_card_preview(&mut self, ui: &mut Ui) {
+        let card_fill = input_background(ui);
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+
+        let _ = ui.components().card(
+            Card::new()
+                .fill(card_fill)
+                .stroke(card_stroke),
+            |ui| {
+                let _ = ui.components().label(
+                    Label::new("Card Title")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Bold)
+                        .size(16.0),
+                );
+                let _ = ui.components().label(
+                    Label::new("Cards wrap related content in a bordered panel.")
+                        .tone(LabelTone::Muted),
+                );
+                ui.add_space(6.0);
+                let _ = ui.components().separator();
+                ui.add_space(6.0);
+                let _ = layout::row().gap(8.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    let _ = components.button(Button::new("Cancel").variant(ButtonVariant::Secondary));
+                    let _ = components.button(Button::new("Save").variant(ButtonVariant::Primary));
+                });
+            },
+        );
+    }
+
+    fn render_progress_preview(&mut self, ui: &mut Ui) {
+        let _ = ui
+            .components()
+            .progress(self.progress_value, Progress::new().width(280.0));
+        ui.add_space(10.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            if components
+                .button(Button::new("Advance").variant(ButtonVariant::Primary))
+                .clicked()
+            {
+                self.progress_value = (self.progress_value + 0.1).clamp(0.0, 1.0);
+            }
+            if components
+                .button(Button::new("Reset").variant(ButtonVariant::Secondary))
+                .clicked()
+            {
+                self.progress_value = 0.0;
+            }
+        });
+    }
+
+    fn render_tooltip_preview(&mut self, ui: &mut Ui) {
+        if let Some(index) = ui.components().button_group(ButtonGroup::new(
+            Id::new("component_showcase_tooltip_placement"),
+            &TOOLTIP_PLACEMENT_OPTIONS,
+        )) {
+            self.tooltip_placement = tooltip_placement_from_index(index);
+        }
+        ui.add_space(8.0);
+        let _ = ui.components().tooltip(
+            Tooltip::new("Hover this trigger", "Tooltip content example")
+                .width(220.0)
+                .placement(self.tooltip_placement),
+        );
+    }
+
+    fn render_dropdown_menu_preview(&mut self, ui: &mut Ui) {
+        let (_, state) = ui.components().dropdown_menu(
+            DropdownMenu::new("Open")
+                .entries(&DROPDOWN_ENTRIES)
+                .width(220.0),
+        );
+        if let Some(action) = state.action {
+            self.dropdown_action = Some(action);
+        }
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(dropdown_action_label(self.dropdown_action))
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_collapsible_preview(&mut self, ui: &mut Ui) {
+        let collapsible_open = self.collapsible_open;
+        let _ = ui.components().collapsible(
+            &mut self.collapsible_open,
+            Collapsible::new(Id::new("component_showcase_collapsible"), "Transform")
+                .open(collapsible_open)
+                .leading_icon("move-3d")
+                .trailing_icon("ellipsis"),
+            |ui| {
+                let mut components = ui.components();
+                let _ = components.label(Label::new("Position").tone(LabelTone::Secondary));
+                let _ = components.label(Label::new("Rotation").tone(LabelTone::Secondary));
+                let _ = components.label(Label::new("Scale").tone(LabelTone::Secondary));
+            },
+        );
+    }
+
+    fn render_audio_playback_preview(&mut self, ui: &mut Ui) {
+        let (_, playback_result) = ui.components().audio_playback_with_actions(
+            AudioPlayback::new(
+                Id::new("component_showcase_audio_playback"),
+                self.audio_playback_state,
+            ),
+            |ui| {
+                let mut components = ui.components();
+                let _ = components.button(
+                    Button::icon_only("share-2")
+                        .variant(ButtonVariant::Ghost)
+                        .size(ControlSize::Sm),
+                );
+                let _ = components.button(
+                    Button::icon_only("download")
+                        .variant(ButtonVariant::Ghost)
+                        .size(ControlSize::Sm),
+                );
+                let _ = components.button(
+                    Button::icon_only("ellipsis")
+                        .variant(ButtonVariant::Ghost)
+                        .size(ControlSize::Sm),
+                );
+            },
+        );
+
+        if playback_result.play_pause_clicked {
+            self.audio_playback_state = match self.audio_playback_state {
+                AudioPlaybackState::Paused => AudioPlaybackState::Playing,
+                AudioPlaybackState::Playing => AudioPlaybackState::Paused,
+            };
+        }
+
+        ui.add_space(8.0);
+        let status = match self.audio_playback_state {
+            AudioPlaybackState::Paused => "Playback: Paused",
+            AudioPlaybackState::Playing => "Playback: Playing",
+        };
+        let _ = ui.components().label(
+            Label::new(status)
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_combobox_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().combobox(
+            &mut self.combobox_query,
+            &mut self.combobox_index,
+            Combobox::new(Id::new("component_showcase_combobox"), &COMBOBOX_OPTIONS).width(280.0),
+        );
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(COMBOBOX_OPTIONS[self.combobox_index])
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_command_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().command(
+            &mut self.command_query,
+            &COMMAND_ITEMS,
+            Command::new(Id::new("component_showcase_command"))
+                .width(380.0)
+                .preview(true)
+                .preview_height(220.0),
+        );
+    }
+
+    fn render_dialogue_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().dialogue(
+            &mut self.dialogue_open,
+            Dialogue::new(Id::new("component_showcase_dialogue"), "Create Component")
+                .description("Adds the selected component to the active object.")
+                .trigger_label("Open Dialogue")
+                .confirm_label("Create")
+                .cancel_label("Cancel")
+                .intent(DialogueIntent::Default)
+                .width(380.0),
+        );
+    }
+
+    fn render_image_tile_preview(&mut self, ui: &mut Ui) {
+        let featured_image = showcase_image("featured");
+        let secondary_image = showcase_image("secondary");
+
+        let _ = ui.components().label(
+            Label::new("Featured tile")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(8.0);
+
+        let (_, featured_state) = ui.components().image_tile_with_body(
+            ImageTile::new(featured_image.clone()).size(ImageTileSize::Lg),
+            |ui| {
+                let mut components = ui.components();
+                let _ = components.label(
+                    Label::new("Untitled Design")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold)
+                        .size(16.0),
+                );
+                draw_image_tile_metadata_row(ui, "Edited 2 days ago");
+            },
+        );
+        if featured_state.tile_clicked {
+            self.image_tile_selected = !self.image_tile_selected;
+            self.image_tile_last_action = "Opened Untitled Design".to_owned();
+        }
+
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new("Audio preview")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(8.0);
+        let (_, audio_state) = ui.components().image_tile_with_body(
+            ImageTile::new(secondary_image)
+                .size(ImageTileSize::Md)
+                .selected(self.image_tile_selected)
+                .playback_state(self.image_tile_playback_state),
+            |ui| {
+                let mut components = ui.components();
+                let _ = components.label(
+                    Label::new("Ambient Preview")
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold),
+                );
+                let playback_label = match self.image_tile_playback_state {
+                    ImageTilePlaybackState::Paused => "Paused • Click play to preview",
+                    ImageTilePlaybackState::Playing => "Playing • 0:27 loop",
+                };
+                draw_image_tile_metadata_row(ui, playback_label);
+            },
+        );
+        if audio_state.play_pause_clicked {
+            self.image_tile_playback_state = match self.image_tile_playback_state {
+                ImageTilePlaybackState::Paused => ImageTilePlaybackState::Playing,
+                ImageTilePlaybackState::Playing => ImageTilePlaybackState::Paused,
+            };
+            self.image_tile_last_action = match self.image_tile_playback_state {
+                ImageTilePlaybackState::Paused => "Paused audio preview".to_owned(),
+                ImageTilePlaybackState::Playing => "Started audio preview".to_owned(),
+            };
+        } else if audio_state.tile_clicked {
+            self.image_tile_last_action = "Opened audio preview tile".to_owned();
+        }
+
+        ui.add_space(8.0);
+        let status = format!("Last action: {}", self.image_tile_last_action);
+        let _ = ui.components().label(
+            Label::new(status.as_str())
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_menu_bar_preview(&mut self, ui: &mut Ui) {
+        let card_fill = app_background(ui);
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let menu_items = [
+            MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(220.0),
+            MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(190.0),
+            MenuBarItem::new("View", &MENU_BAR_VIEW_ENTRIES).width(196.0),
+            MenuBarItem::new("Object", &MENU_BAR_OBJECT_ENTRIES).width(220.0),
+        ];
+
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let _ = ui.components().card(
+                Card::new()
+                    .fill(card_fill)
+                    .stroke(card_stroke),
+                |ui| {
+                    ui.set_width(MENU_BAR_PREVIEW_WIDTH.min(ui.available_width()));
+                    let (_, state) = ui
+                        .components()
+                        .menu_bar(MenuBar::new(Id::new("component_showcase_menu_bar"), &menu_items));
+                    if let Some(action) = state.action {
+                        self.menu_bar_action = Some(action);
+                    }
+                },
+            );
+        });
+
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(menu_bar_action_label(self.menu_bar_action))
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_toolbar_preview(&mut self, ui: &mut Ui) {
+        let canvas_fill = if self.theme_mode.is_dark() {
+            app_background(ui)
+        } else {
+            TOOLBAR_CANVAS_LIGHT_FILL
+        };
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let width = TOOLBAR_PREVIEW_WIDTH.min(ui.available_width());
+            let _ = ui.components().card(
+                Card::new()
+                    .fill(canvas_fill)
+                    .stroke(card_stroke),
+                |ui| {
+                    ui.set_width(width);
+                    let (host_rect, _) = ui.allocate_exact_size(vec2(width - 24.0, 220.0), Sense::hover());
+                    let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
+                        let _ = ui.components().toolbar(
+                            Toolbar::new(Id::new("component_showcase_toolbar"))
+                                .anchor(Align2::CENTER_TOP)
+                                .offset(vec2(0.0, 10.0)),
+                            |ui| draw_toolbar_contents(ui, &mut self.toolbar_color_index),
+                        );
                     });
                 },
             );
         });
     }
 
-    fn render_combobox(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Combobox", |ui| {
-            let _ = ui.components().combobox(
-                &mut self.combobox_query,
-                &mut self.combobox_selected,
-                Combobox::new(Id::new("combobox"), &COMBOBOX_OPTIONS).width(280.0),
-            );
-        });
-    }
+    fn render_pagination_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().pagination(
+            &mut self.pagination_page,
+            Pagination::new(Id::new("component_showcase_pagination"), PAGINATION_PAGE_COUNT),
+        );
 
-    fn render_command(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Command", |ui| {
-            let _ = ui.components().command(
-                &mut self.command_query,
-                &COMMAND_ITEMS,
-                Command::new(Id::new("command"))
-                    .width(360.0)
-                    .preview(true)
-                    .preview_height(220.0),
-            );
-        });
-    }
-
-    fn render_dialogue(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Dialogue", |ui| {
-            let _ = ui.components().dialogue(
-                &mut self.dialogue_open,
-                Dialogue::new(Id::new("dialogue"), "Publish Build")
-                    .description("This demonstrates the dialogue component.")
-                    .trigger_label("Open Dialogue")
-                    .confirm_label("Publish")
-                    .cancel_label("Not Now"),
-            );
-        });
-    }
-
-    fn render_dropdown_menu(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Dropdown Menu", |ui| {
-            let (_, dropdown_state) = ui.components().dropdown_menu(
-                DropdownMenu::new("Actions")
-                    .entries(&DROPDOWN_ENTRIES)
-                    .width(220.0),
-            );
-            if dropdown_state.action.is_some() {
-                self.dropdown_action = dropdown_state.action;
-            }
-            ui.add_space(10.0);
-            let status = dropdown_action_text(self.dropdown_action, &DROPDOWN_ACTION_LABELS);
-            let _ = ui
-                .components()
-                .label(Label::new(status.as_str()).tone(LabelTone::Muted));
-        });
-    }
-
-    fn render_field(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Field", |ui| {
-            let _ = ui.components().field(
-                &mut self.field_value,
-                Field::new("Package Name")
-                    .width(280.0)
-                    .helper_text("Helper text under the input"),
-            );
-        });
-    }
-
-    fn render_icon(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Icon", |ui| {
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
-                let mut components = ui.components();
-                let _ = components.icon(Icon::new("search").size(18.0));
-                let _ = components.icon(Icon::new("sparkles").size(18.0).tint(self.accent_color));
-                let _ = components.icon(Icon::new("bootstrap:play-fill").size(18.0));
-            });
-        });
-    }
-
-    fn render_image(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Image", |ui| {
-            let _ = ui.components().image(
-                showcase_image()
-                    .fit_to_exact_size(vec2(220.0, 146.0))
-                    .corner_radius(10),
-            );
-        });
-    }
-
-    fn render_image_tile(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Image Tile", |ui| {
-            let (_, tile_state) = ui.components().image_tile_with_body(
-                ImageTile::new(showcase_image())
-                    .size(ImageTileSize::Md)
-                    .selected(self.image_tile_selected)
-                    .playback_state(self.image_tile_playback),
-                |ui| {
-                    let mut components = ui.components();
-                    let _ =
-                        components.label(Label::new("Preview Asset").weight(LabelWeight::Semibold));
-                    let _ = components
-                        .label(Label::new("Image Tile with body content").tone(LabelTone::Muted));
-                },
-            );
-            if tile_state.tile_clicked {
-                self.image_tile_selected = !self.image_tile_selected;
-            }
-            if tile_state.play_pause_clicked {
-                self.image_tile_playback = match self.image_tile_playback {
-                    ImageTilePlaybackState::Paused => ImageTilePlaybackState::Playing,
-                    ImageTilePlaybackState::Playing => ImageTilePlaybackState::Paused,
-                };
-            }
-        });
-    }
-
-    fn render_input(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Input", |ui| {
-            let _ = ui.components().text_input(
-                &mut self.text_value,
-                TextInput::new()
-                    .width(280.0)
-                    .placeholder("Component library"),
-            );
-        });
-    }
-
-    fn render_kbd(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Kbd", |ui| {
-            let _ = ui.components().kbd_group((), |ui| {
-                let mut components = ui.components();
-                let _ = components.kbd("Ctrl");
-                let _ = components.kbd("Shift");
-                let _ = components.kbd("P");
-            });
-        });
-    }
-
-    fn render_label(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Label", |ui| {
-            let mut components = ui.components();
-            let _ = components.label(
-                Label::new("Primary Label")
-                    .weight(LabelWeight::Bold)
-                    .size(14.0),
-            );
-            let _ = components.label(Label::new("Secondary Label").tone(LabelTone::Secondary));
-            let _ = components.label(Label::new("Muted Label").tone(LabelTone::Muted));
-            let _ = components.label(Label::new("Destructive Label").tone(LabelTone::Destructive));
-        });
-    }
-
-    fn render_menu_bar(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Menu Bar", |ui| {
-            let (_, menu_state) = ui
-                .components()
-                .menu_bar(MenuBar::new(Id::new("menu_bar"), &MENU_BAR_ITEMS));
-            if menu_state.action.is_some() {
-                self.menu_action = menu_state.action;
-            }
-            let status = menu_action_text(self.menu_action, &MENU_ACTION_LABELS);
-            ui.add_space(10.0);
-            let _ = ui
-                .components()
-                .label(Label::new(status.as_str()).tone(LabelTone::Muted));
-        });
-    }
-
-    fn render_number_input(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Number Input", |ui| {
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
-                let mut components = ui.components();
-                let _ = components.number_input(
-                    &mut self.number_x,
-                    NumberInput::new(Id::new("number_x"))
-                        .prefix("X")
-                        .prefix_align_left()
-                        .range(0.0..=100.0),
-                );
-                let _ = components.number_input(
-                    &mut self.number_y,
-                    NumberInput::new(Id::new("number_y"))
-                        .prefix("Y")
-                        .axis(NumberInputAxis::Vertical)
-                        .range(0.0..=100.0),
-                );
-            });
-        });
-    }
-
-    fn render_pagination(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Pagination", |ui| {
-            let _ = ui.components().pagination(
-                &mut self.current_page,
-                Pagination::new(Id::new("pagination"), 12),
-            );
-        });
-    }
-
-    fn render_progress(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Progress", |ui| {
-            let _ = ui
-                .components()
-                .progress(self.progress, Progress::new().width(280.0));
-            ui.add_space(10.0);
-            let _ = layout::row().gap(8.0).show(ui, |ui| {
-                let mut components = ui.components();
-                if components
-                    .button(Button::new("Advance").variant(ButtonVariant::Primary))
-                    .clicked()
-                {
-                    self.progress = (self.progress + 0.1).clamp(0.0, 1.0);
-                }
-                if components
-                    .button(Button::new("Reset").variant(ButtonVariant::Secondary))
-                    .clicked()
-                {
-                    self.progress = 0.0;
-                }
-            });
-        });
-    }
-
-    fn render_select(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Select", |ui| {
-            let _ = ui.components().select(
-                &mut self.select_value,
-                Select::from_id(Id::new("status"), &STATUS_OPTIONS).width(220.0),
-            );
-        });
-    }
-
-    fn render_separator(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Separator", |ui| {
-            let mut components = ui.components();
-            let _ = components.label("Above separator");
-            let _ = components.separator();
-            let _ = components.label("Below separator");
-        });
-    }
-
-    fn render_slider(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Slider", |ui| {
-            let _ = ui.components().slider(
-                &mut self.slider_value,
-                Slider::new(0.0..=100.0).width(220.0),
-            );
-        });
-    }
-
-    fn render_switch(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Switch", |ui| {
-            let _ = ui.components().switch(
-                &mut self.switch_value,
-                Switch::new()
-                    .label("Publish immediately")
-                    .size(ControlSize::Sm),
-            );
-        });
-    }
-
-    fn render_tabs(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Tabs", |ui| {
-            let _ = layout::column().gap(12.0).show(ui, |ui| {
-                let mut components = ui.components();
-                components.tabs(Id::new("tabs"), &mut self.tabs_value, &TAB_OPTIONS);
-                components.segmented_tabs(
-                    Id::new("segmented_tabs"),
-                    &mut self.segmented_tabs_value,
-                    &TAB_OPTIONS,
-                );
-                components.stacked_tabs(
-                    Id::new("stacked_tabs"),
-                    &mut self.stacked_tabs_value,
-                    &STACKED_TAB_OPTIONS,
-                );
-                components.rail_tabs(
-                    Id::new("rail_tabs"),
-                    &mut self.rail_tabs_value,
-                    &RAIL_TAB_OPTIONS,
-                );
-                components.toggle_rail_tabs(
-                    Id::new("toggle_rail_tabs"),
-                    &mut self.toggle_rail_tabs_value,
-                    &RAIL_TAB_OPTIONS,
-                );
-            });
-        });
-    }
-
-    fn render_toolbar(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Toolbar", |ui| {
-            let (host_rect, _) =
-                ui.allocate_exact_size(vec2(ui.available_width(), 112.0), egui::Sense::hover());
-            let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
-                let _ = ui.components().toolbar(
-                    Toolbar::new(Id::new("toolbar"))
-                        .anchor(Align2::CENTER_CENTER)
-                        .offset(vec2(0.0, 0.0)),
-                    |ui| {
-                        let mut components = ui.components();
-                        let _ = components.button(
-                            Button::new("Edit")
-                                .variant(ButtonVariant::Ghost)
-                                .leading_icon("pencil"),
-                        );
-                        let _ = components.button(
-                            Button::new("Share")
-                                .variant(ButtonVariant::Ghost)
-                                .leading_icon("share-2"),
-                        );
-                        let _ = components.button(
-                            Button::new("Export")
-                                .variant(ButtonVariant::Secondary)
-                                .trailing_icon("arrow-right"),
-                        );
-                    },
-                );
-            });
-        });
-    }
-
-    fn render_tooltip(&mut self, ui: &mut egui::Ui) {
-        surface_demo(ui, "Tooltip", |ui| {
-            let _ = ui.components().tooltip(
-                Tooltip::new("Hover For Tooltip", "Tooltip component example")
-                    .placement(TooltipPlacement::Right)
-                    .width(180.0),
-            );
-        });
+        ui.add_space(8.0);
+        let summary = format!("Page {} of {}", self.pagination_page, PAGINATION_PAGE_COUNT);
+        let _ = ui.components().label(
+            Label::new(summary.as_str())
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
     }
 }
 
-fn surface_demo(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
-    let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let mut components = ui.components();
-        let _ = components.label(Label::new(title).weight(LabelWeight::Bold).size(15.0));
-        let _ = components.separator();
-        ui.add_space(12.0);
-        add(ui);
+fn draw_toolbar_contents(ui: &mut Ui, toolbar_color_index: &mut usize) {
+    let selected_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Foreground));
+
+    let _ = layout::row().gap(6.0).show(ui, |ui| {
+        for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
+            let _ = ui
+                .components()
+                .button(Button::new(label).variant(ButtonVariant::Ghost));
+            if index == 1 {
+                let _ = ui.components().button(
+                    Button::icon_only("crown")
+                        .variant(ButtonVariant::Ghost)
+                        .icon_size(13.0)
+                        .icon_tint(Color32::from_rgb(216, 168, 83)),
+                );
+            }
+        }
+
+        draw_toolbar_divider(ui);
+
+        for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
+            let stroke = if *toolbar_color_index == index {
+                selected_stroke
+            } else {
+                Stroke::NONE
+            };
+            if ui
+                .components()
+                .button(Button::color_only(Color::new(fill).size(16.0).stroke(stroke)))
+                .clicked()
+            {
+                *toolbar_color_index = index;
+            }
+        }
+
+        draw_toolbar_divider(ui);
+        let _ = ui
+            .components()
+            .button(Button::icon_only("square-menu").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::icon_only("rotate-ccw").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::icon_only("crop").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::new("Flip").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::icon_only("grid-3x3").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::new("Animate").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::new("Position").variant(ButtonVariant::Ghost));
+        let _ = ui
+            .components()
+            .button(Button::icon_only("paint-roller").variant(ButtonVariant::Ghost));
     });
 }
 
-fn showcase_image() -> Image<'static> {
-    Image::from_bytes("bytes://examples/showcase-image.png", SHOWCASE_IMAGE_BYTES)
+fn draw_toolbar_divider(ui: &mut Ui) {
+    let (rect, _) = ui.allocate_exact_size(vec2(1.0, 16.0), Sense::hover());
+    ui.painter().vline(
+        rect.center().x,
+        rect.y_range(),
+        Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
+    );
 }
 
-fn button_group_text(selection: Option<usize>, labels: &[&str]) -> String {
-    selection
-        .and_then(|index| labels.get(index).copied())
-        .map(|label| format!("Button Group: {label}"))
-        .unwrap_or_else(|| "Button Group: nothing selected".to_owned())
+fn draw_image_tile_metadata_row(ui: &mut Ui, text: &str) {
+    let _ = layout::row().gap(6.0).show(ui, |ui| {
+        let mut components = ui.components();
+        let _ = components.icon(Icon::new("globe").size(12.0).tint(IMAGE_TILE_META_ACCENT));
+        let _ = components.label(Label::new("•").tone(LabelTone::Muted));
+        let _ = components.label(
+            Label::new(text)
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    });
 }
 
-fn dropdown_action_text(selection: Option<usize>, labels: &[&str]) -> String {
-    selection
-        .and_then(|index| labels.get(index).copied())
-        .map(|label| format!("Dropdown Action: {label}"))
-        .unwrap_or_else(|| "Dropdown Action: none selected yet".to_owned())
+fn tooltip_placement_from_index(index: usize) -> TooltipPlacement {
+    match index {
+        1 => TooltipPlacement::Right,
+        2 => TooltipPlacement::Bottom,
+        3 => TooltipPlacement::Left,
+        _ => TooltipPlacement::Top,
+    }
 }
 
-fn menu_action_text(selection: Option<usize>, labels: &[&str]) -> String {
-    selection
-        .and_then(|index| labels.get(index).copied())
-        .map(|label| format!("Menu Action: {label}"))
-        .unwrap_or_else(|| "Menu Action: none selected yet".to_owned())
+fn dropdown_action_label(action: Option<usize>) -> &'static str {
+    match action.and_then(|id| DROPDOWN_ACTION_LABELS.get(id).copied()) {
+        Some(label) => label,
+        None => "No action triggered",
+    }
+}
+
+fn menu_bar_action_label(action: Option<usize>) -> &'static str {
+    match action.and_then(|id| MENU_BAR_ACTION_LABELS.get(id).copied()) {
+        Some(label) => label,
+        None => "No menu action triggered",
+    }
+}
+
+fn showcase_image(name: &str) -> Image<'static> {
+    Image::from_bytes(format!("bytes://examples/showcase/{name}.png"), SHOWCASE_IMAGE_BYTES)
+}
+
+fn showcase_component_definitions_by_section(
+    section: ShowcaseSection,
+) -> impl Iterator<Item = &'static ComponentDefinition> {
+    let mut definitions = catalog::component_definitions()
+        .filter(move |definition| showcase_section(definition.kind) == section)
+        .collect::<Vec<_>>();
+    definitions.sort_unstable_by(|left, right| left.label.cmp(right.label));
+    definitions.into_iter()
+}
+
+fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefinition {
+    catalog::component_definitions()
+        .find(|definition| definition.kind == kind)
+        .expect("missing catalog component definition")
+}
+
+fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
+    match kind {
+        ComponentKind::MenuBar | ComponentKind::Toolbar | ComponentKind::ImageTile => {
+            ShowcaseSection::Examples
+        }
+        _ => match catalog_component_definition(kind).group {
+            ComponentGroup::Primitive => ShowcaseSection::PrimaryPrimitive,
+            ComponentGroup::Composed => ShowcaseSection::DerivedComposed,
+        },
+    }
+}
+
+fn showcase_description(kind: ComponentKind) -> &'static str {
+    match kind {
+        ComponentKind::Label => "Text styles and tones.",
+        ComponentKind::Color => "Circular solid color swatches.",
+        ComponentKind::Image => "PNG-backed raster image rendering.",
+        ComponentKind::Icon => "Lucide icon rendering.",
+        ComponentKind::Kbd => "Keyboard keycaps and shortcuts.",
+        ComponentKind::Input => "Single-line text input.",
+        ComponentKind::Field => "Label + input + helper text.",
+        ComponentKind::Button => "Text, icon, and link button variants.",
+        ComponentKind::ButtonGroup => "Attached action button group.",
+        ComponentKind::Checkbox => "Boolean control with label.",
+        ComponentKind::Switch => "Toggle control.",
+        ComponentKind::Slider => "Range input.",
+        ComponentKind::NumberInput => "Numeric entry with drag axis support.",
+        ComponentKind::Select => "Single-choice selection menu.",
+        ComponentKind::Tabs => "Inline, segmented, stacked, and rail tabs.",
+        ComponentKind::Separator => "Lightweight content divider.",
+        ComponentKind::Card => "Framed content surface.",
+        ComponentKind::Progress => "Determinate progress indicator.",
+        ComponentKind::Tooltip => "Hover-triggered helper content.",
+        ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
+        ComponentKind::Collapsible => "Expandable content section.",
+        ComponentKind::AudioPlayback => "Playback row with optional trailing actions.",
+        ComponentKind::Combobox => "Filterable text-backed option picker.",
+        ComponentKind::Command => "Searchable command list with preview mode.",
+        ComponentKind::Dialogue => "Modal confirmation flow.",
+        ComponentKind::ImageTile => "Media tile with body and playback states.",
+        ComponentKind::MenuBar => "Desktop-style menu bar surface.",
+        ComponentKind::Toolbar => "Floating tool cluster anchored in a canvas.",
+        ComponentKind::Pagination => "Previous/next pager with page numbers.",
+    }
+}
+
+fn app_background(ui: &Ui) -> Color32 {
+    theme::color(ui, ColorRole::Background)
+}
+
+fn input_background(ui: &Ui) -> Color32 {
+    theme::color(ui, ColorRole::Background).lerp_to_gamma(theme::color(ui, ColorRole::Card), 0.65)
+}
+
+fn text_secondary(ui: &Ui) -> Color32 {
+    theme::color(ui, ColorRole::Foreground)
+        .lerp_to_gamma(theme::color(ui, ColorRole::MutedForeground), 0.55)
+}
+
+fn text_muted(ui: &Ui) -> Color32 {
+    theme::color(ui, ColorRole::MutedForeground)
+}
+
+fn radius_sm(ui: &Ui) -> u8 {
+    theme::radius(ui, RadiusRole::Sm)
+}
+
+fn radius_md(ui: &Ui) -> u8 {
+    theme::radius(ui, RadiusRole::Md)
+}
+
+fn clamp_state(state: &mut ShowcaseApp) {
+    state.toolbar_color_index = state
+        .toolbar_color_index
+        .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
+    state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
+    state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
+    state.segmented_tab_index = state
+        .segmented_tab_index
+        .min(TAB_OPTIONS.len().saturating_sub(1));
+    state.stacked_tab_index = state
+        .stacked_tab_index
+        .min(STACKED_TAB_OPTIONS.len().saturating_sub(1));
+    state.rail_tab_index = state
+        .rail_tab_index
+        .min(RAIL_TAB_OPTIONS.len().saturating_sub(1));
+    if state
+        .toggle_rail_tab_index
+        .is_some_and(|index| index >= RAIL_TAB_OPTIONS.len())
+    {
+        state.toggle_rail_tab_index = None;
+    }
+    state.pagination_page = state.pagination_page.clamp(1, PAGINATION_PAGE_COUNT);
+    state.slider_value = state.slider_value.clamp(0.0, 100.0);
+    state.number_x_value = state.number_x_value.clamp(0.0, 100.0);
+    state.number_y_value = state.number_y_value.clamp(0.0, 100.0);
+    state.progress_value = state.progress_value.clamp(0.0, 1.0);
+
+    if state.select_index.is_some_and(|index| index >= SELECT_OPTIONS.len()) {
+        state.select_index = None;
+    }
+    if state
+        .dropdown_action
+        .is_some_and(|id| id >= DROPDOWN_ACTION_LABELS.len())
+    {
+        state.dropdown_action = None;
+    }
+    if state
+        .menu_bar_action
+        .is_some_and(|id| id >= MENU_BAR_ACTION_LABELS.len())
+    {
+        state.menu_bar_action = None;
+    }
+    state.combobox_index = state
+        .combobox_index
+        .min(COMBOBOX_OPTIONS.len().saturating_sub(1));
 }
