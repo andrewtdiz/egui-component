@@ -50,29 +50,31 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
     let runtime = crate::theme::runtime_for_ui(ui);
     match props.label {
         Some(label_text) => {
-            layout::row().gap(10.0).show(ui, |ui| {
-                let mut control =
-                    draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand);
-                let label = ui
-                    .scope(|ui| {
-                        ui.style_mut().interaction.selectable_labels = false;
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(label_text).color(tokens::text_primary(runtime)),
+            layout::row()
+                .gap(10.0)
+                .show(ui, |ui| {
+                    let mut control =
+                        draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand);
+                    let label = ui
+                        .scope(|ui| {
+                            ui.style_mut().interaction.selectable_labels = false;
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(label_text).color(tokens::text_primary(runtime)),
+                                )
+                                .selectable(false)
+                                .sense(Sense::click()),
                             )
-                            .selectable(false)
-                            .sense(Sense::click()),
-                        )
-                    })
-                    .inner
-                    .on_hover_cursor(CursorIcon::PointingHand);
-                if label.clicked() {
-                    *value = !*value;
-                    control.mark_changed();
-                }
-                control.union(label)
-            })
-            .inner
+                        })
+                        .inner
+                        .on_hover_cursor(CursorIcon::PointingHand);
+                    if label.clicked() {
+                        *value = !*value;
+                        control.mark_changed();
+                    }
+                    control.union(label)
+                })
+                .inner
         }
         None => draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand),
     }

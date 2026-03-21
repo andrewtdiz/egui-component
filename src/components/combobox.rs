@@ -103,7 +103,12 @@ impl ComponentUi<'_> {
     }
 }
 
-fn draw_option_row(ui: &mut Ui, text: &str, selected: bool, runtime: crate::theme::ThemeRuntime) -> Response {
+fn draw_option_row(
+    ui: &mut Ui,
+    text: &str,
+    selected: bool,
+    runtime: crate::theme::ThemeRuntime,
+) -> Response {
     let desired_size = egui::vec2(ui.available_width().max(96.0), ui.spacing().interact_size.y);
     let (rect, response) = row_chrome(
         ui,

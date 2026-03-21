@@ -189,7 +189,11 @@ mod tests {
     #[test]
     fn theme_setup_supports_weighted_labels_and_helper_text() {
         let context = Context::default();
-        crate::theme::install(&context, crate::theme::ThemeSpec::default(), crate::theme::ThemeMode::Dark);
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
 
         let frame_output = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {

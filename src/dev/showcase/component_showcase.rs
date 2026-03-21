@@ -12,6 +12,9 @@ use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Layout, Sense, Stroke,
 
 use egui::containers::scroll_area::ScrollSource;
 
+const CLAY_LOGO_LARGE_PNG_BYTES: &[u8] =
+    include_bytes!("../../../assets/images/clay_logo_large.png");
+const SHOWCASE_IMAGE_PNG_BYTES: &[u8] = include_bytes!("../../../assets/images/showcase-image.png");
 const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
 const TOOLBAR_ACTION_OPTIONS: [&str; 3] = ["Edit", "BG Remover", "Eraser"];
 const TAB_OPTIONS: [TabOption<'static>; 3] = [
@@ -31,6 +34,10 @@ const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(206, 164, 84),
 ];
 const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
+const TOOLBAR_PREVIEW_CARD_WIDTH: f32 = 860.0;
+const MENU_BAR_PREVIEW_CARD_WIDTH: f32 = 520.0;
+const TOOLBAR_PREVIEW_CANVAS_WIDTH: f32 = 820.0;
+const MENU_BAR_PREVIEW_CANVAS_WIDTH: f32 = 360.0;
 const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
@@ -215,7 +222,7 @@ const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
     },
     ShowcaseMetadata {
         kind: ComponentKind::ButtonGroup,
-        description: "Attached segmented action group",
+        description: "Attached action button group",
         section_override: None,
     },
     ShowcaseMetadata {
@@ -321,7 +328,8 @@ const SHOWCASE_METADATA: &[ShowcaseMetadata] = &[
     // xtask:showcase-metadata:end
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 pub struct ComponentShowcaseState {
     selected_component: ComponentKind,
     input_value: String,
@@ -341,7 +349,6 @@ pub struct ComponentShowcaseState {
     stacked_tab_index: usize,
     audio_playback_state: AudioPlaybackState,
     pagination_page: usize,
-    button_group_index: usize,
     collapsible_open: bool,
     dropdown_action: Option<usize>,
     combobox_query: String,
@@ -376,7 +383,6 @@ impl Default for ComponentShowcaseState {
             stacked_tab_index: 0,
             audio_playback_state: AudioPlaybackState::Paused,
             pagination_page: 2,
-            button_group_index: 0,
             collapsible_open: true,
             dropdown_action: None,
             combobox_query: "mat".to_owned(),
@@ -392,7 +398,12 @@ impl Default for ComponentShowcaseState {
     }
 }
 
-pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
+pub(super) fn render(
+    ui: &mut Ui,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+    runtime: crate::theme::ThemeRuntime,
+) {
     clamp_state(state);
     layout::set_debug_overlay(ui.ctx(), false);
 
@@ -403,44 +414,43 @@ pub(super) fn render(ui: &mut Ui, state: &mut ComponentShowcaseState) {
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(tokens::app_background(crate::theme::runtime_for_context(ui.ctx())))
+                .fill(tokens::app_background(runtime))
                 .inner_margin(egui::Margin::same(8))
-                .stroke(Stroke::new(1.0, tokens::separator(crate::theme::runtime_for_context(ui.ctx())))),
+                .stroke(Stroke::new(1.0, tokens::separator(runtime))),
         )
         .show_inside(ui, |ui| {
             let mut ui = ui.components();
-            draw_sidebar(&mut ui, state);
+            draw_sidebar(&mut ui, state, reload_generation);
         });
 
     let _ = egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(tokens::app_background(crate::theme::runtime_for_context(ui.ctx())))
+                .fill(tokens::app_background(runtime))
                 .inner_margin(egui::Margin::same(12)),
         )
         .show_inside(ui, |ui| {
             let mut ui = ui.components();
-            draw_center_preview(&mut ui, state);
+            draw_center_preview(&mut ui, state, reload_generation);
         });
 }
 
-fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn draw_sidebar(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
     let _ = ui.label(
         Label::new("Components")
             .tone(LabelTone::Primary)
             .weight(LabelWeight::Semibold),
-    );
-    let _ = ui.label(
-        Label::new("Select a component to preview")
-            .tone(LabelTone::Muted)
-            .size(typography::SMALL_SIZE),
     );
     ui.add_space(8.0);
     let _ = ui.separator();
     ui.add_space(8.0);
 
     let _ = egui::ScrollArea::vertical()
-        .id_salt("component_showcase_sidebar_scroll")
+        .id_salt(("component_showcase_sidebar_scroll", reload_generation))
         .scroll_source(ScrollSource {
             drag: false,
             ..ScrollSource::default()
@@ -464,8 +474,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
 
                 for definition in showcase_component_definitions_by_section(section) {
                     let selected = state.selected_component == definition.kind;
-                    if draw_sidebar_component_row(ui.ui_mut(), definition.label, selected)
-                    .clicked()
+                    if draw_sidebar_component_row(ui.ui_mut(), definition.label, selected).clicked()
                     {
                         state.selected_component = definition.kind;
                     }
@@ -476,11 +485,7 @@ fn draw_sidebar(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
         });
 }
 
-fn draw_sidebar_component_row(
-    ui: &mut Ui,
-    label_text: &str,
-    selected: bool,
-) -> egui::Response {
+fn draw_sidebar_component_row(ui: &mut Ui, label_text: &str, selected: bool) -> egui::Response {
     let runtime = crate::theme::runtime_for_ui(ui);
     let desired_size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
@@ -516,13 +521,17 @@ fn draw_sidebar_component_row(
     response.on_hover_cursor(CursorIcon::PointingHand)
 }
 
-fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn draw_center_preview(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
     let definition = catalog_component_definition(state.selected_component);
     let metadata = showcase_metadata(state.selected_component);
     let overrides = ui.overrides();
 
     let _ = egui::ScrollArea::vertical()
-        .id_salt("component_showcase_preview_scroll")
+        .id_salt(("component_showcase_preview_scroll", reload_generation))
         .scroll_source(ScrollSource {
             drag: false,
             ..ScrollSource::default()
@@ -534,13 +543,14 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
             ui.ui_mut()
                 .with_layout(Layout::top_down(egui::Align::Center), |ui| {
                     let mut ui = ComponentUi::with_overrides(ui, overrides);
-                    let width = if matches!(
-                        state.selected_component,
-                        ComponentKind::Toolbar | ComponentKind::MenuBar
-                    ) {
-                        ui.available_width().min(980.0)
-                    } else {
-                        ui.available_width().clamp(260.0, 460.0)
+                    let width = match state.selected_component {
+                        ComponentKind::Toolbar => {
+                            ui.available_width().min(TOOLBAR_PREVIEW_CARD_WIDTH)
+                        }
+                        ComponentKind::MenuBar => {
+                            ui.available_width().min(MENU_BAR_PREVIEW_CARD_WIDTH)
+                        }
+                        _ => ui.available_width().clamp(260.0, 460.0),
                     };
 
                     let _ = ui.card((), |ui| {
@@ -561,13 +571,17 @@ fn draw_center_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseSt
                         let _ = ui.separator();
                         ui.add_space(10.0);
 
-                        render_selected_preview(&mut ui, state);
+                        render_selected_preview(&mut ui, state, reload_generation);
                     });
                 });
         });
 }
 
-fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn render_selected_preview(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
     let overrides = ui.overrides();
     match state.selected_component {
         // xtask:showcase-render-arms:start
@@ -631,16 +645,21 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         }
         ComponentKind::Image => {
             let runtime = crate::theme::runtime_for_ui(ui);
-            let sample_png = egui::include_image!("../../../assets/images/clay_logo_large.png");
+            let sample_png = showcase_image(
+                "clay-logo-large",
+                reload_generation,
+                CLAY_LOGO_LARGE_PNG_BYTES,
+            );
 
             let _ = ui.label(
-                Label::new("Embedded PNG")
+                Label::new("bytes:// PNG")
                     .tone(LabelTone::Muted)
                     .size(typography::SMALL_SIZE),
             );
             ui.add_space(6.0);
             let _ = ui.image(
-                Image::new(sample_png.clone())
+                sample_png
+                    .clone()
                     .fit_to_exact_size(egui::vec2(180.0, 180.0))
                     .corner_radius(tokens::radius_md(runtime))
                     .bg_fill(tokens::input_background(runtime)),
@@ -655,8 +674,8 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             ui.add_space(6.0);
             let _ = ui.image(
                 Image::from_bytes(
-                    "bytes://component-showcase/clay-logo-large.png",
-                    include_bytes!("../../../assets/images/clay_logo_large.png"),
+                    showcase_image_uri("clay-logo-large-inline", reload_generation),
+                    CLAY_LOGO_LARGE_PNG_BYTES,
                 )
                 .fit_to_exact_size(egui::vec2(96.0, 96.0))
                 .corner_radius(tokens::radius_sm(runtime)),
@@ -681,7 +700,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
             ui.add_space(6.0);
             let _ = ui.image(
-                Image::new(sample_png)
+                sample_png
                     .fit_to_exact_size(egui::vec2(96.0, 96.0))
                     .rotate(
                         state.image_rotation_degrees.to_radians(),
@@ -692,7 +711,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.add_space(8.0);
             let _ = ui.label(
-                Label::new("Supports include_image!, bytes://, and file:// PNG sources.")
+                Label::new("Supports bytes:// and file:// PNG sources.")
                     .tone(LabelTone::Muted)
                     .size(typography::SMALL_SIZE),
             );
@@ -807,13 +826,10 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
         }
         ComponentKind::ButtonGroup => {
-            ui.button_group(
-                &mut state.button_group_index,
-                crate::components::ButtonGroup::new(
-                    Id::new("component_showcase_button_group"),
-                    &BUTTON_GROUP_OPTIONS[..],
-                ),
-            );
+            let _ = ui.button_group(crate::components::ButtonGroup::new(
+                showcase_id("component_showcase_button_group", reload_generation),
+                &BUTTON_GROUP_OPTIONS[..],
+            ));
         }
         ComponentKind::Checkbox => {
             ui.ui_mut().horizontal(|ui| {
@@ -872,33 +888,42 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 let mut ui = ComponentUi::with_overrides(ui, overrides);
                 let _ = ui.number_input(
                     &mut state.number_x_value,
-                    NumberInput::new(Id::new("component_showcase_number_x"))
-                        .width(110.0)
-                        .range(0.0..=100.0)
-                        .decimals(1)
-                        .prefix("X")
-                        .prefix_tint(tokens::GAME_ENGINE_GREEN)
-                        .prefix_align_left()
-                        .axis(NumberInputAxis::Horizontal),
+                    NumberInput::new(showcase_id(
+                        "component_showcase_number_x",
+                        reload_generation,
+                    ))
+                    .width(110.0)
+                    .range(0.0..=100.0)
+                    .decimals(1)
+                    .prefix("X")
+                    .prefix_tint(tokens::GAME_ENGINE_GREEN)
+                    .prefix_align_left()
+                    .axis(NumberInputAxis::Horizontal),
                 );
                 let _ = ui.number_input(
                     &mut state.number_y_value,
-                    NumberInput::new(Id::new("component_showcase_number_y"))
-                        .width(110.0)
-                        .range(0.0..=100.0)
-                        .decimals(1)
-                        .prefix("Y")
-                        .prefix_tint(tokens::GAME_ENGINE_RED)
-                        .prefix_align_left()
-                        .axis(NumberInputAxis::Vertical),
+                    NumberInput::new(showcase_id(
+                        "component_showcase_number_y",
+                        reload_generation,
+                    ))
+                    .width(110.0)
+                    .range(0.0..=100.0)
+                    .decimals(1)
+                    .prefix("Y")
+                    .prefix_tint(tokens::GAME_ENGINE_RED)
+                    .prefix_align_left()
+                    .axis(NumberInputAxis::Vertical),
                 );
             });
         }
         ComponentKind::Select => {
             let _ = ui.select(
                 &mut state.select_index,
-                Select::from_id(Id::new("component_showcase_select"), &SELECT_OPTIONS[..])
-                    .width(280.0),
+                Select::from_id(
+                    showcase_id("component_showcase_select", reload_generation),
+                    &SELECT_OPTIONS[..],
+                )
+                .width(280.0),
             );
 
             let selected_label = state
@@ -913,7 +938,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
         }
         ComponentKind::Tabs => {
             ui.tabs(
-                Id::new("component_showcase_tabs"),
+                showcase_id("component_showcase_tabs", reload_generation),
                 &mut state.tab_index,
                 &TAB_OPTIONS,
             );
@@ -931,7 +956,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.add_space(18.0);
             ui.tabs_variant(
-                Id::new("component_showcase_segmented_tabs"),
+                showcase_id("component_showcase_segmented_tabs", reload_generation),
                 &mut state.segmented_tab_index,
                 &TAB_OPTIONS,
                 TabsVariant::Segmented,
@@ -950,7 +975,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.add_space(18.0);
             ui.stacked_tabs(
-                Id::new("component_showcase_stacked_tabs"),
+                showcase_id("component_showcase_stacked_tabs", reload_generation),
                 &mut state.stacked_tab_index,
                 &STACKED_TAB_OPTIONS,
             );
@@ -1021,15 +1046,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.progress(state.progress_value, (280.0, 10.0));
         }
         ComponentKind::Tooltip => {
-            let mut placement_index = tooltip_placement_index(state.tooltip_placement);
-            ui.button_group(
-                &mut placement_index,
-                crate::components::ButtonGroup::new(
-                    Id::new("component_showcase_tooltip_placement"),
-                    &TOOLTIP_PLACEMENT_OPTIONS[..],
-                ),
-            );
-            state.tooltip_placement = tooltip_placement_from_index(placement_index);
+            if let Some(placement_index) = ui.button_group(crate::components::ButtonGroup::new(
+                showcase_id("component_showcase_tooltip_placement", reload_generation),
+                &TOOLTIP_PLACEMENT_OPTIONS[..],
+            )) {
+                state.tooltip_placement = tooltip_placement_from_index(placement_index);
+            }
             ui.add_space(6.0);
             let _ = ui.tooltip(
                 Tooltip::new("Hover this trigger", "Tooltip content example")
@@ -1042,7 +1064,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.collapsible(
                 &mut state.collapsible_open,
                 crate::components::Collapsible::new(
-                    Id::new("component_showcase_collapsible"),
+                    showcase_id("component_showcase_collapsible", reload_generation),
                     "Transform",
                 )
                 .open(collapsible_open)
@@ -1085,7 +1107,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 &mut state.combobox_query,
                 &mut state.combobox_index,
                 crate::components::Combobox::new(
-                    Id::new("component_showcase_combobox"),
+                    showcase_id("component_showcase_combobox", reload_generation),
                     &COMBOBOX_OPTIONS[..],
                 )
                 .width(280.0),
@@ -1100,9 +1122,12 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             let _ = ui.command(
                 &mut state.command_query,
                 &COMMAND_OPTIONS,
-                crate::components::Command::new(Id::new("component_showcase_command"))
-                    .width(380.0)
-                    .preview(true),
+                crate::components::Command::new(showcase_id(
+                    "component_showcase_command",
+                    reload_generation,
+                ))
+                .width(380.0)
+                .preview(true),
             );
         }
         ComponentKind::Dialogue => {
@@ -1125,7 +1150,10 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.dialogue_modal(
                 &mut state.dialogue_open,
-                crate::components::DialogueModal::new(Id::new("component_showcase_dialogue"))
+                crate::components::DialogueModal::new(showcase_id(
+                    "component_showcase_dialogue",
+                    reload_generation,
+                ))
                     .width(380.0),
                 |ui, close_requested| {
                     let mut ui = ui.components();
@@ -1173,9 +1201,10 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
             ui.dialogue_modal(
                 &mut state.alert_dialogue_open,
-                crate::components::DialogueModal::new(
-                    Id::new("component_showcase_alert_dialogue"),
-                )
+                crate::components::DialogueModal::new(showcase_id(
+                    "component_showcase_alert_dialogue",
+                    reload_generation,
+                ))
                 .width(380.0),
                 |ui, close_requested| {
                     let mut ui = ui.components();
@@ -1233,19 +1262,19 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             });
         }
         ComponentKind::MenuBar => {
-            draw_menu_bar_preview(ui, state);
+            draw_menu_bar_preview(ui, state, reload_generation);
         }
         ComponentKind::Toolbar => {
-            draw_toolbar_preview(ui, state);
+            draw_toolbar_preview(ui, state, reload_generation);
         }
         ComponentKind::ImageTile => {
-            draw_image_tile_preview(ui, state);
+            draw_image_tile_preview(ui, state, reload_generation);
         }
         ComponentKind::Pagination => {
             let _ = ui.pagination(
                 &mut state.pagination_page,
                 Pagination::new(
-                    Id::new("component_showcase_pagination"),
+                    showcase_id("component_showcase_pagination", reload_generation),
                     PAGINATION_PAGE_COUNT,
                 ),
             );
@@ -1285,7 +1314,7 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
 
                     let (_, playback_result) = ui.audio_playback_with_actions(
                         AudioPlayback::new(
-                            Id::new("component_showcase_audio_playback"),
+                            showcase_id("component_showcase_audio_playback", reload_generation),
                             state.audio_playback_state,
                         ),
                         |ui| {
@@ -1330,6 +1359,18 @@ fn render_selected_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
             ui.ui_mut().advance_cursor_after_rect(used_rect);
         } // xtask:showcase-render-arms:end
     }
+}
+
+fn showcase_id(name: &'static str, reload_generation: u64) -> Id {
+    Id::new((name, reload_generation))
+}
+
+fn showcase_image_uri(name: &str, reload_generation: u64) -> String {
+    format!("bytes://component-showcase/{reload_generation}/{name}.png")
+}
+
+fn showcase_image(name: &str, reload_generation: u64, bytes: &'static [u8]) -> Image<'static> {
+    Image::from_bytes(showcase_image_uri(name, reload_generation), bytes)
 }
 
 fn showcase_component_definitions_by_section(
@@ -1380,16 +1421,6 @@ fn tooltip_placement_from_index(index: usize) -> TooltipPlacement {
     }
 }
 
-fn tooltip_placement_index(placement: TooltipPlacement) -> usize {
-    match placement {
-        TooltipPlacement::Top => 0,
-        TooltipPlacement::Right => 1,
-        TooltipPlacement::Bottom => 2,
-        TooltipPlacement::Left => 3,
-        TooltipPlacement::Auto => 0,
-    }
-}
-
 fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys: &[&str]) {
     let overrides = ui.overrides();
     ui.ui_mut().horizontal(|ui| {
@@ -1416,7 +1447,11 @@ fn draw_dropdown_shortcut_row(ui: &mut ComponentUi<'_>, action_label: &str, keys
     });
 }
 
-fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn draw_toolbar_preview(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
     let runtime = crate::theme::runtime_for_ui(ui);
     let dark_mode = runtime.mode.is_dark();
     let overrides = ui.overrides();
@@ -1425,44 +1460,60 @@ fn draw_toolbar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseS
     } else {
         TOOLBAR_CANVAS_LIGHT_FILL
     };
+    let canvas_width = ui.available_width().min(TOOLBAR_PREVIEW_CANVAS_WIDTH);
 
-    let _ = egui::Frame::new()
-        .fill(canvas_fill)
-        .stroke(Stroke::new(1.0, tokens::separator(runtime)))
-        .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
-        .inner_margin(egui::Margin::same(12))
-        .show(ui.ui_mut(), |ui| {
-            let mut ui = ComponentUi::with_overrides(ui, overrides);
-            let canvas_size = egui::vec2(ui.available_width(), 220.0);
-            let (canvas_rect, _) = ui.allocate_exact_size(canvas_size, Sense::hover());
-            let overrides = ui.overrides();
-            let _ = ui
-                .ui_mut()
-                .scope_builder(egui::UiBuilder::new().max_rect(canvas_rect), |ui| {
-                    let mut ui = ComponentUi::with_overrides(ui, overrides);
-                    let _ = ui.toolbar(
-                        Toolbar::new(Id::new("component_showcase_toolbar"))
-                            .anchor(Align2::CENTER_TOP)
-                            .offset(egui::vec2(0.0, 10.0)),
-                        |ui| {
-                            let mut ui = ui.components();
-                            ui.with_override(
-                                ButtonOverride::new()
-                                    .min_size(egui::vec2(28.0, 28.0))
-                                    .icon_size(12.0),
-                                |ui| {
-                                    let mut ui = ui.components();
-                                    draw_toolbar_contents(&mut ui, state);
-                                },
-                            )
-                        },
-                    );
-                });
+    let _ = ui
+        .ui_mut()
+        .with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let _ = layout::sized_box().width(canvas_width).show(ui, |ui| {
+                let _ = egui::Frame::new()
+                    .fill(canvas_fill)
+                    .stroke(Stroke::new(1.0, tokens::separator(runtime)))
+                    .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
+                    .inner_margin(egui::Margin::same(12))
+                    .show(ui, |ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
+                        let canvas_size = egui::vec2(ui.available_width(), 220.0);
+                        let (canvas_rect, _) = ui.allocate_exact_size(canvas_size, Sense::hover());
+                        let overrides = ui.overrides();
+                        let _ = ui.ui_mut().scope_builder(
+                            egui::UiBuilder::new().max_rect(canvas_rect),
+                            |ui| {
+                                let mut ui = ComponentUi::with_overrides(ui, overrides);
+                                let _ = ui.toolbar(
+                                    Toolbar::new(showcase_id(
+                                        "component_showcase_toolbar",
+                                        reload_generation,
+                                    ))
+                                    .anchor(Align2::CENTER_TOP)
+                                    .offset(egui::vec2(0.0, 10.0)),
+                                    |ui| {
+                                        let mut ui = ui.components();
+                                        ui.with_override(
+                                            ButtonOverride::new()
+                                                .min_size(egui::vec2(28.0, 28.0))
+                                                .icon_size(12.0),
+                                            |ui| {
+                                                let mut ui = ui.components();
+                                                draw_toolbar_contents(&mut ui, state);
+                                            },
+                                        )
+                                    },
+                                );
+                            },
+                        );
+                    });
+            });
         });
 }
 
-fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
+fn draw_menu_bar_preview(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
     let runtime = crate::theme::runtime_for_ui(ui);
+    let preview_width = ui.available_width().min(MENU_BAR_PREVIEW_CANVAS_WIDTH);
     let menu_items = [
         MenuBarItem::new("File", &MENU_BAR_FILE_ENTRIES).width(220.0),
         MenuBarItem::new("Edit", &MENU_BAR_EDIT_ENTRIES).width(190.0),
@@ -1470,18 +1521,31 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
         MenuBarItem::new("Object", &MENU_BAR_OBJECT_ENTRIES).width(220.0),
     ];
 
-    let menu_state = egui::Frame::new()
-        .fill(tokens::app_background(runtime))
-        .stroke(Stroke::new(1.0, tokens::separator(runtime)))
-        .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
-        .inner_margin(egui::Margin::same(12))
-        .show(ui.ui_mut(), |ui| {
-            let mut ui = ui.components();
-            ui.menu_bar(MenuBar::new(
-                Id::new("component_showcase_menu_bar"),
-                &menu_items,
-            ))
-            .1
+    let menu_state = ui
+        .ui_mut()
+        .with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            layout::sized_box()
+                .width(preview_width)
+                .show(ui, |ui| {
+                    ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                        egui::Frame::new()
+                            .fill(tokens::app_background(runtime))
+                            .stroke(Stroke::new(1.0, tokens::separator(runtime)))
+                            .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
+                            .inner_margin(egui::Margin::same(12))
+                            .show(ui, |ui| {
+                                let mut ui = ui.components();
+                                ui.menu_bar(MenuBar::new(
+                                    showcase_id("component_showcase_menu_bar", reload_generation),
+                                    &menu_items,
+                                ))
+                                .1
+                            })
+                            .inner
+                    })
+                    .inner
+                })
+                .inner
         })
         .inner;
 
@@ -1496,9 +1560,21 @@ fn draw_menu_bar_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcase
     );
 }
 
-fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowcaseState) {
-    let showcase_image = egui::include_image!("../../../assets/images/showcase-image.png");
-    let logo_image = egui::include_image!("../../../assets/images/clay_logo_large.png");
+fn draw_image_tile_preview(
+    ui: &mut ComponentUi<'_>,
+    state: &mut ComponentShowcaseState,
+    reload_generation: u64,
+) {
+    let featured_image = showcase_image(
+        "showcase-image",
+        reload_generation,
+        SHOWCASE_IMAGE_PNG_BYTES,
+    );
+    let logo_image = showcase_image(
+        "clay-logo-large",
+        reload_generation,
+        CLAY_LOGO_LARGE_PNG_BYTES,
+    );
     let overrides = ui.overrides();
 
     let _ = ui.label(
@@ -1518,7 +1594,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .size(typography::SMALL_SIZE),
         );
         let (_, featured_state) = ui.image_tile_with_body(
-            ImageTile::new(Image::new(showcase_image.clone())).size(ImageTileSize::Lg),
+            ImageTile::new(featured_image.clone()).size(ImageTileSize::Lg),
             |ui| {
                 let mut ui = ui.components();
                 let _ = ui.label(
@@ -1541,7 +1617,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .size(typography::SMALL_SIZE),
         );
         let (_, custom_state) = ui.image_tile_with_body(
-            ImageTile::new(Image::new(logo_image.clone())).image_size(egui::vec2(180.0, 120.0)),
+            ImageTile::new(logo_image.clone()).image_size(egui::vec2(180.0, 120.0)),
             |ui| {
                 let mut ui = ui.components();
                 let _ = ui.label(
@@ -1566,8 +1642,8 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .tone(LabelTone::Muted)
                 .size(typography::SMALL_SIZE),
         );
-        let (_, bodyless_state) = ui
-            .image_tile(ImageTile::new(Image::new(showcase_image.clone())).size(ImageTileSize::Sm));
+        let (_, bodyless_state) =
+            ui.image_tile(ImageTile::new(featured_image.clone()).size(ImageTileSize::Sm));
         if bodyless_state.tile_clicked {
             state.image_tile_last_action = "Opened bodyless tile".to_owned();
         }
@@ -1579,7 +1655,7 @@ fn draw_image_tile_preview(ui: &mut ComponentUi<'_>, state: &mut ComponentShowca
                 .size(typography::SMALL_SIZE),
         );
         let (_, audio_state) = ui.image_tile_with_body(
-            ImageTile::new(Image::new(showcase_image))
+            ImageTile::new(featured_image)
                 .size(ImageTileSize::Md)
                 .playback_state(state.image_tile_playback_state),
             |ui| {
@@ -1706,9 +1782,6 @@ fn draw_toolbar_divider(ui: &mut ComponentUi<'_>) {
 }
 
 fn clamp_state(state: &mut ComponentShowcaseState) {
-    state.button_group_index = state
-        .button_group_index
-        .min(BUTTON_GROUP_OPTIONS.len().saturating_sub(1));
     state.toolbar_color_index = state
         .toolbar_color_index
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));

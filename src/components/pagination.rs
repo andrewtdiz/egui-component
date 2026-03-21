@@ -9,7 +9,7 @@ use crate::{
     primitives::{row_chrome, RowChrome},
     ui::{tokens, typography},
 };
-use egui::{Align2, Id, Response, Sense, Stroke, Vec2};
+use egui::{Align2, CornerRadius, Id, Response, Sense, Stroke, Vec2};
 
 const PAGINATION_ITEM_GAP: f32 = 4.0;
 const PAGINATION_PAGE_BUTTON_SIZE: Vec2 = egui::vec2(24.0, 24.0);
@@ -69,52 +69,60 @@ fn draw_pagination(
 
     ui.ui_mut()
         .push_id(props.id, |ui| {
-            layout::row().gap(PAGINATION_ITEM_GAP).show(ui, |ui| {
-                let mut ui = ComponentUi::with_overrides(ui, overrides);
-                if *current_page > 1
-                    && ui
-                        .button(
-                            Button::new("Previous")
-                                .variant(ButtonVariant::Ghost)
-                                .size(ControlSize::Sm)
-                                .leading_icon("chevron-left")
-                                .icon_size(PAGINATION_NAV_ICON_SIZE),
-                        )
-                        .clicked()
-                {
-                    *current_page -= 1;
-                }
+            ui.scope(|ui| {
+                let runtime = crate::theme::runtime_for_ui(ui);
+                apply_pagination_corner_radius(ui, runtime);
 
-                for item in items {
-                    match item {
-                        PaginationItem::Page(page) => {
-                            draw_page_button(&mut ui, current_page, page);
+                layout::row()
+                    .gap(PAGINATION_ITEM_GAP)
+                    .show(ui, |ui| {
+                        let mut ui = ComponentUi::with_overrides(ui, overrides);
+                        if *current_page > 1
+                            && ui
+                                .button(
+                                    Button::new("Previous")
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ControlSize::Sm)
+                                        .leading_icon("chevron-left")
+                                        .icon_size(PAGINATION_NAV_ICON_SIZE),
+                                )
+                                .clicked()
+                        {
+                            *current_page -= 1;
                         }
-                        PaginationItem::Ellipsis => {
-                            let _ = ui.label(
-                                Label::new("...")
-                                    .tone(LabelTone::Muted)
-                                    .size(PAGINATION_ELLIPSIS_SIZE),
-                            );
-                        }
-                    }
-                }
 
-                if *current_page < props.page_count
-                    && ui
-                        .button(
-                            Button::new("Next")
-                                .variant(ButtonVariant::Ghost)
-                                .size(ControlSize::Sm)
-                                .trailing_icon("chevron-right")
-                                .icon_size(PAGINATION_NAV_ICON_SIZE),
-                        )
-                        .clicked()
-                {
-                    *current_page += 1;
-                }
+                        for item in items {
+                            match item {
+                                PaginationItem::Page(page) => {
+                                    draw_page_button(&mut ui, current_page, page);
+                                }
+                                PaginationItem::Ellipsis => {
+                                    let _ = ui.label(
+                                        Label::new("...")
+                                            .tone(LabelTone::Muted)
+                                            .size(PAGINATION_ELLIPSIS_SIZE),
+                                    );
+                                }
+                            }
+                        }
+
+                        if *current_page < props.page_count
+                            && ui
+                                .button(
+                                    Button::new("Next")
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ControlSize::Sm)
+                                        .trailing_icon("chevron-right")
+                                        .icon_size(PAGINATION_NAV_ICON_SIZE),
+                                )
+                                .clicked()
+                        {
+                            *current_page += 1;
+                        }
+                    })
+                    .response
             })
-            .response
+            .inner
         })
         .inner
 }
@@ -130,7 +138,7 @@ fn draw_page_button(ui: &mut ComponentUi<'_>, current_page: &mut usize, page: us
     let (rect, response) = row_chrome(
         ui.ui_mut(),
         RowChrome::new(PAGINATION_PAGE_BUTTON_SIZE)
-            .corner_radius(tokens::radius_md(runtime))
+            .corner_radius(tokens::radius_sm(runtime))
             .stroke(stroke),
         |response| {
             if is_current {
@@ -156,6 +164,16 @@ fn draw_page_button(ui: &mut ComponentUi<'_>, current_page: &mut usize, page: us
     if response.clicked() && !is_current {
         *current_page = page;
     }
+}
+
+fn apply_pagination_corner_radius(ui: &mut egui::Ui, runtime: crate::theme::ThemeRuntime) {
+    let corner_radius = CornerRadius::same(tokens::radius_sm(runtime));
+    let visuals = &mut ui.style_mut().visuals.widgets;
+    visuals.noninteractive.corner_radius = corner_radius;
+    visuals.inactive.corner_radius = corner_radius;
+    visuals.hovered.corner_radius = corner_radius;
+    visuals.active.corner_radius = corner_radius;
+    visuals.open.corner_radius = corner_radius;
 }
 
 fn pagination_items(
@@ -280,7 +298,11 @@ mod tests {
     #[test]
     fn first_page_hides_previous_button() {
         let context = Context::default();
-        crate::theme::install(&context, crate::theme::ThemeSpec::default(), crate::theme::ThemeMode::Dark);
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
 
         let frame_output = context.run(RawInput::default(), |context| {
             let mut current_page = 1;

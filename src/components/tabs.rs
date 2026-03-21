@@ -291,66 +291,68 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
     *current = (*current).min(options.len().saturating_sub(1));
 
     ui.push_id(id, |ui| {
-        layout::row().gap(STACKED_TAB_GAP).show(ui, |ui| {
-            for option in options {
-                let selected = *current == option.value;
-                let (rect, response) =
-                    ui.allocate_exact_size(STACKED_TAB_SIZE, egui::Sense::click());
+        layout::row()
+            .gap(STACKED_TAB_GAP)
+            .show(ui, |ui| {
+                for option in options {
+                    let selected = *current == option.value;
+                    let (rect, response) =
+                        ui.allocate_exact_size(STACKED_TAB_SIZE, egui::Sense::click());
 
-                let fill = if response.is_pointer_button_down_on() {
-                    tokens::button_secondary_active_bg(runtime)
-                } else if selected || response.hovered() {
-                    tokens::button_secondary_hover_bg(runtime)
-                } else {
-                    tokens::TRANSPARENT
-                };
-                ui.painter().rect(
-                    rect,
-                    CornerRadius::same(tokens::radius_sm(runtime)),
-                    fill,
-                    Stroke::NONE,
-                    StrokeKind::Outside,
-                );
-
-                if let Some(icon) = option.icon {
-                    if let Some(image) = icons::image(ui.ctx(), icon, STACKED_TAB_ICON_SIZE) {
-                        let icon_rect = Rect::from_center_size(
-                            egui::pos2(rect.center().x, rect.top() + 18.0),
-                            egui::vec2(STACKED_TAB_ICON_SIZE, STACKED_TAB_ICON_SIZE),
-                        );
-                        // Paint directly so the icon never participates in layout after the
-                        // tile rect has already been allocated.
-                        image
-                            .tint(if selected {
-                                tokens::text_primary(runtime)
-                            } else {
-                                tokens::text_secondary(runtime)
-                            })
-                            .paint_at(ui, icon_rect);
-                    }
-                }
-
-                ui.painter().text(
-                    egui::pos2(rect.center().x, rect.bottom() - 18.0),
-                    Align2::CENTER_CENTER,
-                    option.label,
-                    typography::label_font(),
-                    if selected {
-                        tokens::text_primary(runtime)
+                    let fill = if response.is_pointer_button_down_on() {
+                        tokens::button_secondary_active_bg(runtime)
+                    } else if selected || response.hovered() {
+                        tokens::button_secondary_hover_bg(runtime)
                     } else {
-                        tokens::text_secondary(runtime)
-                    },
-                );
+                        tokens::TRANSPARENT
+                    };
+                    ui.painter().rect(
+                        rect,
+                        CornerRadius::same(tokens::radius_sm(runtime)),
+                        fill,
+                        Stroke::NONE,
+                        StrokeKind::Outside,
+                    );
 
-                if response.clicked() && !selected {
-                    *current = option.value;
+                    if let Some(icon) = option.icon {
+                        if let Some(image) = icons::image(ui.ctx(), icon, STACKED_TAB_ICON_SIZE) {
+                            let icon_rect = Rect::from_center_size(
+                                egui::pos2(rect.center().x, rect.top() + 18.0),
+                                egui::vec2(STACKED_TAB_ICON_SIZE, STACKED_TAB_ICON_SIZE),
+                            );
+                            // Paint directly so the icon never participates in layout after the
+                            // tile rect has already been allocated.
+                            image
+                                .tint(if selected {
+                                    tokens::text_primary(runtime)
+                                } else {
+                                    tokens::text_secondary(runtime)
+                                })
+                                .paint_at(ui, icon_rect);
+                        }
+                    }
+
+                    ui.painter().text(
+                        egui::pos2(rect.center().x, rect.bottom() - 18.0),
+                        Align2::CENTER_CENTER,
+                        option.label,
+                        typography::label_font(),
+                        if selected {
+                            tokens::text_primary(runtime)
+                        } else {
+                            tokens::text_secondary(runtime)
+                        },
+                    );
+
+                    if response.clicked() && !selected {
+                        *current = option.value;
+                    }
+
+                    let _ = response.on_hover_cursor(CursorIcon::PointingHand);
                 }
-
-                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
-            }
-        })
-        .response
-        .rect
+            })
+            .response
+            .rect
     })
     .inner
 }
@@ -364,63 +366,69 @@ fn draw_rail_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption
     *current = (*current).min(options.len().saturating_sub(1));
 
     ui.push_id(id, |ui| {
-        layout::column().gap(RAIL_TAB_GAP).show(ui, |ui| {
-            for option in options {
-                let selected = *current == option.value;
-                let (rect, response) = ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
-                let icon_and_text_color = if selected {
-                    tokens::text_primary(runtime)
-                } else if response.hovered() {
-                    tokens::text_secondary(runtime)
-                } else {
-                    tokens::text_muted(runtime)
-                };
+        layout::column()
+            .gap(RAIL_TAB_GAP)
+            .show(ui, |ui| {
+                for option in options {
+                    let selected = *current == option.value;
+                    let (rect, response) =
+                        ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
+                    let icon_and_text_color = if selected {
+                        tokens::text_primary(runtime)
+                    } else if response.hovered() {
+                        tokens::text_secondary(runtime)
+                    } else {
+                        tokens::text_muted(runtime)
+                    };
 
-                let fill = if response.is_pointer_button_down_on() {
-                    tokens::button_secondary_active_bg(runtime)
-                } else if selected {
-                    tokens::row_active_bg(runtime)
-                } else if response.hovered() {
-                    tokens::button_secondary_hover_bg(runtime)
-                } else {
-                    tokens::TRANSPARENT
-                };
+                    let fill = if response.is_pointer_button_down_on() {
+                        tokens::button_secondary_active_bg(runtime)
+                    } else if selected {
+                        tokens::row_active_bg(runtime)
+                    } else if response.hovered() {
+                        tokens::button_secondary_hover_bg(runtime)
+                    } else {
+                        tokens::TRANSPARENT
+                    };
 
-                ui.painter().rect(
-                    rect,
-                    CornerRadius::same(tokens::radius_sm(runtime)),
-                    fill,
-                    Stroke::NONE,
-                    StrokeKind::Outside,
-                );
+                    ui.painter().rect(
+                        rect,
+                        CornerRadius::same(tokens::radius_sm(runtime)),
+                        fill,
+                        Stroke::NONE,
+                        StrokeKind::Outside,
+                    );
 
-                if let Some(icon) = option.icon {
-                    if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
-                        let icon_rect = Rect::from_center_size(
-                            egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_ICON_OFFSET_Y),
-                            egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
-                        );
-                        image.tint(icon_and_text_color).paint_at(ui, icon_rect);
+                    if let Some(icon) = option.icon {
+                        if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
+                            let icon_rect = Rect::from_center_size(
+                                egui::pos2(
+                                    rect.center().x,
+                                    rect.center().y + RAIL_TAB_ICON_OFFSET_Y,
+                                ),
+                                egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
+                            );
+                            image.tint(icon_and_text_color).paint_at(ui, icon_rect);
+                        }
                     }
+
+                    ui.painter().text(
+                        egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
+                        Align2::CENTER_CENTER,
+                        option.label,
+                        egui::FontId::new(10.0, egui::FontFamily::Proportional),
+                        icon_and_text_color,
+                    );
+
+                    if response.clicked() && !selected {
+                        *current = option.value;
+                    }
+
+                    let _ = response.on_hover_cursor(CursorIcon::PointingHand);
                 }
-
-                ui.painter().text(
-                    egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
-                    Align2::CENTER_CENTER,
-                    option.label,
-                    egui::FontId::new(10.0, egui::FontFamily::Proportional),
-                    icon_and_text_color,
-                );
-
-                if response.clicked() && !selected {
-                    *current = option.value;
-                }
-
-                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
-            }
-        })
-        .response
-        .rect
+            })
+            .response
+            .rect
     })
     .inner
 }
@@ -442,67 +450,73 @@ fn draw_toggle_rail_tabs(
     }
 
     ui.push_id(id, |ui| {
-        layout::column().gap(RAIL_TAB_GAP).show(ui, |ui| {
-            for option in options {
-                let selected = *current == Some(option.value);
-                let (rect, response) = ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
-                let icon_and_text_color = if selected {
-                    tokens::text_primary(runtime)
-                } else if response.hovered() {
-                    tokens::text_secondary(runtime)
-                } else {
-                    tokens::text_muted(runtime)
-                };
-
-                let fill = if response.is_pointer_button_down_on() {
-                    tokens::button_secondary_active_bg(runtime)
-                } else if selected {
-                    tokens::row_active_bg(runtime)
-                } else if response.hovered() {
-                    tokens::button_secondary_hover_bg(runtime)
-                } else {
-                    tokens::TRANSPARENT
-                };
-
-                ui.painter().rect(
-                    rect,
-                    CornerRadius::same(tokens::radius_sm(runtime)),
-                    fill,
-                    Stroke::NONE,
-                    StrokeKind::Outside,
-                );
-
-                if let Some(icon) = option.icon {
-                    if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
-                        let icon_rect = Rect::from_center_size(
-                            egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_ICON_OFFSET_Y),
-                            egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
-                        );
-                        image.tint(icon_and_text_color).paint_at(ui, icon_rect);
-                    }
-                }
-
-                ui.painter().text(
-                    egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
-                    Align2::CENTER_CENTER,
-                    option.label,
-                    egui::FontId::new(10.0, egui::FontFamily::Proportional),
-                    icon_and_text_color,
-                );
-
-                if response.clicked() {
-                    if selected {
-                        *current = None;
+        layout::column()
+            .gap(RAIL_TAB_GAP)
+            .show(ui, |ui| {
+                for option in options {
+                    let selected = *current == Some(option.value);
+                    let (rect, response) =
+                        ui.allocate_exact_size(RAIL_TAB_SIZE, egui::Sense::click());
+                    let icon_and_text_color = if selected {
+                        tokens::text_primary(runtime)
+                    } else if response.hovered() {
+                        tokens::text_secondary(runtime)
                     } else {
-                        *current = Some(option.value);
-                    }
-                }
+                        tokens::text_muted(runtime)
+                    };
 
-                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
-            }
-        })
-        .response
-        .rect
+                    let fill = if response.is_pointer_button_down_on() {
+                        tokens::button_secondary_active_bg(runtime)
+                    } else if selected {
+                        tokens::row_active_bg(runtime)
+                    } else if response.hovered() {
+                        tokens::button_secondary_hover_bg(runtime)
+                    } else {
+                        tokens::TRANSPARENT
+                    };
+
+                    ui.painter().rect(
+                        rect,
+                        CornerRadius::same(tokens::radius_sm(runtime)),
+                        fill,
+                        Stroke::NONE,
+                        StrokeKind::Outside,
+                    );
+
+                    if let Some(icon) = option.icon {
+                        if let Some(image) = icons::image(ui.ctx(), icon, RAIL_TAB_ICON_SIZE) {
+                            let icon_rect = Rect::from_center_size(
+                                egui::pos2(
+                                    rect.center().x,
+                                    rect.center().y + RAIL_TAB_ICON_OFFSET_Y,
+                                ),
+                                egui::vec2(RAIL_TAB_ICON_SIZE, RAIL_TAB_ICON_SIZE),
+                            );
+                            image.tint(icon_and_text_color).paint_at(ui, icon_rect);
+                        }
+                    }
+
+                    ui.painter().text(
+                        egui::pos2(rect.center().x, rect.center().y + RAIL_TAB_LABEL_OFFSET_Y),
+                        Align2::CENTER_CENTER,
+                        option.label,
+                        egui::FontId::new(10.0, egui::FontFamily::Proportional),
+                        icon_and_text_color,
+                    );
+
+                    if response.clicked() {
+                        if selected {
+                            *current = None;
+                        } else {
+                            *current = Some(option.value);
+                        }
+                    }
+
+                    let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+                }
+            })
+            .response
+            .rect
     })
     .inner
 }

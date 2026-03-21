@@ -254,9 +254,7 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
                         Align2::LEFT_CENTER,
                         prefix,
                         typography::label_font(),
-                        props
-                            .prefix_tint
-                            .unwrap_or(tokens::text_secondary(runtime)),
+                        props.prefix_tint.unwrap_or(tokens::text_secondary(runtime)),
                     );
                 }
             }

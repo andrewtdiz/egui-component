@@ -7,8 +7,8 @@ use crate::primitives::{
 };
 use crate::ui::{tokens, typography};
 use egui::{
-    containers::scroll_area::ScrollSource, Align, Align2, FontFamily, FontId, Id, Key,
-    Layout, Rect, Response, Sense, Stroke, Ui, UiBuilder,
+    containers::scroll_area::ScrollSource, Align, Align2, FontFamily, FontId, Id, Key, Layout,
+    Rect, Response, Sense, Stroke, Ui, UiBuilder,
 };
 
 const COMMAND_PANEL_PADDING_X: i8 = 10;
@@ -392,10 +392,9 @@ fn draw_command_row(
 
     if let Some(shortcut_rect) = shortcut_rect {
         let overrides = ui.overrides();
-        let _ = ui.ui_mut().scope_builder(
-            UiBuilder::new()
-                .max_rect(shortcut_rect),
-            |ui| {
+        let _ = ui
+            .ui_mut()
+            .scope_builder(UiBuilder::new().max_rect(shortcut_rect), |ui| {
                 ui.set_min_width(shortcut_rect.width());
                 ui.set_max_width(shortcut_rect.width());
                 let _ = layout::align()
@@ -406,8 +405,7 @@ fn draw_command_row(
                         let _ =
                             render_shortcut_keycaps(&mut ui, &shortcut_keys, selected, emphasized);
                     });
-            },
-        );
+            });
     }
 }
 

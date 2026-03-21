@@ -4,8 +4,12 @@ use egui::{
     CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
 };
 
-pub(crate) fn install(context: &egui::Context, runtime: ThemeRuntime) {
+pub(crate) fn install_context_resources(context: &egui::Context) {
     context.set_fonts(component_font_definitions());
+}
+
+pub(crate) fn install(context: &egui::Context, runtime: ThemeRuntime) {
+    install_context_resources(context);
     set_theme_runtime(context, runtime);
 }
 
@@ -169,7 +173,8 @@ fn mode_visuals(runtime: ThemeRuntime) -> Visuals {
     visuals.widgets.open.weak_bg_fill = tokens::input_focus_background(runtime);
     visuals.widgets.open.bg_stroke = tokens::input_focus_stroke(runtime);
     visuals.widgets.open.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
-    visuals.menu_corner_radius = CornerRadius::same(theme::resolved_radius(runtime, RadiusRole::Md));
+    visuals.menu_corner_radius =
+        CornerRadius::same(theme::resolved_radius(runtime, RadiusRole::Md));
     visuals.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.85 };
     visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     visuals
@@ -199,13 +204,25 @@ mod tests {
     #[test]
     fn installed_style_uses_shared_text_defaults() {
         let context = Context::default();
-        install(&context, ThemeRuntime::new(ThemeSpec::default(), ThemeMode::Dark));
+        install(
+            &context,
+            ThemeRuntime::new(ThemeSpec::default(), ThemeMode::Dark),
+        );
 
         let style = context.style();
         assert_eq!(style.text_styles[&TextStyle::Body], typography::body_font());
-        assert_eq!(style.text_styles[&TextStyle::Button], typography::body_font());
-        assert_eq!(style.text_styles[&TextStyle::Heading], typography::heading_font());
-        assert_eq!(style.text_styles[&TextStyle::Small], typography::small_font());
+        assert_eq!(
+            style.text_styles[&TextStyle::Button],
+            typography::body_font()
+        );
+        assert_eq!(
+            style.text_styles[&TextStyle::Heading],
+            typography::heading_font()
+        );
+        assert_eq!(
+            style.text_styles[&TextStyle::Small],
+            typography::small_font()
+        );
     }
 
     #[test]
@@ -218,7 +235,10 @@ mod tests {
 
         assert_eq!(
             context.style().visuals.panel_fill,
-            tokens::app_background(ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light))
+            tokens::app_background(ThemeRuntime::new(
+                ThemeSpec::preset(BaseColor::Neutral),
+                ThemeMode::Light
+            ))
         );
 
         set_theme_runtime(

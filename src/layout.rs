@@ -1,5 +1,8 @@
 use crate::ui::tokens;
-use egui::{Context, FontId, Id, InnerResponse, Layout as EguiLayout, Rect, Response, Sense, Stroke, StrokeKind, Ui};
+use egui::{
+    Context, FontId, Id, InnerResponse, Layout as EguiLayout, Rect, Response, Sense, Stroke,
+    StrokeKind, Ui,
+};
 
 const DEBUG_OVERLAY_ID: &str = "egui_component::layout_debug_overlay";
 const DEBUG_LABEL_FONT_SIZE: f32 = 9.0;
@@ -247,11 +250,8 @@ impl SizedBox {
         let response = match (self.width, self.height) {
             (Some(width), Some(height)) => {
                 let origin = ui.next_widget_position();
-                let response = ui.allocate_ui_with_layout(
-                    egui::vec2(width, height),
-                    ui.layout().clone(),
-                    add,
-                );
+                let response =
+                    ui.allocate_ui_with_layout(egui::vec2(width, height), ui.layout().clone(), add);
                 let mut sized_response = response.response;
                 let rect = Rect::from_min_size(origin, egui::vec2(width, height));
                 sized_response.rect = rect;
@@ -385,10 +385,7 @@ pub(crate) fn set_debug_overlay(ctx: &Context, enabled: bool) {
 }
 
 fn debug_overlay_enabled(ctx: &Context) -> bool {
-    ctx.data(|data| {
-        data.get_temp::<bool>(debug_overlay_id())
-            .unwrap_or(false)
-    })
+    ctx.data(|data| data.get_temp::<bool>(debug_overlay_id()).unwrap_or(false))
 }
 
 fn debug_overlay_id() -> Id {
@@ -450,7 +447,12 @@ fn paint_overlay(ui: &Ui, rect: Rect, label: &str, stroke: Stroke) {
         stroke,
         StrokeKind::Inside,
     );
-    paint_overlay_label(ui, rect.left_top() + egui::vec2(4.0, 4.0), label, stroke.color);
+    paint_overlay_label(
+        ui,
+        rect.left_top() + egui::vec2(4.0, 4.0),
+        label,
+        stroke.color,
+    );
 }
 
 fn paint_overlay_label(ui: &Ui, pos: egui::Pos2, label: &str, color: egui::Color32) {
@@ -485,8 +487,12 @@ mod tests {
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
                 let _ = row().gap(12.0).show(ui, |ui| {
-                    first = ui.allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover()).0;
-                    second = ui.allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover()).0;
+                    first = ui
+                        .allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover())
+                        .0;
+                    second = ui
+                        .allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover())
+                        .0;
                 });
             });
         });
@@ -503,8 +509,12 @@ mod tests {
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
                 let _ = column().gap(7.0).show(ui, |ui| {
-                    first = ui.allocate_exact_size(egui::vec2(10.0, 12.0), Sense::hover()).0;
-                    second = ui.allocate_exact_size(egui::vec2(10.0, 12.0), Sense::hover()).0;
+                    first = ui
+                        .allocate_exact_size(egui::vec2(10.0, 12.0), Sense::hover())
+                        .0;
+                    second = ui
+                        .allocate_exact_size(egui::vec2(10.0, 12.0), Sense::hover())
+                        .0;
                 });
             });
         });
@@ -521,7 +531,9 @@ mod tests {
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
                 let response = inset().padding(6, 4).show(ui, |ui| {
-                    inner = ui.allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover()).0;
+                    inner = ui
+                        .allocate_exact_size(egui::vec2(20.0, 10.0), Sense::hover())
+                        .0;
                 });
                 outer = response.response.rect;
             });
@@ -548,10 +560,8 @@ mod tests {
                             .justify(Justify::Center)
                             .align(Align::Center)
                             .show(ui, |ui| {
-                                let _ = ui.allocate_exact_size(
-                                    egui::vec2(40.0, 16.0),
-                                    Sense::hover(),
-                                );
+                                let _ =
+                                    ui.allocate_exact_size(egui::vec2(40.0, 16.0), Sense::hover());
                             });
                     })
                     .response

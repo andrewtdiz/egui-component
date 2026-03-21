@@ -32,7 +32,7 @@ impl ImageTileSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum ImageTilePlaybackState {
     Paused,
     Playing,

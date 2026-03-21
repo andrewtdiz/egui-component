@@ -102,53 +102,53 @@ fn draw_collapsible<R>(
         StrokeKind::Outside,
     );
 
-    let _ = ui.ui_mut().scope_builder(
-        egui::UiBuilder::new()
-            .max_rect(rect),
-        |ui| {
+    let _ = ui
+        .ui_mut()
+        .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
             let mut ui = ComponentUi::with_overrides(ui, overrides);
-            let _ = layout::row().gap(tokens::LAYOUT_GAP_SM).show(ui.ui_mut(), |ui| {
-                let mut ui = ComponentUi::with_overrides(ui, overrides);
-                let expand_icon = if *open {
-                    "chevron-down"
-                } else {
-                    "chevron-right"
-                };
-                let _ = ui.icon(
-                    crate::components::Icon::new(expand_icon)
-                        .size(12.0)
-                        .tint(tokens::text_muted(runtime)),
-                );
-
-                if let Some(leading_icon) = props.leading_icon {
+            let _ = layout::row()
+                .gap(tokens::LAYOUT_GAP_SM)
+                .show(ui.ui_mut(), |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    let expand_icon = if *open {
+                        "chevron-down"
+                    } else {
+                        "chevron-right"
+                    };
                     let _ = ui.icon(
-                        crate::components::Icon::new(leading_icon).size(13.0).tint(
-                            props
-                                .leading_icon_tint
-                                .unwrap_or(tokens::text_secondary(runtime)),
-                        ),
+                        crate::components::Icon::new(expand_icon)
+                            .size(12.0)
+                            .tint(tokens::text_muted(runtime)),
                     );
-                }
 
-                let _ = ui.label(
-                    crate::components::Label::new(props.title)
-                        .tone(LabelTone::Primary)
-                        .weight(LabelWeight::Semibold),
-                );
+                    if let Some(leading_icon) = props.leading_icon {
+                        let _ = ui.icon(
+                            crate::components::Icon::new(leading_icon).size(13.0).tint(
+                                props
+                                    .leading_icon_tint
+                                    .unwrap_or(tokens::text_secondary(runtime)),
+                            ),
+                        );
+                    }
 
-                let _ = layout::spacer().show(ui.ui_mut());
-                if let Some(trailing_icon) = props.trailing_icon {
-                    let _ = ui.icon(
-                        crate::components::Icon::new(trailing_icon).size(13.0).tint(
-                            props
-                                .trailing_icon_tint
-                                .unwrap_or(tokens::text_muted(runtime)),
-                        ),
+                    let _ = ui.label(
+                        crate::components::Label::new(props.title)
+                            .tone(LabelTone::Primary)
+                            .weight(LabelWeight::Semibold),
                     );
-                }
-            });
-        },
-    );
+
+                    let _ = layout::spacer().show(ui.ui_mut());
+                    if let Some(trailing_icon) = props.trailing_icon {
+                        let _ = ui.icon(
+                            crate::components::Icon::new(trailing_icon).size(13.0).tint(
+                                props
+                                    .trailing_icon_tint
+                                    .unwrap_or(tokens::text_muted(runtime)),
+                            ),
+                        );
+                    }
+                });
+        });
 
     if *open {
         ui.add_space(6.0);

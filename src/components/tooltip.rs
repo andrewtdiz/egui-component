@@ -7,7 +7,7 @@ const TOOLTIP_GAP: f32 = 6.0;
 const TOOLTIP_PADDING_X: i8 = 6;
 const TOOLTIP_PADDING_Y: i8 = 4;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum TooltipPlacement {
     Auto,
     Top,
@@ -99,7 +99,8 @@ impl ComponentUi<'_> {
                 };
 
                 if show_tooltip {
-                    let tooltip_frame = tooltip_frame(ui.style(), crate::theme::runtime_for_ui(&ui));
+                    let tooltip_frame =
+                        tooltip_frame(ui.style(), crate::theme::runtime_for_ui(&ui));
                     let mut tooltip = egui::Tooltip::for_widget(&response).gap(TOOLTIP_GAP);
                     tooltip.popup = tooltip.popup.frame(tooltip_frame);
                     match props.placement {
@@ -146,6 +147,7 @@ impl ComponentUi<'_> {
 
 fn tooltip_frame(style: &egui::Style, runtime: crate::theme::ThemeRuntime) -> egui::Frame {
     egui::Frame::popup(style)
+        .corner_radius(tokens::radius_sm(runtime))
         .inner_margin(egui::Margin::symmetric(
             TOOLTIP_PADDING_X,
             TOOLTIP_PADDING_Y,
@@ -158,12 +160,16 @@ mod tests {
     use super::{tooltip_frame, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y};
     use crate::theme::ThemeMode;
     use crate::ui::tokens;
-    use egui::{Context, Margin};
+    use egui::{Context, CornerRadius, Margin};
 
     #[test]
     fn tooltip_frame_overrides_popup_padding_and_shadow() {
         let context = Context::default();
-        crate::theme::install(&context, crate::theme::ThemeSpec::default(), ThemeMode::Dark);
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            ThemeMode::Dark,
+        );
         let style = context.style();
         let popup_frame = egui::Frame::popup(&style);
         let frame = tooltip_frame(&style, crate::theme::runtime_for_context(&context));
@@ -172,9 +178,17 @@ mod tests {
             frame.inner_margin,
             Margin::symmetric(TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y)
         );
-        assert_eq!(frame.shadow, tokens::tailwind_shadow_sm(crate::theme::runtime_for_context(&context)));
+        assert_eq!(
+            frame.shadow,
+            tokens::tailwind_shadow_sm(crate::theme::runtime_for_context(&context))
+        );
         assert_eq!(frame.fill, popup_frame.fill);
         assert_eq!(frame.stroke, popup_frame.stroke);
-        assert_eq!(frame.corner_radius, popup_frame.corner_radius);
+        assert_eq!(
+            frame.corner_radius,
+            CornerRadius::same(tokens::radius_sm(crate::theme::runtime_for_context(
+                &context
+            )))
+        );
     }
 }

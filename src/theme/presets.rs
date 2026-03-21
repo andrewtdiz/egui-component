@@ -524,4 +524,3 @@ pub(crate) const fn taupe_theme() -> ThemeSpec {
         shadows: default_shadows(),
     }
 }
-

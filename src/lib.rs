@@ -20,7 +20,10 @@ pub use catalog::{
 };
 #[cfg(feature = "showcase")]
 pub use error::{ComponentLibraryError, Result};
-pub use theme::{BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette, ThemeShadows, ThemeSpec};
+pub use theme::{
+    BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,
+    ThemeShadows, ThemeSpec,
+};
 
 pub mod prelude {
     pub use crate::components::{
@@ -85,5 +88,8 @@ pub mod prelude {
         // xtask:prelude-exports:start
         // xtask:prelude-exports:end
     };
-    pub use crate::theme::{BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette, ThemeShadows, ThemeSpec};
+    pub use crate::theme::{
+        BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,
+        ThemeShadows, ThemeSpec,
+    };
 }

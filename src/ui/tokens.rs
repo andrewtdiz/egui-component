@@ -93,7 +93,11 @@ pub(crate) fn input_background(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn input_hover_background(runtime: ThemeRuntime) -> Color32 {
-    mix(input_background(runtime), role(runtime, ColorRole::Accent), 0.35)
+    mix(
+        input_background(runtime),
+        role(runtime, ColorRole::Accent),
+        0.35,
+    )
 }
 
 pub(crate) fn input_focus_background(runtime: ThemeRuntime) -> Color32 {
@@ -238,7 +242,10 @@ pub(crate) fn tailwind_shadow_lg(runtime: ThemeRuntime) -> Shadow {
 
 pub(crate) fn text_selection_bg(runtime: ThemeRuntime) -> Color32 {
     let dark_mode = runtime.mode.is_dark();
-    alpha(role(runtime, ColorRole::Ring), if dark_mode { 120 } else { 96 })
+    alpha(
+        role(runtime, ColorRole::Ring),
+        if dark_mode { 120 } else { 96 },
+    )
 }
 
 pub(crate) fn dialogue_backdrop(runtime: ThemeRuntime) -> Color32 {

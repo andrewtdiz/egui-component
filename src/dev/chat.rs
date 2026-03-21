@@ -37,7 +37,11 @@ pub(crate) fn run_chat_window() -> Result {
         window_title,
         native_options,
         Box::new(move |creation_context| {
-            theme::install(&creation_context.egui_ctx, theme::ThemeSpec::default(), ThemeMode::Dark);
+            theme::install(
+                &creation_context.egui_ctx,
+                theme::ThemeSpec::default(),
+                ThemeMode::Dark,
+            );
             Ok(Box::new(ChatWindowApp {
                 state: ChatExampleState::default(),
             }))
@@ -116,7 +120,8 @@ impl Default for ChatExampleState {
 
 impl ChatExampleState {
     fn draw(&mut self, context: &Context) {
-        let dark_runtime = crate::theme::runtime_for_context(context).with_mode(crate::theme::ThemeMode::Dark);
+        let dark_runtime =
+            crate::theme::runtime_for_context(context).with_mode(crate::theme::ThemeMode::Dark);
         SidePanel::left("chat_sidebar")
             .resizable(false)
             .exact_width(SIDEBAR_WIDTH)
@@ -149,7 +154,8 @@ impl ChatExampleState {
     }
 
     fn draw_sidebar(&mut self, ui: &mut Ui) {
-        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
+        let dark_runtime =
+            crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         ui.spacing_mut().item_spacing.y = 6.0;
 
         ui.horizontal(|ui| {
@@ -214,7 +220,8 @@ impl ChatExampleState {
     }
 
     fn draw_conversation(&mut self, context: &Context, ui: &mut Ui) {
-        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
+        let dark_runtime =
+            crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         let thread_id = self.current_thread().id;
         self.conversation_scroll.ensure_thread(thread_id);
         let stick_to_end = self.conversation_scroll.stick_to_end;
@@ -271,7 +278,8 @@ impl ChatExampleState {
     }
 
     fn draw_composer(&mut self, ui: &mut Ui) {
-        let dark_runtime = crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
+        let dark_runtime =
+            crate::theme::runtime_for_ui(ui).with_mode(crate::theme::ThemeMode::Dark);
         let can_send = !self.composer_text.trim().is_empty() && self.streaming.is_none();
         let composer_width = ui.available_width().min(COMPOSER_MAX_WIDTH);
         let mut send_clicked = false;
@@ -281,7 +289,8 @@ impl ChatExampleState {
 
             let text_edit = egui::TextEdit::multiline(&mut self.composer_text)
                 .hint_text(
-                    RichText::new("Ask for follow-up changes").color(tokens::text_muted(dark_runtime)),
+                    RichText::new("Ask for follow-up changes")
+                        .color(tokens::text_muted(dark_runtime)),
                 )
                 .frame(false)
                 .font(typography::body_font())

@@ -112,7 +112,11 @@ fn draw_toolbar<R>(
                         .stroke
                         .unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
                 )
-                .corner_radius(props.corner_radius.unwrap_or(crate::theme::radius(ui, crate::theme::RadiusRole::Xl)))
+                .corner_radius(
+                    props
+                        .corner_radius
+                        .unwrap_or(crate::theme::radius(ui, crate::theme::RadiusRole::Xl)),
+                )
                 .padding(props.padding_x, props.padding_y)
                 .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm(runtime))),
                 |ui| layout::row().gap(tokens::LAYOUT_GAP_XS).show(ui, add).inner,

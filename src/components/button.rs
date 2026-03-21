@@ -430,8 +430,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         visuals.inactive.fg_stroke = resolved.inactive_fg;
         visuals.hovered.fg_stroke = resolved.hovered_fg;
         visuals.active.fg_stroke = resolved.active_fg;
-        let button_font_size = egui::TextStyle::Button.resolve(ui.style()).size;
-        let button_label_font = resolve_button_label_font(props.label_weight, button_font_size);
+        let button_label_font = resolve_button_label_font(props.label_weight);
         let label_color = resolved.label_color.unwrap_or(resolved.inactive_fg.color);
         let label_width = if props.label.is_empty() {
             0.0
@@ -449,9 +448,9 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         };
         let button_label = match resolved.label_color {
             Some(label_color) => RichText::new(props.label)
-                .font(button_label_font)
+                .font(button_label_font.clone())
                 .color(label_color),
-            None => RichText::new(props.label).font(button_label_font),
+            None => RichText::new(props.label).font(button_label_font.clone()),
         };
         let has_label = !props.label.is_empty();
         let swatch_only = props.color.is_some() && !has_label && props.leading_icon.is_none();
@@ -551,10 +550,9 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
             && props.leading_icon.is_none()
             && !props.icon_only
         {
-            let font_id = egui::TextStyle::Button.resolve(ui.style());
             let text_galley = ui.painter().layout_no_wrap(
                 props.label.to_owned(),
-                font_id,
+                button_label_font.clone(),
                 tokens::text_primary(runtime),
             );
             let text_half_width = text_galley.size().x * 0.5;
@@ -593,18 +591,19 @@ fn paint_trailing_icon(
     }
 }
 
-fn resolve_button_label_font(weight: ButtonLabelWeight, size: f32) -> FontId {
+fn resolve_button_label_font(weight: ButtonLabelWeight) -> FontId {
     match weight {
-        ButtonLabelWeight::Regular => typography::proportional(size),
-        ButtonLabelWeight::Medium => typography::semibold_font(size),
-        ButtonLabelWeight::Bold => typography::bold_font(size),
+        ButtonLabelWeight::Regular => typography::label_font(),
+        ButtonLabelWeight::Medium => typography::semibold_font(typography::LABEL_SIZE),
+        ButtonLabelWeight::Bold => typography::bold_font(typography::LABEL_SIZE),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Button, ButtonVariant};
+    use super::{resolve_button_label_font, Button, ButtonLabelWeight, ButtonVariant};
     use crate::components::{Color, ComponentUiExt, ControlSize};
+    use crate::ui::typography;
     use egui::{CentralPanel, Color32, Context, RawInput, Rect};
 
     #[test]
@@ -627,5 +626,21 @@ mod tests {
 
         assert!(rect.width() >= 18.0);
         assert!(rect.height() >= 18.0);
+    }
+
+    #[test]
+    fn button_labels_use_label_text_size() {
+        assert_eq!(
+            resolve_button_label_font(ButtonLabelWeight::Regular),
+            typography::label_font()
+        );
+        assert_eq!(
+            resolve_button_label_font(ButtonLabelWeight::Medium).size,
+            typography::LABEL_SIZE
+        );
+        assert_eq!(
+            resolve_button_label_font(ButtonLabelWeight::Bold).size,
+            typography::LABEL_SIZE
+        );
     }
 }

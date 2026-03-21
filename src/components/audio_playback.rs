@@ -20,7 +20,7 @@ const AUDIO_PLAYBACK_BAR_PATTERN: [f32; 42] = [
     0.42, 0.60, 0.34, 0.72, 0.48, 0.64, 0.30, 0.56, 0.40, 0.68,
 ];
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum AudioPlaybackState {
     Paused,
     Playing,
@@ -354,7 +354,8 @@ mod tests {
     fn action_strip_stays_right_aligned_and_leaves_waveform_room() {
         let context = Context::default();
         let mut actions_rect = Rect::NOTHING;
-        let row_rect = Rect::from_min_size(pos2(20.0, 20.0), vec2(420.0, super::AUDIO_PLAYBACK_HEIGHT));
+        let row_rect =
+            Rect::from_min_size(pos2(20.0, 20.0), vec2(420.0, super::AUDIO_PLAYBACK_HEIGHT));
 
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
@@ -385,7 +386,8 @@ mod tests {
             });
         });
 
-        let waveform_left = row_rect.left() + super::AUDIO_PLAYBACK_BUTTON_SIZE + super::AUDIO_PLAYBACK_CONTENT_GAP;
+        let waveform_left =
+            row_rect.left() + super::AUDIO_PLAYBACK_BUTTON_SIZE + super::AUDIO_PLAYBACK_CONTENT_GAP;
         assert!(actions_rect.right() <= row_rect.right() + 0.5);
         assert!(actions_rect.left() > waveform_left + 40.0);
     }

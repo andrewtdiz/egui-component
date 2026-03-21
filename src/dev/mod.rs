@@ -1,4 +1,5 @@
 mod chat;
+mod hot_exports;
 mod runtime;
 pub mod showcase;
 

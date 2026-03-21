@@ -6,7 +6,6 @@ use std::fmt;
 
 const DESTRUCTIVE_FOREGROUND: OklchColor = OklchColor::new(0.985, 0.0, 0.0);
 
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ThemeMode {
     Light,
@@ -423,6 +422,11 @@ pub const fn preset(base: BaseColor) -> ThemeSpec {
     ThemeSpec::preset(base)
 }
 
+pub fn install_context_resources(context: &Context) {
+    style::install_context_resources(context);
+    icons::setup(context);
+}
+
 pub fn install(context: &Context, theme: ThemeSpec, mode: ThemeMode) {
     let runtime = ThemeRuntime::new(theme, mode);
     store_context_runtime(context, runtime);
@@ -529,7 +533,8 @@ pub(crate) fn runtime_for_context(context: &Context) -> ThemeRuntime {
 
 pub(crate) fn runtime_for_ui(ui: &impl ThemeUiRef) -> ThemeRuntime {
     let ui = ui.theme_ui();
-    if let Some(runtime) = ui.data(|data| data.get_temp::<ThemeRuntime>(scoped_theme_runtime_id())) {
+    if let Some(runtime) = ui.data(|data| data.get_temp::<ThemeRuntime>(scoped_theme_runtime_id()))
+    {
         runtime
     } else {
         runtime_for_context(ui.ctx())
@@ -610,7 +615,10 @@ mod tests {
     fn base_color_presets_match_upstream_slots() {
         let neutral = ThemeSpec::preset(BaseColor::Neutral);
         assert_eq!(neutral.light.background, OklchColor::new(1.0, 0.0, 0.0));
-        assert_eq!(neutral.dark.sidebar_primary, OklchColor::new(0.488, 0.243, 264.376));
+        assert_eq!(
+            neutral.dark.sidebar_primary,
+            OklchColor::new(0.488, 0.243, 264.376)
+        );
         assert_eq!(neutral.light.destructive_foreground, DESTRUCTIVE_FOREGROUND);
 
         let taupe = ThemeSpec::preset(BaseColor::Taupe);
@@ -630,7 +638,11 @@ mod tests {
     #[test]
     fn set_theme_preserves_mode_and_scoped_theme_restores() {
         let context = Context::default();
-        install(&context, ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark);
+        install(
+            &context,
+            ThemeSpec::preset(BaseColor::Neutral),
+            ThemeMode::Dark,
+        );
         set_theme(&context, ThemeSpec::preset(BaseColor::Stone));
 
         assert_eq!(load_context_runtime(&context).mode, ThemeMode::Dark);
@@ -644,14 +656,19 @@ mod tests {
                         .resolved(ColorRole::Background)
                 );
 
-                with_theme(ui, ThemeSpec::preset(BaseColor::Mauve), ThemeMode::Light, |ui| {
-                    assert_eq!(
-                        color(ui, ColorRole::Background),
-                        ThemeSpec::preset(BaseColor::Mauve)
-                            .palette(ThemeMode::Light)
-                            .resolved(ColorRole::Background)
-                    );
-                });
+                with_theme(
+                    ui,
+                    ThemeSpec::preset(BaseColor::Mauve),
+                    ThemeMode::Light,
+                    |ui| {
+                        assert_eq!(
+                            color(ui, ColorRole::Background),
+                            ThemeSpec::preset(BaseColor::Mauve)
+                                .palette(ThemeMode::Light)
+                                .resolved(ColorRole::Background)
+                        );
+                    },
+                );
 
                 assert_eq!(
                     color(ui, ColorRole::Background),
@@ -666,7 +683,10 @@ mod tests {
     #[test]
     fn oklch_conversion_preserves_alpha_and_basic_neutral_values() {
         assert_eq!(OklchColor::new(1.0, 0.0, 0.0).to_color32(), Color32::WHITE);
-        assert_eq!(OklchColor::with_alpha(1.0, 0.0, 0.0, 0.1).to_color32().a(), 26);
+        assert_eq!(
+            OklchColor::with_alpha(1.0, 0.0, 0.0, 0.1).to_color32().a(),
+            26
+        );
         assert!(OklchColor::new(0.577, 0.245, 27.325).to_color32().r() > 128);
     }
 }

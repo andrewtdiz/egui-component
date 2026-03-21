@@ -16,24 +16,18 @@ impl<'a> ButtonGroup<'a> {
 }
 
 impl ComponentUi<'_> {
-    pub fn button_group<'a>(
-        &mut self,
-        selected_index: &mut usize,
-        props: impl Into<ButtonGroup<'a>>,
-    ) {
-        draw_button_group(self.ui_mut(), selected_index, props.into());
+    pub fn button_group<'a>(&mut self, props: impl Into<ButtonGroup<'a>>) -> Option<usize> {
+        draw_button_group(self.ui_mut(), props.into())
     }
 }
 
-fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup<'_>) {
+fn draw_button_group(ui: &mut Ui, props: ButtonGroup<'_>) -> Option<usize> {
     if props.options.is_empty() {
-        *selected_index = 0;
-        return;
+        return None;
     }
 
-    let clamped_index = (*selected_index).min(props.options.len() - 1);
-    *selected_index = clamped_index;
     let runtime = crate::theme::runtime_for_ui(ui);
+    let mut clicked_index = None;
 
     ui.push_id(props.id, |ui| {
         layout::row().gap(0.0).show(ui, |ui| {
@@ -43,7 +37,6 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
             let mut segment_rects = Vec::with_capacity(props.options.len());
 
             for (index, label) in props.options.iter().copied().enumerate() {
-                let selected = index == *selected_index;
                 let galley_width = ui.fonts_mut(|fonts| {
                     fonts
                         .layout_no_wrap(
@@ -59,9 +52,7 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                     ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
                 segment_rects.push(rect);
 
-                let fill = if selected {
-                    tokens::row_selected_bg(runtime)
-                } else if response.is_pointer_button_down_on() {
+                let fill = if response.is_pointer_button_down_on() {
                     tokens::button_secondary_active_bg(runtime)
                 } else if response.hovered() {
                     tokens::button_secondary_hover_bg(runtime)
@@ -95,15 +86,11 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
                     Align2::CENTER_CENTER,
                     label,
                     text_font.clone(),
-                    if selected {
-                        tokens::row_selected_text(runtime)
-                    } else {
-                        tokens::text_primary(runtime)
-                    },
+                    tokens::text_primary(runtime),
                 );
 
                 if response.clicked() {
-                    *selected_index = index;
+                    clicked_index = Some(index);
                 }
 
                 let _ = response.on_hover_cursor(CursorIcon::PointingHand);
@@ -136,4 +123,85 @@ fn draw_button_group(ui: &mut Ui, selected_index: &mut usize, props: ButtonGroup
             }
         });
     });
+
+    clicked_index
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ButtonGroup;
+    use crate::components::ComponentUiExt;
+    use crate::ui::tokens;
+    use egui::{
+        pos2, vec2, CentralPanel, Context, Event, Id, Modifiers, PointerButton, Pos2, RawInput,
+    };
+
+    const TEST_OPTIONS: &[&str] = &["One", "Two", "Three"];
+
+    #[test]
+    fn empty_button_group_has_no_action() {
+        let context = Context::default();
+        let mut clicked = Some(0);
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                clicked = ui
+                    .components()
+                    .button_group(ButtonGroup::new(Id::new("button_group_empty"), &[]));
+            });
+        });
+
+        assert_eq!(clicked, None);
+    }
+
+    #[test]
+    fn button_group_returns_clicked_action_index() {
+        let context = Context::default();
+        let (_, second_button_center, _) = render_button_group(&context, RawInput::default());
+
+        let _ = render_button_group(&context, pointer_input(second_button_center, true));
+        let (_, _, clicked) =
+            render_button_group(&context, pointer_input(second_button_center, false));
+
+        assert_eq!(clicked, Some(1));
+    }
+
+    fn render_button_group(context: &Context, input: RawInput) -> (Pos2, Pos2, Option<usize>) {
+        let mut first_button_center = Pos2::ZERO;
+        let mut second_button_center = Pos2::ZERO;
+        let mut clicked = None;
+
+        let _ = context.run(input, |context| {
+            CentralPanel::default().show(context, |ui| {
+                let origin = ui.next_widget_position();
+                let button_size = vec2(58.0, (tokens::SPACING_INTERACT_HEIGHT - 4.0).max(24.0));
+                first_button_center = origin + button_size * 0.5;
+                second_button_center = pos2(
+                    origin.x + button_size.x * 1.5,
+                    origin.y + button_size.y * 0.5,
+                );
+                clicked = ui.components().button_group(ButtonGroup::new(
+                    Id::new("button_group_actions"),
+                    TEST_OPTIONS,
+                ));
+            });
+        });
+
+        (first_button_center, second_button_center, clicked)
+    }
+
+    fn pointer_input(position: Pos2, pressed: bool) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            ..RawInput::default()
+        }
+    }
 }
