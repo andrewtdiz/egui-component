@@ -29,8 +29,8 @@ pub mod prelude {
         NumberInput, NumberInputAxis, Pagination, Popover, PopoverAlign, PopoverResponse,
         PopoverSide, Progress, Radio, RadioGroup, RadioOption, Select, Sidebar, SidebarSide,
         Skeleton, Slider, Spinner, Switch, TabOption, TabsVariant, TextInput, TextInputOverride,
-        Toast, ToastIntent, ToastPlacement, ToastStack, ToastViewport, Toolbar, Tooltip,
-        TooltipPlacement,
+        Toast, ToastIntent, ToastPlacement, ToastStack, ToastViewport, ToggleGroup, Toolbar,
+        Tooltip, TooltipPlacement,
     };
     pub use crate::theme::{
         BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,

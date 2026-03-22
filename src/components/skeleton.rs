@@ -82,9 +82,10 @@ fn draw_skeleton(ui: &mut Ui, props: Skeleton) -> Response {
     let base = tokens::muted_surface(runtime);
     let highlight = tokens::card_background(runtime);
     let fill = if props.animated {
-        let pulse = ((ui.input(|input| input.time) as f32 * 2.6).sin() + 1.0) * 0.5;
+        let pulse = ((ui.input(|input| input.time) as f32 * 1.8).sin() + 1.0) * 0.5;
+        let eased = pulse * pulse * (3.0 - (2.0 * pulse));
         ui.ctx().request_repaint_after_secs(1.0 / 30.0);
-        base.lerp_to_gamma(highlight, 0.12 + (pulse * 0.16))
+        base.lerp_to_gamma(highlight, 0.07 + (eased * 0.18))
     } else {
         base
     };

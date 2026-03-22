@@ -166,44 +166,45 @@ fn draw_radio(ui: &mut Ui, selected: bool, props: Radio<'_>) -> Response {
         return draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
     }
 
-    layout::row()
-        .gap(10.0)
-        .show(ui, |ui| {
-            let control =
-                draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
-            let label = ui
-                .scope(|ui| {
-                    ui.style_mut().interaction.selectable_labels = false;
-                    let _ = layout::column().gap(RADIO_TEXT_GAP).show(ui, |ui| {
-                        let runtime = crate::theme::runtime_for_ui(ui);
-                        if let Some(label_text) = props.label {
-                            let _ = ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(label_text)
-                                        .color(tokens::text_primary(runtime)),
-                                )
-                                .selectable(false),
-                            );
-                        }
-                        if let Some(description) = props.description.filter(|text| !text.is_empty())
-                        {
-                            let _ = ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(description)
-                                        .color(tokens::text_muted(runtime))
-                                        .size(12.0),
-                                )
-                                .selectable(false),
-                            );
-                        }
-                    });
-                })
-                .response
-                .on_hover_cursor(CursorIcon::PointingHand);
+    let click_id = ui.next_auto_id();
+    let content = layout::row().gap(10.0).show(ui, |ui| {
+        let control = draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
+        let label = ui
+            .scope(|ui| {
+                ui.style_mut().interaction.selectable_labels = false;
+                let _ = layout::column().gap(RADIO_TEXT_GAP).show(ui, |ui| {
+                    let runtime = crate::theme::runtime_for_ui(ui);
+                    if let Some(label_text) = props.label {
+                        let _ = ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(label_text)
+                                    .color(tokens::text_primary(runtime)),
+                            )
+                            .selectable(false),
+                        );
+                    }
+                    if let Some(description) = props.description.filter(|text| !text.is_empty()) {
+                        let _ = ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(description)
+                                    .color(tokens::text_muted(runtime))
+                                    .size(12.0),
+                            )
+                            .selectable(false),
+                        );
+                    }
+                });
+            })
+            .response
+            .on_hover_cursor(CursorIcon::PointingHand);
 
-            control.union(label)
-        })
+        control.union(label)
+    });
+
+    content
         .inner
+        .union(ui.interact(content.response.rect, click_id, Sense::click()))
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 fn draw_radio_control(ui: &mut Ui, selected: bool) -> Response {

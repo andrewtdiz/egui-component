@@ -142,7 +142,7 @@ fn draw_page_button(ui: &mut ComponentUi<'_>, current_page: &mut usize, page: us
             .stroke(stroke),
         |response| {
             if is_current {
-                tokens::button_secondary_bg(runtime)
+                tokens::card_background(runtime)
             } else if response.is_pointer_button_down_on() {
                 tokens::button_secondary_active_bg(runtime)
             } else if response.hovered() {

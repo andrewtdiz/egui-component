@@ -83,16 +83,17 @@ fn draw_spinner(ui: &mut Ui, props: Spinner) -> Response {
     ui.ctx().request_repaint_after_secs(1.0 / 60.0);
 
     let color = props.color.unwrap_or(tokens::primary_bg(runtime));
-    let track_color = tokens::input_border(runtime);
     let center = rect.center();
     let start_angle = (ui.input(|input| input.time) as f32) * props.speed * std::f32::consts::TAU;
+    let arc_points = spinner_arc_points(center, radius, start_angle, SPINNER_ARC_SWEEP);
 
-    ui.painter()
-        .circle_stroke(center, radius, Stroke::new(props.stroke_width, track_color));
-    ui.painter().add(egui::Shape::line(
-        spinner_arc_points(center, radius, start_angle, SPINNER_ARC_SWEEP),
-        Stroke::new(props.stroke_width, color),
-    ));
+    for (index, segment) in arc_points.windows(2).enumerate() {
+        let t = (index + 1) as f32 / (arc_points.len().saturating_sub(1)) as f32;
+        ui.painter().line_segment(
+            [segment[0], segment[1]],
+            Stroke::new(props.stroke_width, color.gamma_multiply(0.18 + (0.82 * t))),
+        );
+    }
 
     response
 }

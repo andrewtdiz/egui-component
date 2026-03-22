@@ -34,6 +34,7 @@ mod spinner;
 mod switch;
 mod tabs;
 mod toast;
+mod toggle_group;
 mod toolbar;
 mod tooltip;
 // xtask:component-modules:end
@@ -75,6 +76,7 @@ pub use spinner::Spinner;
 pub use switch::Switch;
 pub use tabs::{TabOption, TabsVariant};
 pub use toast::{Toast, ToastIntent, ToastPlacement, ToastStack, ToastViewport};
+pub use toggle_group::ToggleGroup;
 pub use toolbar::Toolbar;
 pub use tooltip::{Tooltip, TooltipPlacement};
 // xtask:component-exports:end

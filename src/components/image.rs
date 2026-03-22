@@ -5,18 +5,24 @@ use std::borrow::Cow;
 #[derive(Debug, Clone)]
 pub struct Image<'a> {
     widget: egui::Image<'a>,
+    rotation: Option<(f32, Vec2)>,
+    corner_radius: Option<CornerRadius>,
 }
 
 impl<'a> Image<'a> {
     pub fn new(source: impl Into<egui::ImageSource<'a>>) -> Self {
         Self {
             widget: egui::Image::new(source),
+            rotation: None,
+            corner_radius: None,
         }
     }
 
     pub fn from_uri(uri: impl Into<Cow<'a, str>>) -> Self {
         Self {
             widget: egui::Image::from_uri(uri),
+            rotation: None,
+            corner_radius: None,
         }
     }
 
@@ -26,6 +32,8 @@ impl<'a> Image<'a> {
     ) -> Self {
         Self {
             widget: egui::Image::from_bytes(uri, bytes),
+            rotation: None,
+            corner_radius: None,
         }
     }
 
@@ -70,12 +78,12 @@ impl<'a> Image<'a> {
     }
 
     pub fn rotate(mut self, angle_radians: f32, origin: Vec2) -> Self {
-        self.widget = self.widget.rotate(angle_radians, origin);
+        self.rotation = Some((angle_radians, origin));
         self
     }
 
     pub fn corner_radius(mut self, corner_radius: impl Into<CornerRadius>) -> Self {
-        self.widget = self.widget.corner_radius(corner_radius);
+        self.corner_radius = Some(corner_radius.into());
         self
     }
 }
@@ -120,7 +128,17 @@ impl ComponentUi<'_> {
 }
 
 fn draw_image(ui: &mut Ui, props: Image<'_>) -> Response {
-    ui.add(props.widget)
+    let mut widget = props.widget;
+
+    if let Some(corner_radius) = props.corner_radius {
+        widget = widget.corner_radius(corner_radius);
+    }
+
+    if let Some((angle_radians, origin)) = props.rotation {
+        widget = widget.rotate(angle_radians, origin);
+    }
+
+    ui.add(widget)
 }
 
 #[cfg(test)]

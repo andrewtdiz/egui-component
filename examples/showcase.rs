@@ -238,7 +238,6 @@ struct ShowcaseApp {
     segmented_tab_index: usize,
     stacked_tab_index: usize,
     rail_tab_index: usize,
-    toggle_rail_tab_index: Option<usize>,
     audio_playback_state: AudioPlaybackState,
     pagination_page: usize,
     collapsible_open: bool,
@@ -256,6 +255,7 @@ struct ShowcaseApp {
     image_tile_selected: bool,
     image_tile_playback_state: ImageTilePlaybackState,
     image_tile_last_action: String,
+    spinner_demo_until: Option<f64>,
 }
 
 impl Default for ShowcaseApp {
@@ -273,7 +273,7 @@ impl Default for ShowcaseApp {
             slider_value: 62.0,
             number_x_value: 42.0,
             number_y_value: 16.0,
-            progress_value: 0.58,
+            progress_value: 0.0,
             radio_value: true,
             radio_group_value: Some(1),
             select_index: Some(1),
@@ -284,7 +284,6 @@ impl Default for ShowcaseApp {
             segmented_tab_index: 0,
             stacked_tab_index: 0,
             rail_tab_index: 0,
-            toggle_rail_tab_index: Some(1),
             audio_playback_state: AudioPlaybackState::Paused,
             pagination_page: 2,
             collapsible_open: true,
@@ -302,6 +301,7 @@ impl Default for ShowcaseApp {
             image_tile_selected: false,
             image_tile_playback_state: ImageTilePlaybackState::Paused,
             image_tile_last_action: "No image tile actions yet".to_owned(),
+            spinner_demo_until: None,
         }
     }
 }
@@ -368,12 +368,13 @@ impl ShowcaseApp {
                     for definition in showcase_component_definitions_by_section(section) {
                         let selected = self.selected_component == definition.kind;
                         let button = Button::new(definition.label)
-                            .variant(if selected {
-                                ButtonVariant::Secondary
-                            } else {
-                                ButtonVariant::Ghost
-                            })
+                            .variant(ButtonVariant::Ghost)
                             .selected(selected)
+                            .label_weight(if selected {
+                                ButtonLabelWeight::Medium
+                            } else {
+                                ButtonLabelWeight::Regular
+                            })
                             .min_size(vec2(ui.available_width(), 30.0));
                         if ui.components().button(button).clicked() {
                             self.selected_component = definition.kind;
@@ -386,20 +387,19 @@ impl ShowcaseApp {
     }
 
     fn render_topbar(&mut self, ui: &mut Ui) {
-        let fill = theme::color(ui, ColorRole::Card);
-        let stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
-
-        ui.add_space(8.0);
-        let _ = ui.components().card(
-            Card::new().padding(12, 10).fill(fill).stroke(stroke),
-            |ui| {
-                let _ = layout::row().gap(12.0).show(ui, |ui| {
+        let _ = layout::inset().padding(16, 10).show(ui, |ui| {
+            let _ = layout::row().gap(12.0).show(ui, |ui| {
+                {
                     let mut components = ui.components();
                     let _ = components.label(
                         Label::new("egui-component Showcase")
                             .weight(LabelWeight::Semibold)
                             .tone(LabelTone::Primary),
                     );
+                }
+                let _ = layout::spacer().show(ui);
+                {
+                    let mut components = ui.components();
                     let _ = components.label(
                         Label::new("Theme mode")
                             .tone(LabelTone::Muted)
@@ -413,10 +413,10 @@ impl ShowcaseApp {
                         &THEME_MODE_OPTIONS,
                     );
                     self.theme_mode = theme_mode_from_index(selected_mode);
-                });
-            },
-        );
-        ui.add_space(8.0);
+                }
+            });
+        });
+        let _ = ui.components().separator();
     }
 
     fn render_center(&mut self, ui: &mut Ui) {
@@ -835,13 +835,6 @@ impl ShowcaseApp {
             &mut self.rail_tab_index,
             &RAIL_TAB_OPTIONS,
         );
-
-        ui.add_space(18.0);
-        ui.components().toggle_rail_tabs(
-            Id::new("component_showcase_toggle_rail_tabs"),
-            &mut self.toggle_rail_tab_index,
-            &RAIL_TAB_OPTIONS,
-        );
     }
 
     fn render_separator_preview(&mut self, ui: &mut Ui) {
@@ -940,6 +933,57 @@ impl ShowcaseApp {
                 .tone(LabelTone::Muted)
                 .size(SMALL_TEXT),
         );
+
+        let now = ui.input(|input| input.time);
+        let spinner_demo_active = self.spinner_demo_until.is_some_and(|until| until > now);
+        if let Some(until) = self.spinner_demo_until {
+            if until > now {
+                ui.ctx().request_repaint_after_secs((until - now) as f32);
+            } else {
+                self.spinner_demo_until = None;
+            }
+        }
+
+        ui.add_space(12.0);
+        let _ = ui.components().label(
+            Label::new("Loading button example")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let trigger = ui
+            .add_enabled_ui(!spinner_demo_active, |ui| {
+                ui.components().button(
+                    Button::new(if spinner_demo_active {
+                        "  Publishing build"
+                    } else {
+                        "Publish build"
+                    })
+                    .variant(ButtonVariant::Primary)
+                    .min_size(vec2(152.0, 34.0)),
+                )
+            })
+            .inner;
+        if trigger.clicked() {
+            self.spinner_demo_until = Some(now + 1.0);
+        }
+
+        if spinner_demo_active {
+            let spinner_color = theme::color(ui, ColorRole::PrimaryForeground);
+            let spinner_rect = egui::Rect::from_center_size(
+                egui::pos2(trigger.rect.left() + 18.0, trigger.rect.center().y),
+                vec2(14.0, 14.0),
+            );
+            let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(spinner_rect), |ui| {
+                let _ = ui.components().spinner(
+                    Spinner::new()
+                        .size(14.0)
+                        .stroke_width(2.0)
+                        .speed(1.4)
+                        .color(spinner_color),
+                );
+            });
+        }
     }
 
     fn render_skeleton_preview(&mut self, ui: &mut Ui) {
@@ -1076,12 +1120,15 @@ impl ShowcaseApp {
     }
 
     fn render_tooltip_preview(&mut self, ui: &mut Ui) {
-        if let Some(index) = ui.components().button_group(ButtonGroup::new(
-            Id::new("component_showcase_tooltip_placement"),
-            &TOOLTIP_PLACEMENT_OPTIONS,
-        )) {
-            self.tooltip_placement = tooltip_placement_from_index(index);
-        }
+        let mut placement_index = tooltip_placement_index(self.tooltip_placement);
+        let _ = ui.components().toggle_group(
+            &mut placement_index,
+            ToggleGroup::new(
+                Id::new("component_showcase_tooltip_placement"),
+                &TOOLTIP_PLACEMENT_OPTIONS,
+            ),
+        );
+        self.tooltip_placement = tooltip_placement_from_index(placement_index);
         ui.add_space(8.0);
         let _ = ui.components().tooltip(
             Tooltip::new("Hover this trigger", "Tooltip content example")
@@ -1376,28 +1423,6 @@ impl ShowcaseApp {
             self.sidebar_side_index = index;
         }
 
-        ui.add_space(8.0);
-        let trigger_label = if self.sidebar_preview_open {
-            "Sidebar Active"
-        } else {
-            "Open Sidebar"
-        };
-        if ui
-            .components()
-            .button(
-                Button::new(trigger_label)
-                    .variant(ButtonVariant::Secondary)
-                    .leading_icon(if self.sidebar_side_index == 0 {
-                        "panel-left-open"
-                    } else {
-                        "panel-right-open"
-                    }),
-            )
-            .clicked()
-        {
-            self.sidebar_preview_open = true;
-        }
-
         ui.add_space(10.0);
         let canvas_fill = if self.theme_mode.is_dark() {
             app_background(ui)
@@ -1414,13 +1439,192 @@ impl ShowcaseApp {
                     let (host_rect, _) =
                         ui.allocate_exact_size(vec2(width - 24.0, 360.0), Sense::hover());
                     let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
+                        let preview_rect = host_rect.shrink(1.0);
+                        let preview_radius = radius_md(ui);
+                        let preview_animation = ui.ctx().animate_bool_responsive(
+                            Id::new("component_showcase_sidebar_preview"),
+                            self.sidebar_preview_open,
+                        );
+                        let preview_fill = if self.theme_mode.is_dark() {
+                            app_background(ui).lerp_to_gamma(theme::color(ui, ColorRole::Card), 0.18)
+                        } else {
+                            theme::color(ui, ColorRole::Card)
+                        };
+                        let preview_header_rect = egui::Rect::from_min_max(
+                            preview_rect.min,
+                            egui::pos2(preview_rect.right(), preview_rect.top() + 46.0),
+                        );
+                        let preview_rail_rect = if self.sidebar_side_index == 0 {
+                            egui::Rect::from_min_max(
+                                egui::pos2(preview_rect.left(), preview_header_rect.bottom()),
+                                egui::pos2(preview_rect.left() + 54.0, preview_rect.bottom()),
+                            )
+                        } else {
+                            egui::Rect::from_min_max(
+                                egui::pos2(preview_rect.right() - 54.0, preview_header_rect.bottom()),
+                                preview_rect.right_bottom(),
+                            )
+                        };
+
                         ui.painter().rect(
-                            host_rect.shrink(1.0),
-                            egui::CornerRadius::same(radius_md(ui)),
-                            Color32::TRANSPARENT,
+                            preview_rect,
+                            egui::CornerRadius::same(preview_radius),
+                            preview_fill,
                             Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
                             egui::StrokeKind::Outside,
                         );
+                        ui.painter().rect(
+                            preview_header_rect,
+                            egui::CornerRadius {
+                                nw: preview_radius,
+                                ne: preview_radius,
+                                sw: 0,
+                                se: 0,
+                            },
+                            theme::color(ui, ColorRole::Background),
+                            Stroke::NONE,
+                            egui::StrokeKind::Outside,
+                        );
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(preview_rect.left(), preview_header_rect.bottom()),
+                                egui::pos2(preview_rect.right(), preview_header_rect.bottom()),
+                            ],
+                            Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
+                        );
+                        ui.painter().rect(
+                            preview_rail_rect,
+                            sidebar_preview_rail_radius(self.sidebar_side_index, preview_radius),
+                            theme::color(ui, ColorRole::Muted),
+                            Stroke::NONE,
+                            egui::StrokeKind::Outside,
+                        );
+
+                        let _ = ui.scope_builder(
+                            egui::UiBuilder::new()
+                                .max_rect(preview_header_rect.shrink2(vec2(14.0, 10.0))),
+                            |ui| {
+                                let _ = layout::row().gap(10.0).show(ui, |ui| {
+                                    {
+                                        let mut components = ui.components();
+                                        let _ = components.label(
+                                            Label::new("Sidebar Preview")
+                                                .tone(LabelTone::Primary)
+                                                .weight(LabelWeight::Semibold),
+                                        );
+                                        let _ = components.label(
+                                            Label::new(if self.sidebar_preview_open {
+                                                "Open"
+                                            } else {
+                                                "Closed"
+                                            })
+                                            .tone(LabelTone::Muted)
+                                            .size(SMALL_TEXT),
+                                        );
+                                    }
+                                    let _ = layout::spacer().show(ui);
+                                    {
+                                        let mut components = ui.components();
+                                        let _ = components.label(
+                                            Label::new(if self.sidebar_side_index == 0 {
+                                                "Left dock"
+                                            } else {
+                                                "Right dock"
+                                            })
+                                            .tone(LabelTone::Muted)
+                                            .size(SMALL_TEXT),
+                                        );
+                                    }
+                                });
+                            },
+                        );
+
+                        let toggle_rect = if self.sidebar_side_index == 0 {
+                            egui::Rect::from_min_size(
+                                egui::pos2(
+                                    preview_rect.left() + 9.0 + (preview_animation * 4.0),
+                                    preview_header_rect.bottom() + 12.0,
+                                ),
+                                vec2(36.0, 36.0),
+                            )
+                        } else {
+                            egui::Rect::from_min_size(
+                                egui::pos2(
+                                    preview_rect.right() - 45.0 - (preview_animation * 4.0),
+                                    preview_header_rect.bottom() + 12.0,
+                                ),
+                                vec2(36.0, 36.0),
+                            )
+                        };
+                        let toggle_icon =
+                            sidebar_preview_toggle_icon(self.sidebar_side_index, self.sidebar_preview_open);
+                        let toggle_response =
+                            ui.scope_builder(egui::UiBuilder::new().max_rect(toggle_rect), |ui| {
+                                ui.components().button(
+                                    Button::icon_only(toggle_icon)
+                                        .variant(if self.sidebar_preview_open {
+                                            ButtonVariant::Secondary
+                                        } else {
+                                            ButtonVariant::Ghost
+                                        })
+                                        .icon_size(16.0)
+                                        .min_size(vec2(36.0, 36.0)),
+                                )
+                            })
+                            .inner;
+                        if toggle_response.clicked() {
+                            self.sidebar_preview_open = !self.sidebar_preview_open;
+                        }
+
+                        let content_rect = if self.sidebar_side_index == 0 {
+                            egui::Rect::from_min_max(
+                                egui::pos2(
+                                    preview_rail_rect.right() + 20.0,
+                                    preview_header_rect.bottom() + 16.0,
+                                ),
+                                egui::pos2(preview_rect.right() - 18.0, preview_rect.bottom() - 18.0),
+                            )
+                        } else {
+                            egui::Rect::from_min_max(
+                                egui::pos2(preview_rect.left() + 18.0, preview_header_rect.bottom() + 16.0),
+                                egui::pos2(preview_rail_rect.left() - 20.0, preview_rect.bottom() - 18.0),
+                            )
+                        };
+                        let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(content_rect), |ui| {
+                            let _ = layout::column().gap(10.0).show(ui, |ui| {
+                                let mut components = ui.components();
+                                let _ = components.label(
+                                    Label::new("Workspace canvas")
+                                        .tone(LabelTone::Primary)
+                                        .weight(LabelWeight::Semibold),
+                                );
+                                let _ = components.label(
+                                    Label::new("Use the edge control to preview the animated open and close states.")
+                                        .tone(LabelTone::Muted)
+                                        .size(SMALL_TEXT),
+                                );
+
+                                let card_fill = input_background(ui);
+                                let card_stroke =
+                                    Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+                                let _ = ui.components().card(
+                                    Card::new().fill(card_fill).stroke(card_stroke),
+                                    |ui| {
+                                        ui.set_width(ui.available_width());
+                                        let _ = ui.components().label(
+                                            Label::new("Inspector")
+                                                .tone(LabelTone::Primary)
+                                                .weight(LabelWeight::Semibold),
+                                        );
+                                        let _ = ui.components().label(
+                                            Label::new("Layer, transforms, and appearance metadata stay visible while the sidebar animates.")
+                                                .tone(LabelTone::Muted)
+                                                .size(SMALL_TEXT),
+                                        );
+                                    },
+                                );
+                            });
+                        });
 
                         ui.components().sidebar(
                             &mut self.sidebar_preview_open,
@@ -1822,7 +2026,10 @@ fn app_background(ui: &Ui) -> Color32 {
 }
 
 fn input_background(ui: &Ui) -> Color32 {
-    theme::color(ui, ColorRole::Background).lerp_to_gamma(theme::color(ui, ColorRole::Card), 0.65)
+    theme::color(ui, ColorRole::Background).lerp_to_gamma(
+        theme::color(ui, ColorRole::Card),
+        if ui.visuals().dark_mode { 0.82 } else { 0.72 },
+    )
 }
 
 fn text_secondary(ui: &Ui) -> Color32 {
@@ -1840,6 +2047,42 @@ fn radius_sm(ui: &Ui) -> u8 {
 
 fn radius_md(ui: &Ui) -> u8 {
     theme::radius(ui, RadiusRole::Md)
+}
+
+fn tooltip_placement_index(placement: TooltipPlacement) -> usize {
+    match placement {
+        TooltipPlacement::Top | TooltipPlacement::Auto => 0,
+        TooltipPlacement::Right => 1,
+        TooltipPlacement::Bottom => 2,
+        TooltipPlacement::Left => 3,
+    }
+}
+
+fn sidebar_preview_toggle_icon(side_index: usize, open: bool) -> &'static str {
+    match (side_index, open) {
+        (0, true) => "panel-left-close",
+        (0, false) => "panel-left-open",
+        (_, true) => "panel-right-close",
+        (_, false) => "panel-right-open",
+    }
+}
+
+fn sidebar_preview_rail_radius(side_index: usize, radius: u8) -> egui::CornerRadius {
+    if side_index == 0 {
+        egui::CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: radius,
+            se: 0,
+        }
+    } else {
+        egui::CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: 0,
+            se: radius,
+        }
+    }
 }
 
 fn theme_mode_index(mode: ThemeMode) -> usize {
@@ -1871,12 +2114,6 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.rail_tab_index = state
         .rail_tab_index
         .min(RAIL_TAB_OPTIONS.len().saturating_sub(1));
-    if state
-        .toggle_rail_tab_index
-        .is_some_and(|index| index >= RAIL_TAB_OPTIONS.len())
-    {
-        state.toggle_rail_tab_index = None;
-    }
     state.pagination_page = state.pagination_page.clamp(1, PAGINATION_PAGE_COUNT);
     state.slider_value = state.slider_value.clamp(0.0, 100.0);
     state.number_x_value = state.number_x_value.clamp(0.0, 100.0);

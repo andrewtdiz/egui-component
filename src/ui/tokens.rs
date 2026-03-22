@@ -3,13 +3,13 @@ use egui::{Color32, Shadow, Stroke};
 
 pub(crate) const TRANSPARENT: Color32 = Color32::TRANSPARENT;
 
-pub(crate) const SPACING_ITEM_Y: f32 = 8.0;
+pub(crate) const SPACING_ITEM_Y: f32 = 7.0;
 pub(crate) const SPACING_BUTTON_PADDING_X: f32 = 12.0;
 pub(crate) const SPACING_BUTTON_PADDING_Y: f32 = 7.0;
 pub(crate) const SPACING_INTERACT_HEIGHT: f32 = 34.0;
 pub(crate) const LAYOUT_GAP_XS: f32 = 4.0;
-pub(crate) const LAYOUT_GAP_SM: f32 = 6.0;
-pub(crate) const LAYOUT_GAP_MD: f32 = 8.0;
+pub(crate) const LAYOUT_GAP_SM: f32 = 5.0;
+pub(crate) const LAYOUT_GAP_MD: f32 = 7.0;
 pub(crate) const LAYOUT_INSET_X: i8 = 8;
 pub(crate) const LAYOUT_INSET_Y: i8 = 8;
 pub(crate) const INPUT_PADDING_X: i8 = 10;
@@ -53,14 +53,18 @@ pub(crate) fn separator(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn row_hover_bg(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Accent)
+    mix(
+        role(runtime, ColorRole::Accent),
+        role(runtime, ColorRole::Background),
+        if runtime.mode.is_dark() { 0.28 } else { 0.14 },
+    )
 }
 
 pub(crate) fn row_active_bg(runtime: ThemeRuntime) -> Color32 {
     mix(
-        role(runtime, ColorRole::Accent),
+        row_selected_bg(runtime),
         role(runtime, ColorRole::Foreground),
-        0.08,
+        0.06,
     )
 }
 
@@ -88,7 +92,7 @@ pub(crate) fn input_background(runtime: ThemeRuntime) -> Color32 {
     mix(
         role(runtime, ColorRole::Background),
         role(runtime, ColorRole::Card),
-        0.65,
+        if runtime.mode.is_dark() { 0.82 } else { 0.72 },
     )
 }
 
@@ -96,28 +100,28 @@ pub(crate) fn input_hover_background(runtime: ThemeRuntime) -> Color32 {
     mix(
         input_background(runtime),
         role(runtime, ColorRole::Accent),
-        0.35,
+        if runtime.mode.is_dark() { 0.14 } else { 0.1 },
     )
 }
 
 pub(crate) fn input_focus_background(runtime: ThemeRuntime) -> Color32 {
     mix(
         input_background(runtime),
-        role(runtime, ColorRole::Background),
-        0.18,
+        role(runtime, ColorRole::Card),
+        if runtime.mode.is_dark() { 0.18 } else { 0.12 },
     )
 }
 
 pub(crate) fn input_border(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Input)
+    mix(
+        role(runtime, ColorRole::Input),
+        input_background(runtime),
+        if runtime.mode.is_dark() { 0.56 } else { 0.4 },
+    )
 }
 
 pub(crate) fn input_hover_border(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Input),
-        role(runtime, ColorRole::Ring),
-        0.4,
-    )
+    mix(input_border(runtime), role(runtime, ColorRole::Ring), 0.18)
 }
 
 pub(crate) fn button_secondary_bg(runtime: ThemeRuntime) -> Color32 {
@@ -128,7 +132,7 @@ pub(crate) fn button_secondary_hover_bg(runtime: ThemeRuntime) -> Color32 {
     mix(
         role(runtime, ColorRole::Secondary),
         role(runtime, ColorRole::Foreground),
-        0.04,
+        0.025,
     )
 }
 
@@ -148,7 +152,7 @@ pub(crate) fn button_secondary_hover_border(runtime: ThemeRuntime) -> Color32 {
     mix(
         role(runtime, ColorRole::Border),
         role(runtime, ColorRole::Ring),
-        0.3,
+        0.18,
     )
 }
 
@@ -342,7 +346,7 @@ pub(crate) fn input_focus_border(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn input_focus_stroke(runtime: ThemeRuntime) -> Stroke {
-    Stroke::new(1.1, input_focus_border(runtime))
+    Stroke::new(1.0, input_focus_border(runtime))
 }
 
 pub(crate) fn radius_sm(runtime: ThemeRuntime) -> u8 {
