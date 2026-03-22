@@ -13,7 +13,7 @@ Available examples:
 - `content-composition`
   Reusable composition patterns with `layout::*`, `Card`, `Label`, `Button`, `Kbd`, and scoped overrides.
 - `popup-patterns`
-  Popup interaction patterns for `Tooltip`, `DropdownMenu`, and `Dialogue`.
+  Popup interaction patterns for `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`.
 - `theme-playground`
   Live controls for `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`.
 

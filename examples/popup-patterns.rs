@@ -72,6 +72,9 @@ const SUPPORT_MENU_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
 
 struct PopupPatternsApp {
     last_action: Option<usize>,
+    share_popover_open: bool,
+    share_public: bool,
+    share_notifications: bool,
     archive_dialogue_open: bool,
 }
 
@@ -79,6 +82,9 @@ impl Default for PopupPatternsApp {
     fn default() -> Self {
         Self {
             last_action: None,
+            share_popover_open: false,
+            share_public: true,
+            share_notifications: false,
             archive_dialogue_open: false,
         }
     }
@@ -98,8 +104,10 @@ impl eframe::App for PopupPatternsApp {
                         .size(20.0),
                 );
                 let _ = components.label(
-                    Label::new("Tooltips, menus, and modals built with the same popup primitives.")
-                        .tone(LabelTone::Muted),
+                    Label::new(
+                        "Tooltips, popovers, menus, and modals built with the same popup primitives.",
+                    )
+                    .tone(LabelTone::Muted),
                 );
             });
 
@@ -110,6 +118,8 @@ impl eframe::App for PopupPatternsApp {
                 .show(ui, |ui| {
                     ui.set_max_width(980.0);
                     render_tooltip_section(ui);
+                    ui.add_space(16.0);
+                    render_popover_section(self, ui);
                     ui.add_space(16.0);
                     render_menu_section(self, ui);
                     ui.add_space(16.0);
@@ -186,6 +196,76 @@ fn render_menu_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
                     app.last_action = support_state.action;
                 }
             });
+        });
+    });
+}
+
+fn render_popover_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
+    let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
+        let _ = layout::column().gap(10.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new("Popover")
+                    .weight(LabelWeight::Semibold)
+                    .tone(LabelTone::Secondary),
+            );
+            let _ = components.label(
+                Label::new(
+                    "Popovers stay open for interactive content and close on outside click or Escape.",
+                )
+                .tone(LabelTone::Muted),
+            );
+
+            let _ = ui.components().popover(
+                &mut app.share_popover_open,
+                Popover::new(Id::new("share_popover"))
+                    .width(300.0)
+                    .side_offset(1.0),
+                |ui| {
+                    ui.components().button(
+                        Button::new("Share settings").variant(ButtonVariant::Secondary),
+                    )
+                },
+                |ui, open| {
+                    let _ = layout::column().gap(10.0).show(ui, |ui| {
+                        let mut components = ui.components();
+                        let _ = components.label(
+                            Label::new("Share project")
+                                .weight(LabelWeight::Semibold)
+                                .tone(LabelTone::Primary),
+                        );
+                        let _ = components.label(
+                            Label::new(
+                                "Configure what collaborators can see before sending the link.",
+                            )
+                            .tone(LabelTone::Muted),
+                        );
+                        let _ = components.switch(&mut app.share_public, "Public link");
+                        let _ = components.switch(
+                            &mut app.share_notifications,
+                            "Email collaborators",
+                        );
+
+                        ui.add_space(4.0);
+                        let _ = layout::row().gap(8.0).show(ui, |ui| {
+                            let mut components = ui.components();
+                            if components
+                                .button(Button::new("Cancel").variant(ButtonVariant::Ghost))
+                                .clicked()
+                            {
+                                *open = false;
+                            }
+                            if components
+                                .button(Button::new("Apply").variant(ButtonVariant::Primary))
+                                .clicked()
+                            {
+                                app.last_action = Some(42);
+                                *open = false;
+                            }
+                        });
+                    });
+                },
+            );
         });
     });
 }

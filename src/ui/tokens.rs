@@ -40,6 +40,10 @@ pub(crate) fn card_background(runtime: ThemeRuntime) -> Color32 {
     role(runtime, ColorRole::Card)
 }
 
+pub(crate) fn popover_background(runtime: ThemeRuntime) -> Color32 {
+    role(runtime, ColorRole::Popover)
+}
+
 pub(crate) fn muted_surface(runtime: ThemeRuntime) -> Color32 {
     role(runtime, ColorRole::Muted)
 }

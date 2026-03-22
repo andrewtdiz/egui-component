@@ -155,7 +155,7 @@ The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
 - `content-composition`: reusable `layout::*` composition with cards, labels, buttons, kbd, and scoped overrides
-- `popup-patterns`: focused popup interactions with `Tooltip`, `DropdownMenu`, and `Dialogue`
+- `popup-patterns`: focused popup interactions with `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
 
 Run the main showcase:

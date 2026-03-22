@@ -223,6 +223,8 @@ struct ShowcaseApp {
     combobox_index: usize,
     command_query: String,
     dialogue_open: bool,
+    popover_open: bool,
+    popover_compact_mode: bool,
     menu_bar_action: Option<usize>,
     tooltip_placement: TooltipPlacement,
     image_tile_selected: bool,
@@ -261,6 +263,8 @@ impl Default for ShowcaseApp {
             combobox_index: 0,
             command_query: String::new(),
             dialogue_open: false,
+            popover_open: false,
+            popover_compact_mode: true,
             menu_bar_action: None,
             tooltip_placement: TooltipPlacement::Top,
             image_tile_selected: false,
@@ -455,6 +459,7 @@ impl ShowcaseApp {
             ComponentKind::Separator => self.render_separator_preview(ui),
             ComponentKind::Card => self.render_card_preview(ui),
             ComponentKind::Progress => self.render_progress_preview(ui),
+            ComponentKind::Popover => self.render_popover_preview(ui),
             ComponentKind::Tooltip => self.render_tooltip_preview(ui),
             ComponentKind::DropdownMenu => self.render_dropdown_menu_preview(ui),
             ComponentKind::Collapsible => self.render_collapsible_preview(ui),
@@ -511,11 +516,7 @@ impl ShowcaseApp {
         let _ = layout::row().gap(8.0).show(ui, |ui| {
             let mut components = ui.components();
             for fill in TOOLBAR_SWATCHES {
-                let _ = components.color(
-                    Color::new(fill)
-                        .size(20.0)
-                        .stroke(border),
-                );
+                let _ = components.color(Color::new(fill).size(20.0).stroke(border));
             }
         });
     }
@@ -533,7 +534,8 @@ impl ShowcaseApp {
         );
         ui.add_space(6.0);
         let _ = ui.components().image(
-            image.clone()
+            image
+                .clone()
                 .fit_to_exact_size(vec2(180.0, 180.0))
                 .corner_radius(md_radius)
                 .bg_fill(image_bg),
@@ -558,7 +560,8 @@ impl ShowcaseApp {
         });
         ui.add_space(6.0);
         let _ = ui.components().image(
-            image.fit_to_exact_size(vec2(96.0, 96.0))
+            image
+                .fit_to_exact_size(vec2(96.0, 96.0))
                 .rotate(self.image_rotation_degrees.to_radians(), vec2(0.5, 0.5))
                 .corner_radius(sm_radius)
                 .bg_fill(image_bg),
@@ -651,7 +654,11 @@ impl ShowcaseApp {
         let _ = layout::row().gap(8.0).show(ui, |ui| {
             let mut components = ui.components();
             for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
-                let stroke = if index == 1 { selected_stroke } else { Stroke::NONE };
+                let stroke = if index == 1 {
+                    selected_stroke
+                } else {
+                    Stroke::NONE
+                };
                 let _ = components.button(
                     Button::color_only(Color::new(fill).size(18.0).stroke(stroke))
                         .variant(ButtonVariant::Ghost),
@@ -695,7 +702,9 @@ impl ShowcaseApp {
     }
 
     fn render_switch_preview(&mut self, ui: &mut Ui) {
-        let _ = ui.components().switch(&mut self.switch_value, "Enable Post FX");
+        let _ = ui
+            .components()
+            .switch(&mut self.switch_value, "Enable Post FX");
         let _ = ui.components().switch(
             &mut self.small_switch_value,
             Switch::new()
@@ -764,8 +773,11 @@ impl ShowcaseApp {
     }
 
     fn render_tabs_preview(&mut self, ui: &mut Ui) {
-        ui.components()
-            .tabs(Id::new("component_showcase_tabs"), &mut self.tab_index, &TAB_OPTIONS);
+        ui.components().tabs(
+            Id::new("component_showcase_tabs"),
+            &mut self.tab_index,
+            &TAB_OPTIONS,
+        );
 
         let selected_tab = TAB_OPTIONS
             .iter()
@@ -819,31 +831,35 @@ impl ShowcaseApp {
         let card_fill = input_background(ui);
         let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
 
-        let _ = ui.components().card(
-            Card::new()
-                .fill(card_fill)
-                .stroke(card_stroke),
-            |ui| {
-                let _ = ui.components().label(
-                    Label::new("Card Title")
-                        .tone(LabelTone::Primary)
-                        .weight(LabelWeight::Bold)
-                        .size(16.0),
-                );
-                let _ = ui.components().label(
-                    Label::new("Cards wrap related content in a bordered panel.")
-                        .tone(LabelTone::Muted),
-                );
-                ui.add_space(6.0);
-                let _ = ui.components().separator();
-                ui.add_space(6.0);
-                let _ = layout::row().gap(8.0).show(ui, |ui| {
-                    let mut components = ui.components();
-                    let _ = components.button(Button::new("Cancel").variant(ButtonVariant::Secondary));
-                    let _ = components.button(Button::new("Save").variant(ButtonVariant::Primary));
+        let _ = ui
+            .components()
+            .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
+                let _ = layout::column().align(layout::Align::Start).show(ui, |ui| {
+                    let _ = ui.components().label(
+                        Label::new("Card Title")
+                            .tone(LabelTone::Primary)
+                            .weight(LabelWeight::Bold)
+                            .size(16.0),
+                    );
+                    let _ = ui.components().label(
+                        Label::new("Cards wrap related content in a bordered panel.")
+                            .tone(LabelTone::Muted),
+                    );
+                    ui.add_space(6.0);
+                    let _ = ui.components().separator();
+                    ui.add_space(6.0);
+                    let _ = layout::row()
+                        .gap(8.0)
+                        .justify(layout::Justify::End)
+                        .show(ui, |ui| {
+                            let mut components = ui.components();
+                            let _ = components
+                                .button(Button::new("Cancel").variant(ButtonVariant::Secondary));
+                            let _ = components
+                                .button(Button::new("Save").variant(ButtonVariant::Primary));
+                        });
                 });
-            },
-        );
+            });
     }
 
     fn render_progress_preview(&mut self, ui: &mut Ui) {
@@ -880,6 +896,59 @@ impl ShowcaseApp {
             Tooltip::new("Hover this trigger", "Tooltip content example")
                 .width(220.0)
                 .placement(self.tooltip_placement),
+        );
+    }
+
+    fn render_popover_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().popover(
+            &mut self.popover_open,
+            Popover::new(Id::new("component_showcase_popover"))
+                .width(280.0)
+                .side_offset(1.0),
+            |ui| {
+                ui.components()
+                    .button(Button::new("Open Popover").variant(ButtonVariant::Secondary))
+            },
+            |ui, open| {
+                let _ = layout::column().gap(10.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    let _ = components.label(
+                        Label::new("Layout settings")
+                            .weight(LabelWeight::Semibold)
+                            .tone(LabelTone::Primary),
+                    );
+                    let _ = components.label(
+                        Label::new("Interactive popovers work well for small settings panels.")
+                            .tone(LabelTone::Muted)
+                            .size(SMALL_TEXT),
+                    );
+                    let _ = components.switch(&mut self.popover_compact_mode, "Compact mode");
+                    let _ = components.switch(&mut self.switch_value, "Snap to grid");
+
+                    ui.add_space(4.0);
+                    let _ = layout::row().gap(8.0).show(ui, |ui| {
+                        let mut components = ui.components();
+                        if components
+                            .button(Button::new("Close").variant(ButtonVariant::Ghost))
+                            .clicked()
+                        {
+                            *open = false;
+                        }
+                        let _ =
+                            components.button(Button::new("Apply").variant(ButtonVariant::Primary));
+                    });
+                });
+            },
+        );
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(if self.popover_compact_mode {
+                "Compact mode enabled"
+            } else {
+                "Compact mode disabled"
+            })
+            .tone(LabelTone::Muted)
+            .size(SMALL_TEXT),
         );
     }
 
@@ -955,11 +1024,9 @@ impl ShowcaseApp {
             AudioPlaybackState::Paused => "Playback: Paused",
             AudioPlaybackState::Playing => "Playback: Playing",
         };
-        let _ = ui.components().label(
-            Label::new(status)
-                .tone(LabelTone::Muted)
-                .size(SMALL_TEXT),
-        );
+        let _ = ui
+            .components()
+            .label(Label::new(status).tone(LabelTone::Muted).size(SMALL_TEXT));
     }
 
     fn render_combobox_preview(&mut self, ui: &mut Ui) {
@@ -1088,20 +1155,18 @@ impl ShowcaseApp {
         ];
 
         let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-            let _ = ui.components().card(
-                Card::new()
-                    .fill(card_fill)
-                    .stroke(card_stroke),
-                |ui| {
+            let _ = ui
+                .components()
+                .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
                     ui.set_width(MENU_BAR_PREVIEW_WIDTH.min(ui.available_width()));
-                    let (_, state) = ui
-                        .components()
-                        .menu_bar(MenuBar::new(Id::new("component_showcase_menu_bar"), &menu_items));
+                    let (_, state) = ui.components().menu_bar(MenuBar::new(
+                        Id::new("component_showcase_menu_bar"),
+                        &menu_items,
+                    ));
                     if let Some(action) = state.action {
                         self.menu_bar_action = Some(action);
                     }
-                },
-            );
+                });
         });
 
         ui.add_space(8.0);
@@ -1122,13 +1187,12 @@ impl ShowcaseApp {
 
         let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
             let width = TOOLBAR_PREVIEW_WIDTH.min(ui.available_width());
-            let _ = ui.components().card(
-                Card::new()
-                    .fill(canvas_fill)
-                    .stroke(card_stroke),
-                |ui| {
+            let _ = ui
+                .components()
+                .card(Card::new().fill(canvas_fill).stroke(card_stroke), |ui| {
                     ui.set_width(width);
-                    let (host_rect, _) = ui.allocate_exact_size(vec2(width - 24.0, 220.0), Sense::hover());
+                    let (host_rect, _) =
+                        ui.allocate_exact_size(vec2(width - 24.0, 220.0), Sense::hover());
                     let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
                         let _ = ui.components().toolbar(
                             Toolbar::new(Id::new("component_showcase_toolbar"))
@@ -1137,15 +1201,17 @@ impl ShowcaseApp {
                             |ui| draw_toolbar_contents(ui, &mut self.toolbar_color_index),
                         );
                     });
-                },
-            );
+                });
         });
     }
 
     fn render_pagination_preview(&mut self, ui: &mut Ui) {
         let _ = ui.components().pagination(
             &mut self.pagination_page,
-            Pagination::new(Id::new("component_showcase_pagination"), PAGINATION_PAGE_COUNT),
+            Pagination::new(
+                Id::new("component_showcase_pagination"),
+                PAGINATION_PAGE_COUNT,
+            ),
         );
 
         ui.add_space(8.0);
@@ -1186,7 +1252,9 @@ fn draw_toolbar_contents(ui: &mut Ui, toolbar_color_index: &mut usize) {
             };
             if ui
                 .components()
-                .button(Button::color_only(Color::new(fill).size(16.0).stroke(stroke)))
+                .button(Button::color_only(
+                    Color::new(fill).size(16.0).stroke(stroke),
+                ))
                 .clicked()
             {
                 *toolbar_color_index = index;
@@ -1235,11 +1303,7 @@ fn draw_image_tile_metadata_row(ui: &mut Ui, text: &str) {
         let mut components = ui.components();
         let _ = components.icon(Icon::new("globe").size(12.0).tint(IMAGE_TILE_META_ACCENT));
         let _ = components.label(Label::new("•").tone(LabelTone::Muted));
-        let _ = components.label(
-            Label::new(text)
-                .tone(LabelTone::Muted)
-                .size(SMALL_TEXT),
-        );
+        let _ = components.label(Label::new(text).tone(LabelTone::Muted).size(SMALL_TEXT));
     });
 }
 
@@ -1267,7 +1331,10 @@ fn menu_bar_action_label(action: Option<usize>) -> &'static str {
 }
 
 fn showcase_image(name: &str) -> Image<'static> {
-    Image::from_bytes(format!("bytes://examples/showcase/{name}.png"), SHOWCASE_IMAGE_BYTES)
+    Image::from_bytes(
+        format!("bytes://examples/showcase/{name}.png"),
+        SHOWCASE_IMAGE_BYTES,
+    )
 }
 
 fn showcase_component_definitions_by_section(
@@ -1318,6 +1385,7 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Separator => "Lightweight content divider.",
         ComponentKind::Card => "Framed content surface.",
         ComponentKind::Progress => "Determinate progress indicator.",
+        ComponentKind::Popover => "Click-triggered interactive popup surface.",
         ComponentKind::Tooltip => "Hover-triggered helper content.",
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
         ComponentKind::Collapsible => "Expandable content section.",
@@ -1384,7 +1452,10 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.number_y_value = state.number_y_value.clamp(0.0, 100.0);
     state.progress_value = state.progress_value.clamp(0.0, 1.0);
 
-    if state.select_index.is_some_and(|index| index >= SELECT_OPTIONS.len()) {
+    if state
+        .select_index
+        .is_some_and(|index| index >= SELECT_OPTIONS.len())
+    {
         state.select_index = None;
     }
     if state

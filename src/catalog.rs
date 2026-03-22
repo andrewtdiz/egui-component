@@ -22,6 +22,7 @@ pub enum ComponentKind {
     MenuBar,
     NumberInput,
     Pagination,
+    Popover,
     Progress,
     Select,
     Separator,
@@ -166,6 +167,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::Popover,
+        id: "popover",
+        label: "Popover",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Tooltip,
         id: "tooltip",
         label: "Tooltip",
@@ -295,6 +302,7 @@ mod tests {
         assert!(ids.contains(&"image"));
         assert!(ids.contains(&"kbd"));
         assert!(ids.contains(&"number-input"));
+        assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
         assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"toolbar"));
@@ -317,6 +325,10 @@ mod tests {
             Some(ComponentKind::NumberInput)
         );
         assert_eq!(parse_component_kind("icon"), Some(ComponentKind::Icon));
+        assert_eq!(
+            parse_component_kind("popover"),
+            Some(ComponentKind::Popover)
+        );
         assert_eq!(
             parse_component_kind("toolbar"),
             Some(ComponentKind::Toolbar)
