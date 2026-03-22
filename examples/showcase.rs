@@ -1,6 +1,6 @@
 use egui::{
     vec2, Align2, CentralPanel, Color32, Context, CursorIcon, Id, Layout, ScrollArea, Sense,
-    SidePanel, Stroke, Ui, ViewportBuilder,
+    SidePanel, Stroke, TopBottomPanel, Ui, ViewportBuilder,
 };
 use egui_component::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use egui_component::layout;
@@ -36,10 +36,30 @@ const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
     TabOption::with_icon(0, "Templates", "layout-template"),
     TabOption::with_icon(1, "Layouts", "layout-grid"),
 ];
+const THEME_MODE_OPTIONS: [TabOption<'static>; 2] =
+    [TabOption::new(0, "Light"), TabOption::new(1, "Dark")];
+const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::with_icon(0, "Home", "house"),
     TabOption::with_icon(1, "Assets", "image"),
     TabOption::with_icon(2, "Export", "rocket"),
+];
+const TOAST_PLACEMENT_OPTIONS: [&str; 9] = [
+    "Top Left",
+    "Top Center",
+    "Top Right",
+    "Center Left",
+    "Center",
+    "Center Right",
+    "Bottom Left",
+    "Bottom Center",
+    "Bottom Right",
+];
+const RADIO_GROUP_OPTIONS: [RadioOption<'static>; 3] = [
+    RadioOption::new(0, "Starter").description("Basic surfaces and controls for smaller tools."),
+    RadioOption::new(1, "Team").description("Shared tokens, overrides, and example screens."),
+    RadioOption::new(2, "Enterprise")
+        .description("Extended theming, audit trails, and environment presets."),
 ];
 const COMMAND_ITEMS: [CommandItem<'static>; 11] = [
     CommandItem::new("", "scene: open scene search").shortcut("Ctrl+P"),
@@ -196,7 +216,6 @@ impl ShowcaseSection {
 
 struct ShowcaseApp {
     selected_component: ComponentKind,
-    theme_base: BaseColor,
     theme_mode: ThemeMode,
     input_value: String,
     field_value: String,
@@ -209,7 +228,12 @@ struct ShowcaseApp {
     number_x_value: f32,
     number_y_value: f32,
     progress_value: f32,
+    radio_value: bool,
+    radio_group_value: Option<usize>,
     select_index: Option<usize>,
+    skeleton_loading: bool,
+    sidebar_preview_open: bool,
+    sidebar_side_index: usize,
     tab_index: usize,
     segmented_tab_index: usize,
     stacked_tab_index: usize,
@@ -225,6 +249,8 @@ struct ShowcaseApp {
     dialogue_open: bool,
     popover_open: bool,
     popover_compact_mode: bool,
+    toast_stack: ToastStack,
+    toast_placement_index: Option<usize>,
     menu_bar_action: Option<usize>,
     tooltip_placement: TooltipPlacement,
     image_tile_selected: bool,
@@ -236,7 +262,6 @@ impl Default for ShowcaseApp {
     fn default() -> Self {
         Self {
             selected_component: ComponentKind::Button,
-            theme_base: BaseColor::Neutral,
             theme_mode: ThemeMode::Dark,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
@@ -249,7 +274,12 @@ impl Default for ShowcaseApp {
             number_x_value: 42.0,
             number_y_value: 16.0,
             progress_value: 0.58,
+            radio_value: true,
+            radio_group_value: Some(1),
             select_index: Some(1),
+            skeleton_loading: true,
+            sidebar_preview_open: false,
+            sidebar_side_index: 0,
             tab_index: 0,
             segmented_tab_index: 0,
             stacked_tab_index: 0,
@@ -265,6 +295,8 @@ impl Default for ShowcaseApp {
             dialogue_open: false,
             popover_open: false,
             popover_compact_mode: true,
+            toast_stack: ToastStack::default(),
+            toast_placement_index: Some(8),
             menu_bar_action: None,
             tooltip_placement: TooltipPlacement::Top,
             image_tile_selected: false,
@@ -277,8 +309,12 @@ impl Default for ShowcaseApp {
 impl eframe::App for ShowcaseApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         clamp_state(self);
-        theme::set_theme(ctx, ThemeSpec::preset(self.theme_base));
+        theme::set_theme(ctx, ThemeSpec::preset(BaseColor::Neutral));
         theme::set_mode(ctx, self.theme_mode);
+
+        TopBottomPanel::top("component_showcase_topbar")
+            .resizable(false)
+            .show(ctx, |ui| self.render_topbar(ui));
 
         SidePanel::left("component_showcase_sidebar")
             .resizable(true)
@@ -310,11 +346,6 @@ impl ShowcaseApp {
         });
 
         ui.add_space(8.0);
-        let _ = ui.components().separator();
-        ui.add_space(8.0);
-
-        self.render_theme_controls(ui);
-        ui.add_space(10.0);
         let _ = ui.components().separator();
         ui.add_space(8.0);
 
@@ -354,53 +385,38 @@ impl ShowcaseApp {
             });
     }
 
-    fn render_theme_controls(&mut self, ui: &mut Ui) {
-        let _ = ui.components().card(Card::new().padding(10, 10), |ui| {
-            let mut components = ui.components();
-            let _ = components.label(
-                Label::new("Theme")
-                    .weight(LabelWeight::Semibold)
-                    .tone(LabelTone::Secondary),
-            );
-            ui.add_space(8.0);
+    fn render_topbar(&mut self, ui: &mut Ui) {
+        let fill = theme::color(ui, ColorRole::Card);
+        let stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
 
-            let _ = layout::row().gap(6.0).show(ui, |ui| {
-                let mut components = ui.components();
-                if components
-                    .button(
-                        Button::new("Dark")
-                            .variant(ButtonVariant::Secondary)
-                            .selected(self.theme_mode == ThemeMode::Dark),
-                    )
-                    .clicked()
-                {
-                    self.theme_mode = ThemeMode::Dark;
-                }
-                if components
-                    .button(
-                        Button::new("Light")
-                            .variant(ButtonVariant::Secondary)
-                            .selected(self.theme_mode == ThemeMode::Light),
-                    )
-                    .clicked()
-                {
-                    self.theme_mode = ThemeMode::Light;
-                }
-            });
+        ui.add_space(8.0);
+        let _ = ui.components().card(
+            Card::new().padding(12, 10).fill(fill).stroke(stroke),
+            |ui| {
+                let _ = layout::row().gap(12.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    let _ = components.label(
+                        Label::new("egui-component Showcase")
+                            .weight(LabelWeight::Semibold)
+                            .tone(LabelTone::Primary),
+                    );
+                    let _ = components.label(
+                        Label::new("Theme mode")
+                            .tone(LabelTone::Muted)
+                            .size(SMALL_TEXT),
+                    );
 
-            ui.add_space(8.0);
-            for base in BaseColor::ALL {
-                let selected = self.theme_base == base;
-                let button = Button::new(base.label())
-                    .variant(ButtonVariant::Ghost)
-                    .selected(selected)
-                    .min_size(vec2(ui.available_width(), 26.0));
-                if ui.components().button(button).clicked() {
-                    self.theme_base = base;
-                }
-                ui.add_space(4.0);
-            }
-        });
+                    let mut selected_mode = theme_mode_index(self.theme_mode);
+                    components.segmented_tabs(
+                        Id::new("component_showcase_theme_mode"),
+                        &mut selected_mode,
+                        &THEME_MODE_OPTIONS,
+                    );
+                    self.theme_mode = theme_mode_from_index(selected_mode);
+                });
+            },
+        );
+        ui.add_space(8.0);
     }
 
     fn render_center(&mut self, ui: &mut Ui) {
@@ -408,6 +424,8 @@ impl ShowcaseApp {
         let width = match self.selected_component {
             ComponentKind::Toolbar => ui.available_width().min(920.0),
             ComponentKind::MenuBar => ui.available_width().min(560.0),
+            ComponentKind::Sidebar => ui.available_width().min(820.0),
+            ComponentKind::Toast => ui.available_width().min(760.0),
             _ => ui.available_width().clamp(280.0, 480.0),
         };
 
@@ -459,6 +477,8 @@ impl ShowcaseApp {
             ComponentKind::Separator => self.render_separator_preview(ui),
             ComponentKind::Card => self.render_card_preview(ui),
             ComponentKind::Progress => self.render_progress_preview(ui),
+            ComponentKind::Radio => self.render_radio_preview(ui),
+            ComponentKind::RadioGroup => self.render_radio_group_preview(ui),
             ComponentKind::Popover => self.render_popover_preview(ui),
             ComponentKind::Tooltip => self.render_tooltip_preview(ui),
             ComponentKind::DropdownMenu => self.render_dropdown_menu_preview(ui),
@@ -469,6 +489,10 @@ impl ShowcaseApp {
             ComponentKind::Dialogue => self.render_dialogue_preview(ui),
             ComponentKind::ImageTile => self.render_image_tile_preview(ui),
             ComponentKind::MenuBar => self.render_menu_bar_preview(ui),
+            ComponentKind::Sidebar => self.render_sidebar_preview(ui),
+            ComponentKind::Skeleton => self.render_skeleton_preview(ui),
+            ComponentKind::Spinner => self.render_spinner_preview(ui),
+            ComponentKind::Toast => self.render_toast_preview(ui),
             ComponentKind::Toolbar => self.render_toolbar_preview(ui),
             ComponentKind::Pagination => self.render_pagination_preview(ui),
         }
@@ -830,35 +854,47 @@ impl ShowcaseApp {
     fn render_card_preview(&mut self, ui: &mut Ui) {
         let card_fill = input_background(ui);
         let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let _ = layout::sized_box()
+            .width(ui.available_width())
+            .show(ui, |ui| {
+                let _ =
+                    ui.components()
+                        .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
+                            ui.set_min_width(ui.available_width());
 
-        let _ = ui
-            .components()
-            .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
-                let _ = layout::column().align(layout::Align::Start).show(ui, |ui| {
-                    let _ = ui.components().label(
-                        Label::new("Card Title")
-                            .tone(LabelTone::Primary)
-                            .weight(LabelWeight::Bold)
-                            .size(16.0),
-                    );
-                    let _ = ui.components().label(
-                        Label::new("Cards wrap related content in a bordered panel.")
-                            .tone(LabelTone::Muted),
-                    );
-                    ui.add_space(6.0);
-                    let _ = ui.components().separator();
-                    ui.add_space(6.0);
-                    let _ = layout::row()
-                        .gap(8.0)
-                        .justify(layout::Justify::End)
-                        .show(ui, |ui| {
-                            let mut components = ui.components();
-                            let _ = components
-                                .button(Button::new("Cancel").variant(ButtonVariant::Secondary));
-                            let _ = components
-                                .button(Button::new("Save").variant(ButtonVariant::Primary));
+                            let _ = layout::column().gap(6.0).show(ui, |ui| {
+                                let _ = ui.components().label(
+                                    Label::new("Card Title")
+                                        .tone(LabelTone::Primary)
+                                        .weight(LabelWeight::Bold)
+                                        .size(16.0),
+                                );
+                                let _ = ui.components().label(
+                                    Label::new("Cards wrap related content in a bordered panel.")
+                                        .tone(LabelTone::Muted),
+                                );
+                            });
+
+                            ui.add_space(6.0);
+                            let _ = ui.components().separator();
+                            ui.add_space(6.0);
+
+                            let footer_size =
+                                egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                            let _ = ui.allocate_ui_with_layout(
+                                footer_size,
+                                Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let mut components = ui.components();
+                                    let _ = components.button(
+                                        Button::new("Save").variant(ButtonVariant::Primary),
+                                    );
+                                    let _ = components.button(
+                                        Button::new("Cancel").variant(ButtonVariant::Secondary),
+                                    );
+                                },
+                            );
                         });
-                });
             });
     }
 
@@ -881,6 +917,161 @@ impl ShowcaseApp {
             {
                 self.progress_value = 0.0;
             }
+        });
+    }
+
+    fn render_spinner_preview(&mut self, ui: &mut Ui) {
+        let spinner_tint = theme::color(ui, ColorRole::Foreground);
+        let _ = layout::row().gap(16.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.spinner(Spinner::new().size(16.0));
+            let _ = components.spinner(Spinner::new().size(22.0));
+            let _ = components.spinner(
+                Spinner::new()
+                    .size(28.0)
+                    .stroke_width(2.4)
+                    .color(spinner_tint),
+            );
+        });
+
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new("Indeterminate loading spinner with configurable size, stroke, and tint.")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
+    fn render_skeleton_preview(&mut self, ui: &mut Ui) {
+        let toggle_label = if self.skeleton_loading {
+            "Show Loaded State"
+        } else {
+            "Show Loading State"
+        };
+        if ui
+            .components()
+            .button(Button::new(toggle_label).variant(ButtonVariant::Secondary))
+            .clicked()
+        {
+            self.skeleton_loading = !self.skeleton_loading;
+        }
+
+        ui.add_space(10.0);
+        let card_fill = input_background(ui);
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let _ = ui
+            .components()
+            .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
+                let primary_tint = theme::color(ui, ColorRole::Primary);
+                let _ = layout::row().gap(12.0).show(ui, |ui| {
+                    let mut components = ui.components();
+                    if self.skeleton_loading {
+                        let _ = components.skeleton(Skeleton::new().circle(44.0));
+                    } else {
+                        let _ = components.icon(
+                            Icon::new("sparkles").size(20.0).tint(primary_tint),
+                        );
+                    }
+
+                    let _ = layout::column().gap(8.0).show(ui, |ui| {
+                        let mut components = ui.components();
+                        if self.skeleton_loading {
+                            let _ = components.skeleton((180.0, 16.0));
+                            let _ = components.skeleton((240.0, 12.0));
+                            let _ = components.skeleton((212.0, 12.0));
+                            ui.add_space(2.0);
+                            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                                let mut components = ui.components();
+                                let _ = components.skeleton((72.0, 28.0));
+                                let _ = components.skeleton((96.0, 28.0));
+                            });
+                        } else {
+                            let _ = components.label(
+                                Label::new("Loading state complete")
+                                    .tone(LabelTone::Primary)
+                                    .weight(LabelWeight::Semibold),
+                            );
+                            let _ = components.label(
+                                Label::new(
+                                    "Skeleton blocks can be mixed to mirror the final layout while data is in flight.",
+                                )
+                                .tone(LabelTone::Muted)
+                                .size(SMALL_TEXT),
+                            );
+                            ui.add_space(2.0);
+                            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                                let mut components = ui.components();
+                                let _ = components.button(
+                                    Button::new("Inspect").variant(ButtonVariant::Primary),
+                                );
+                                let _ = components.button(
+                                    Button::new("Dismiss").variant(ButtonVariant::Secondary),
+                                );
+                            });
+                        }
+                    });
+                });
+            });
+    }
+
+    fn render_radio_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().radio(
+            &mut self.radio_value,
+            Radio::new()
+                .label("Use publish channel")
+                .description("Standalone radios stay selected until you explicitly reset them."),
+        );
+
+        ui.add_space(8.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            if components
+                .button(Button::new("Reset").variant(ButtonVariant::Secondary))
+                .clicked()
+            {
+                self.radio_value = false;
+            }
+            let state_label = if self.radio_value {
+                "Selected"
+            } else {
+                "Unselected"
+            };
+            let _ = components.label(
+                Label::new(state_label)
+                    .tone(LabelTone::Muted)
+                    .size(SMALL_TEXT),
+            );
+        });
+    }
+
+    fn render_radio_group_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().radio_group(
+            &mut self.radio_group_value,
+            RadioGroup::new(
+                Id::new("component_showcase_radio_group"),
+                &RADIO_GROUP_OPTIONS,
+            ),
+        );
+
+        ui.add_space(8.0);
+        let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let mut components = ui.components();
+            if components
+                .button(Button::new("Clear").variant(ButtonVariant::Secondary))
+                .clicked()
+            {
+                self.radio_group_value = None;
+            }
+            let selected = self
+                .radio_group_value
+                .and_then(|value| {
+                    RADIO_GROUP_OPTIONS
+                        .iter()
+                        .find(|option| option.value == value)
+                        .map(|option| option.label)
+                })
+                .unwrap_or("No option selected");
+            let _ = components.label(Label::new(selected).tone(LabelTone::Muted).size(SMALL_TEXT));
         });
     }
 
@@ -1177,6 +1368,208 @@ impl ShowcaseApp {
         );
     }
 
+    fn render_sidebar_preview(&mut self, ui: &mut Ui) {
+        if let Some(index) = ui.components().button_group(ButtonGroup::new(
+            Id::new("component_showcase_sidebar_side"),
+            &SIDEBAR_SIDE_OPTIONS,
+        )) {
+            self.sidebar_side_index = index;
+        }
+
+        ui.add_space(8.0);
+        let trigger_label = if self.sidebar_preview_open {
+            "Sidebar Active"
+        } else {
+            "Open Sidebar"
+        };
+        if ui
+            .components()
+            .button(
+                Button::new(trigger_label)
+                    .variant(ButtonVariant::Secondary)
+                    .leading_icon(if self.sidebar_side_index == 0 {
+                        "panel-left-open"
+                    } else {
+                        "panel-right-open"
+                    }),
+            )
+            .clicked()
+        {
+            self.sidebar_preview_open = true;
+        }
+
+        ui.add_space(10.0);
+        let canvas_fill = if self.theme_mode.is_dark() {
+            app_background(ui)
+        } else {
+            TOOLBAR_CANVAS_LIGHT_FILL
+        };
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let width = 700.0f32.min(ui.available_width());
+            let _ = ui
+                .components()
+                .card(Card::new().fill(canvas_fill).stroke(card_stroke), |ui| {
+                    ui.set_width(width);
+                    let (host_rect, _) =
+                        ui.allocate_exact_size(vec2(width - 24.0, 360.0), Sense::hover());
+                    let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
+                        ui.painter().rect(
+                            host_rect.shrink(1.0),
+                            egui::CornerRadius::same(radius_md(ui)),
+                            Color32::TRANSPARENT,
+                            Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
+                            egui::StrokeKind::Outside,
+                        );
+
+                        ui.components().sidebar(
+                            &mut self.sidebar_preview_open,
+                            Sidebar::new(Id::new("component_showcase_overlay_sidebar"))
+                                .title("Workspace")
+                                .side(if self.sidebar_side_index == 0 {
+                                    SidebarSide::Left
+                                } else {
+                                    SidebarSide::Right
+                                })
+                                .width(240.0),
+                            |ui, open| {
+                                let _ = layout::column().gap(8.0).show(ui, |ui| {
+                                    let _ = ui.components().button(
+                                        Button::new("New Draft")
+                                            .variant(ButtonVariant::Primary)
+                                            .leading_icon("file-plus"),
+                                    );
+                                    let _ = ui.components().button(
+                                        Button::new("Command Search")
+                                            .variant(ButtonVariant::Ghost)
+                                            .leading_icon("search"),
+                                    );
+                                    let _ = ui.components().button(
+                                        Button::new("Theme Tokens")
+                                            .variant(ButtonVariant::Ghost)
+                                            .leading_icon("palette"),
+                                    );
+                                    let _ = ui.components().button(
+                                        Button::new("Exports")
+                                            .variant(ButtonVariant::Ghost)
+                                            .leading_icon("rocket"),
+                                    );
+                                    ui.add_space(4.0);
+                                    if ui
+                                        .components()
+                                        .button(
+                                            Button::new("Close Sidebar")
+                                                .variant(ButtonVariant::Secondary),
+                                        )
+                                        .clicked()
+                                    {
+                                        *open = false;
+                                    }
+                                });
+                            },
+                        );
+                    });
+                });
+        });
+    }
+
+    fn render_toast_preview(&mut self, ui: &mut Ui) {
+        let placement_label = self
+            .toast_placement_index
+            .and_then(|index| TOAST_PLACEMENT_OPTIONS.get(index).copied())
+            .unwrap_or(TOAST_PLACEMENT_OPTIONS[8]);
+        let _ = ui.components().select(
+            &mut self.toast_placement_index,
+            Select::from_id(
+                Id::new("component_showcase_toast_position"),
+                &TOAST_PLACEMENT_OPTIONS,
+            )
+            .width(220.0),
+        );
+
+        ui.add_space(8.0);
+        let _ =
+            layout::row().gap(8.0).show(ui, |ui| {
+                let mut components = ui.components();
+                if components
+                    .button(Button::new("Neutral").variant(ButtonVariant::Secondary))
+                    .clicked()
+                {
+                    self.toast_stack.push(Toast::new("Heads up").description(
+                        "Neutral notifications stack cleanly without blocking the UI.",
+                    ));
+                }
+                if components
+                    .button(Button::new("Success").variant(ButtonVariant::Primary))
+                    .clicked()
+                {
+                    self.toast_stack.push(
+                        Toast::new("Changes saved")
+                            .description("Your layout tokens were published successfully.")
+                            .intent(ToastIntent::Success),
+                    );
+                }
+                if components
+                    .button(Button::new("Error").variant(ButtonVariant::Ghost))
+                    .clicked()
+                {
+                    self.toast_stack.push(
+                        Toast::new("Build failed")
+                            .description("A component export is missing a required icon mapping.")
+                            .intent(ToastIntent::Destructive),
+                    );
+                }
+                if components
+                    .button(Button::new("Clear").variant(ButtonVariant::Ghost))
+                    .clicked()
+                {
+                    self.toast_stack.clear();
+                }
+            });
+
+        ui.add_space(10.0);
+        let canvas_fill = if self.theme_mode.is_dark() {
+            app_background(ui)
+        } else {
+            TOOLBAR_CANVAS_LIGHT_FILL
+        };
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let width = 640.0f32.min(ui.available_width());
+            let _ = ui
+                .components()
+                .card(Card::new().fill(canvas_fill).stroke(card_stroke), |ui| {
+                    ui.set_width(width);
+                    let (host_rect, _) =
+                        ui.allocate_exact_size(vec2(width - 24.0, 300.0), Sense::hover());
+                    let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
+                        let mut components = ui.components();
+                        let _ = components.label(
+                            Label::new("Toast viewport host")
+                                .tone(LabelTone::Muted)
+                                .size(SMALL_TEXT),
+                        );
+                        let subtitle = format!("Current placement: {placement_label}");
+                        let _ = components.label(
+                            Label::new(subtitle.as_str())
+                                .tone(LabelTone::Muted)
+                                .size(SMALL_TEXT),
+                        );
+
+                        components.toast_viewport(
+                            &mut self.toast_stack,
+                            ToastViewport::new(Id::new("component_showcase_toast_viewport"))
+                                .placement(toast_placement_from_index(
+                                    self.toast_placement_index.unwrap_or(8),
+                                ))
+                                .width(280.0)
+                                .overlap(42.0),
+                        );
+                    });
+                });
+        });
+    }
+
     fn render_toolbar_preview(&mut self, ui: &mut Ui) {
         let canvas_fill = if self.theme_mode.is_dark() {
             app_background(ui)
@@ -1316,6 +1709,20 @@ fn tooltip_placement_from_index(index: usize) -> TooltipPlacement {
     }
 }
 
+fn toast_placement_from_index(index: usize) -> ToastPlacement {
+    match index {
+        0 => ToastPlacement::TopLeft,
+        1 => ToastPlacement::TopCenter,
+        2 => ToastPlacement::TopRight,
+        3 => ToastPlacement::CenterLeft,
+        4 => ToastPlacement::Center,
+        5 => ToastPlacement::CenterRight,
+        6 => ToastPlacement::BottomLeft,
+        7 => ToastPlacement::BottomCenter,
+        _ => ToastPlacement::BottomRight,
+    }
+}
+
 fn dropdown_action_label(action: Option<usize>) -> &'static str {
     match action.and_then(|id| DROPDOWN_ACTION_LABELS.get(id).copied()) {
         Some(label) => label,
@@ -1355,9 +1762,11 @@ fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefini
 
 fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
     match kind {
-        ComponentKind::MenuBar | ComponentKind::Toolbar | ComponentKind::ImageTile => {
-            ShowcaseSection::Examples
-        }
+        ComponentKind::MenuBar
+        | ComponentKind::Toolbar
+        | ComponentKind::ImageTile
+        | ComponentKind::Sidebar
+        | ComponentKind::Toast => ShowcaseSection::Examples,
         _ => match catalog_component_definition(kind).group {
             ComponentGroup::Primitive => ShowcaseSection::PrimaryPrimitive,
             ComponentGroup::Composed => ShowcaseSection::DerivedComposed,
@@ -1385,6 +1794,8 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Separator => "Lightweight content divider.",
         ComponentKind::Card => "Framed content surface.",
         ComponentKind::Progress => "Determinate progress indicator.",
+        ComponentKind::Radio => "Single-choice control for mutually exclusive selections.",
+        ComponentKind::RadioGroup => "Vertical radio list with optional descriptions.",
         ComponentKind::Popover => "Click-triggered interactive popup surface.",
         ComponentKind::Tooltip => "Hover-triggered helper content.",
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
@@ -1395,6 +1806,12 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Dialogue => "Modal confirmation flow.",
         ComponentKind::ImageTile => "Media tile with body and playback states.",
         ComponentKind::MenuBar => "Desktop-style menu bar surface.",
+        ComponentKind::Sidebar => {
+            "Button-triggered overlay sidebar rendered inside a host surface."
+        }
+        ComponentKind::Skeleton => "Animated placeholder blocks for loading layouts.",
+        ComponentKind::Spinner => "Indeterminate loading spinner.",
+        ComponentKind::Toast => "Stacked toast notifications with configurable placement.",
         ComponentKind::Toolbar => "Floating tool cluster anchored in a canvas.",
         ComponentKind::Pagination => "Previous/next pager with page numbers.",
     }
@@ -1425,6 +1842,20 @@ fn radius_md(ui: &Ui) -> u8 {
     theme::radius(ui, RadiusRole::Md)
 }
 
+fn theme_mode_index(mode: ThemeMode) -> usize {
+    match mode {
+        ThemeMode::Light => 0,
+        ThemeMode::Dark => 1,
+    }
+}
+
+fn theme_mode_from_index(index: usize) -> ThemeMode {
+    match index {
+        0 => ThemeMode::Light,
+        _ => ThemeMode::Dark,
+    }
+}
+
 fn clamp_state(state: &mut ShowcaseApp) {
     state.toolbar_color_index = state
         .toolbar_color_index
@@ -1451,12 +1882,29 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.number_x_value = state.number_x_value.clamp(0.0, 100.0);
     state.number_y_value = state.number_y_value.clamp(0.0, 100.0);
     state.progress_value = state.progress_value.clamp(0.0, 1.0);
+    state.sidebar_side_index = state
+        .sidebar_side_index
+        .min(SIDEBAR_SIDE_OPTIONS.len().saturating_sub(1));
+
+    if state.radio_group_value.is_some_and(|value| {
+        !RADIO_GROUP_OPTIONS
+            .iter()
+            .any(|option| option.value == value)
+    }) {
+        state.radio_group_value = None;
+    }
 
     if state
         .select_index
         .is_some_and(|index| index >= SELECT_OPTIONS.len())
     {
         state.select_index = None;
+    }
+    if state
+        .toast_placement_index
+        .is_some_and(|index| index >= TOAST_PLACEMENT_OPTIONS.len())
+    {
+        state.toast_placement_index = Some(TOAST_PLACEMENT_OPTIONS.len().saturating_sub(1));
     }
     if state
         .dropdown_action

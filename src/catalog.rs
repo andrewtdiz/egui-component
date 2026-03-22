@@ -24,11 +24,17 @@ pub enum ComponentKind {
     Pagination,
     Popover,
     Progress,
+    Radio,
+    RadioGroup,
     Select,
     Separator,
+    Sidebar,
     Slider,
+    Skeleton,
+    Spinner,
     Switch,
     Tabs,
+    Toast,
     Toolbar,
     Tooltip,
 }
@@ -167,6 +173,24 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::Radio,
+        id: "radio",
+        label: "Radio",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Skeleton,
+        id: "skeleton",
+        label: "Skeleton",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Spinner,
+        id: "spinner",
+        label: "Spinner",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Popover,
         id: "popover",
         label: "Popover",
@@ -203,6 +227,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
+        kind: ComponentKind::RadioGroup,
+        id: "radio-group",
+        label: "Radio Group",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Command,
         id: "command",
         label: "Command",
@@ -230,6 +260,18 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Pagination,
         id: "pagination",
         label: "Pagination",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Sidebar,
+        id: "sidebar",
+        label: "Sidebar",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Toast,
+        id: "toast",
+        label: "Toast",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -305,6 +347,12 @@ mod tests {
         assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
         assert!(ids.contains(&"menu-bar"));
+        assert!(ids.contains(&"radio"));
+        assert!(ids.contains(&"radio-group"));
+        assert!(ids.contains(&"sidebar"));
+        assert!(ids.contains(&"skeleton"));
+        assert!(ids.contains(&"spinner"));
+        assert!(ids.contains(&"toast"));
         assert!(ids.contains(&"toolbar"));
         assert!(!ids.contains(&"alert-dialogue"));
         assert!(!ids.contains(&"accordion"));

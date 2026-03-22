@@ -96,8 +96,9 @@ fn draw_toolbar<R>(
     let runtime = crate::theme::runtime_for_ui(ui);
     let parent_rect = ui.max_rect();
     let anchor_pos = anchored_pos(parent_rect, props.anchor) + props.offset;
+    let area_id = props.id.with("area");
 
-    egui::Area::new(props.id)
+    egui::Area::new(area_id)
         .order(Order::Foreground)
         .pivot(props.anchor)
         .fixed_pos(anchor_pos)
