@@ -21,6 +21,10 @@ include = [
     "assets/images/showcase-image.png",
 ]
 
+[workspace]
+resolver = "2"
+members = ["dev/example-runner"]
+
 [lib]
 crate-type = ["rlib", "dylib"]
 

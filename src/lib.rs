@@ -1,5 +1,7 @@
 pub mod catalog;
 pub mod components;
+#[doc(hidden)]
+pub mod example_apps;
 pub mod layout;
 pub mod icons {
     pub use crate::ui::icons::{image, setup, svg_source};

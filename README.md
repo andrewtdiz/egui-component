@@ -164,6 +164,25 @@ Run the main showcase:
 cargo run --example showcase
 ```
 
+Run the local wrapper command for the showcase:
+
+```bash
+cargo example showcase
+```
+
+Generate isolated showcase snapshots:
+
+```bash
+cargo example snapshot --component canva-position
+cargo screenshot --component canva-position
+```
+
+Enable hot restart for the showcase:
+
+```bash
+cargo example showcase --hot
+```
+
 Run any focused example:
 
 ```bash
@@ -172,8 +191,7 @@ cargo run --example theme-playground
 
 Replace `theme-playground` with `content-composition` or `popup-patterns`.
 
-If you use the local alias for the showcase:
+In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
+The window is restarted on each rebuild rather than patched in place.
 
-```bash
-cargo showcase
-```
+Snapshot mode renders offscreen without opening a native window and crops the output to the component preview itself rather than the outer showcase wrapper card.

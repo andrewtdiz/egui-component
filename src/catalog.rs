@@ -2,8 +2,12 @@
 pub enum ComponentKind {
     // xtask:component-kinds:start
     AudioPlayback,
+    CanvaBackgrounds,
+    CanvaBrandKit,
+    CanvaEditImage,
     Button,
     ButtonGroup,
+    CanvaPosition,
     Card,
     Checkbox,
     Color,
@@ -117,6 +121,30 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         id: "button-group",
         label: "Button Group",
         group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CanvaBackgrounds,
+        id: "canva-backgrounds",
+        label: "Backgrounds",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CanvaBrandKit,
+        id: "canva-brand-kit",
+        label: "Brand Kit",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CanvaEditImage,
+        id: "canva-edit-image",
+        label: "Edit Image",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CanvaPosition,
+        id: "canva-position",
+        label: "Position",
+        group: ComponentGroup::Composed,
     },
     ComponentDefinition {
         kind: ComponentKind::Checkbox,

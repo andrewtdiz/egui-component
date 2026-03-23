@@ -143,8 +143,11 @@ pub struct NumberInput {
     pub width: f32,
     pub range: RangeInclusive<f32>,
     pub speed: f64,
+    pub fine_speed: Option<f64>,
     pub decimals: usize,
+    pub fine_decimals: Option<usize>,
     pub prefix: Option<String>,
+    pub suffix: Option<String>,
     pub prefix_tint: Option<Color32>,
     pub prefix_align_left: bool,
     pub axis: NumberInputAxis,
@@ -157,8 +160,11 @@ impl NumberInput {
             width: 58.0,
             range: 0.0..=100.0,
             speed: 0.2,
+            fine_speed: None,
             decimals: 1,
+            fine_decimals: None,
             prefix: None,
+            suffix: None,
             prefix_tint: None,
             prefix_align_left: false,
             axis: NumberInputAxis::Horizontal,
@@ -180,13 +186,28 @@ impl NumberInput {
         self
     }
 
+    pub fn fine_speed(mut self, fine_speed: f64) -> Self {
+        self.fine_speed = Some(fine_speed.max(f64::EPSILON));
+        self
+    }
+
     pub fn decimals(mut self, decimals: usize) -> Self {
         self.decimals = decimals;
         self
     }
 
+    pub fn fine_decimals(mut self, fine_decimals: usize) -> Self {
+        self.fine_decimals = Some(fine_decimals);
+        self
+    }
+
     pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = Some(prefix.into());
+        self
+    }
+
+    pub fn suffix(mut self, suffix: impl Into<String>) -> Self {
+        self.suffix = Some(suffix.into());
         self
     }
 
@@ -229,12 +250,26 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
         let runtime = crate::theme::runtime_for_ui(ui);
         ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(runtime);
         ui.push_id(props.id, |ui| {
+            let fine_adjustment = ui.input(|input| input.modifiers.shift);
+            let decimals = if fine_adjustment {
+                props.fine_decimals.unwrap_or(props.decimals)
+            } else {
+                props.decimals
+            };
+            let speed = if fine_adjustment {
+                props.fine_speed.unwrap_or(props.speed)
+            } else {
+                props.speed
+            };
             let mut drag_value = egui::DragValue::new(value)
                 .range(props.range)
-                .speed(props.speed)
-                .fixed_decimals(props.decimals);
+                .speed(speed)
+                .fixed_decimals(decimals);
             if let Some(prefix) = props.prefix.as_deref().filter(|_| !props.prefix_align_left) {
                 drag_value = drag_value.prefix(format!("{prefix} "));
+            }
+            if let Some(suffix) = props.suffix.as_deref() {
+                drag_value = drag_value.suffix(format!(" {suffix}"));
             }
             let cursor_icon = match props.axis {
                 NumberInputAxis::Horizontal => CursorIcon::ResizeHorizontal,

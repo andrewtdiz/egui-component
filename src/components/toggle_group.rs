@@ -51,23 +51,49 @@ fn draw_toggle_group(ui: &mut Ui, current: &mut usize, props: ToggleGroup<'_>) -
 
     ui.push_id(props.id, |ui| {
         let _ = layout::row().gap(0.0).show(ui, |ui| {
-            let mut segment_rects = Vec::with_capacity(props.options.len());
+            let label_widths = props
+                .options
+                .iter()
+                .copied()
+                .map(|label| {
+                    ui.fonts_mut(|fonts| {
+                        fonts
+                            .layout_no_wrap(
+                                label.to_owned(),
+                                label_font.clone(),
+                                tokens::text_primary(runtime),
+                            )
+                            .size()
+                            .x
+                    })
+                })
+                .collect::<Vec<_>>();
+            let segment_widths = label_widths
+                .iter()
+                .map(|label_width| {
+                    (label_width + (TOGGLE_GROUP_PADDING_X * 2.0)).max(props.min_segment_width)
+                })
+                .collect::<Vec<_>>();
+            let total_width = segment_widths.iter().sum::<f32>();
+            let (group_rect, _) = ui
+                .allocate_exact_size(egui::vec2(total_width, TOGGLE_GROUP_HEIGHT), Sense::hover());
+            let group_border = Stroke::new(1.0, tokens::button_secondary_border(runtime));
+            ui.painter().rect(
+                group_rect,
+                CornerRadius::same(tokens::radius_md(runtime)),
+                tokens::muted_surface(runtime),
+                group_border,
+                StrokeKind::Outside,
+            );
 
+            let mut segment_left = group_rect.left();
             for (index, label) in props.options.iter().copied().enumerate() {
-                let label_width = ui.fonts_mut(|fonts| {
-                    fonts
-                        .layout_no_wrap(
-                            label.to_owned(),
-                            label_font.clone(),
-                            tokens::text_primary(runtime),
-                        )
-                        .size()
-                        .x
-                });
-                let width =
-                    (label_width + (TOGGLE_GROUP_PADDING_X * 2.0)).max(props.min_segment_width);
-                let (rect, response) =
-                    ui.allocate_exact_size(egui::vec2(width, TOGGLE_GROUP_HEIGHT), Sense::click());
+                let width = segment_widths[index];
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(segment_left, group_rect.top()),
+                    egui::vec2(width, TOGGLE_GROUP_HEIGHT),
+                );
+                let response = ui.interact(rect, props.id.with(index), Sense::click());
                 let selected = *current == index;
                 let fill = if selected {
                     tokens::card_background(runtime)
@@ -117,37 +143,22 @@ fn draw_toggle_group(ui: &mut Ui, current: &mut usize, props: ToggleGroup<'_>) -
                     *current = index;
                 }
 
-                combined_response = Some(match combined_response.take() {
-                    Some(previous) => previous.union(response),
-                    None => response,
-                });
-                segment_rects.push(rect);
-            }
-
-            if let (Some(first), Some(last)) = (segment_rects.first(), segment_rects.last()) {
-                let group_rect = first.union(*last);
-                let border = Stroke::new(1.0, tokens::button_secondary_border(runtime));
-                ui.painter().rect(
-                    group_rect,
-                    CornerRadius::same(tokens::radius_md(runtime)),
-                    tokens::muted_surface(runtime),
-                    border,
-                    StrokeKind::Outside,
-                );
-
-                for rect in segment_rects
-                    .iter()
-                    .take(segment_rects.len().saturating_sub(1))
-                {
+                if index + 1 < props.options.len() {
                     let x = rect.right();
                     ui.painter().line_segment(
                         [
                             egui::pos2(x, group_rect.top() + 1.0),
                             egui::pos2(x, group_rect.bottom() - 1.0),
                         ],
-                        border,
+                        group_border,
                     );
                 }
+
+                combined_response = Some(match combined_response.take() {
+                    Some(previous) => previous.union(response),
+                    None => response,
+                });
+                segment_left = rect.right();
             }
         });
     });

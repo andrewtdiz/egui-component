@@ -113,108 +113,137 @@ impl ComponentUi<'_> {
         props: impl Into<Sidebar<'a>>,
         add: impl FnOnce(&mut Ui, &mut bool),
     ) {
-        let props = props.into();
-        let ctx = self.ctx().clone();
         let host_rect = self.ui().max_rect();
-        let runtime = crate::theme::runtime_for_ui(self.ui());
-        let overrides = self.overrides();
-        let animation_id = props.id.with("open");
-        let panel_area_id = props.id.with("panel");
-        let backdrop_area_id = props.id.with("backdrop");
-        let openness = ctx.animate_bool_responsive(animation_id, *open);
+        draw_sidebar_in(self, host_rect, open, props.into(), add);
+    }
 
-        if !*open && openness <= 0.0 {
-            return;
-        }
+    pub fn sidebar_in<'a>(
+        &mut self,
+        host_rect: egui::Rect,
+        open: &mut bool,
+        props: impl Into<Sidebar<'a>>,
+        add: impl FnOnce(&mut Ui, &mut bool),
+    ) {
+        draw_sidebar_in(self, host_rect, open, props.into(), add);
+    }
+}
 
-        let fill = props
-            .fill
-            .unwrap_or(crate::theme::resolved_color(runtime, ColorRole::Sidebar));
-        let stroke = props.stroke.unwrap_or(Stroke::new(
-            1.0,
-            crate::theme::resolved_color(runtime, ColorRole::SidebarBorder),
-        ));
-        let shadow = props.shadow.unwrap_or(tokens::tailwind_shadow_lg(runtime));
-        let panel_left = match props.side {
-            SidebarSide::Left => host_rect.left() - (props.width * (1.0 - openness)),
-            SidebarSide::Right => host_rect.right() - (props.width * openness),
-        };
-        let panel_rect = egui::Rect::from_min_size(
-            egui::pos2(panel_left, host_rect.top()),
-            egui::vec2(props.width, host_rect.height()),
-        );
-        let corner_radius = sidebar_corner_radius(props.side, tokens::radius_lg(runtime));
-        let mut close_requested = false;
+fn draw_sidebar_in(
+    component_ui: &mut ComponentUi<'_>,
+    host_rect: egui::Rect,
+    open: &mut bool,
+    props: Sidebar<'_>,
+    add: impl FnOnce(&mut Ui, &mut bool),
+) {
+    let ctx = component_ui.ctx().clone();
+    let runtime = crate::theme::runtime_for_ui(component_ui.ui());
+    let overrides = component_ui.overrides();
+    let animation_id = props.id.with("open");
+    let panel_area_id = props.id.with("panel");
+    let backdrop_area_id = props.id.with("backdrop");
+    let openness = ctx.animate_bool_responsive(animation_id, *open);
 
-        if props.backdrop && openness > 0.0 {
-            let backdrop_fill = tokens::dialogue_backdrop(runtime)
-                .gamma_multiply((0.85 * openness).clamp(0.0, 1.0));
-            let backdrop_response = egui::Area::new(backdrop_area_id)
-                .order(Order::Foreground)
-                .fixed_pos(host_rect.left_top())
-                .constrain_to(host_rect)
-                .interactable(true)
-                .show(&ctx, |ui| {
-                    let (rect, response) =
-                        ui.allocate_exact_size(host_rect.size(), egui::Sense::click());
-                    ui.painter().rect(
-                        rect,
-                        CornerRadius::ZERO,
-                        backdrop_fill,
-                        egui::Stroke::NONE,
-                        StrokeKind::Outside,
-                    );
-                    response
-                })
-                .inner;
+    if !*open && openness <= 0.0 {
+        return;
+    }
 
-            if props.close_on_outside_click && backdrop_response.clicked() {
-                close_requested = true;
-            }
-        }
+    let fill = props
+        .fill
+        .unwrap_or(crate::theme::resolved_color(runtime, ColorRole::Sidebar));
+    let stroke = props.stroke.unwrap_or(Stroke::new(
+        1.0,
+        crate::theme::resolved_color(runtime, ColorRole::SidebarBorder),
+    ));
+    let shadow = props.shadow.unwrap_or(tokens::tailwind_shadow_lg(runtime));
+    let panel_rect = sidebar_panel_rect(host_rect, props.side, props.width, openness);
+    let corner_radius = sidebar_corner_radius(props.side, tokens::radius_lg(runtime));
+    let mut close_requested = false;
 
-        let _ = egui::Area::new(panel_area_id)
+    if props.backdrop && openness > 0.0 {
+        let backdrop_fill =
+            tokens::dialogue_backdrop(runtime).gamma_multiply((0.85 * openness).clamp(0.0, 1.0));
+        let backdrop_response = egui::Area::new(backdrop_area_id)
             .order(Order::Foreground)
-            .fixed_pos(panel_rect.min)
+            .fixed_pos(host_rect.left_top())
             .constrain_to(host_rect)
+            .interactable(true)
             .show(&ctx, |ui| {
-                ui.set_min_width(props.width);
-                ui.set_max_width(props.width);
-                ui.set_min_height(host_rect.height());
+                let (rect, response) =
+                    ui.allocate_exact_size(host_rect.size(), egui::Sense::click());
+                ui.painter().rect(
+                    rect,
+                    CornerRadius::ZERO,
+                    backdrop_fill,
+                    egui::Stroke::NONE,
+                    StrokeKind::Outside,
+                );
+                response
+            })
+            .inner;
 
-                let inner_height = (host_rect.height() - f32::from(props.padding_y * 2)).max(1.0);
-                let _ = egui::Frame::new()
-                    .fill(fill)
-                    .stroke(stroke)
-                    .corner_radius(corner_radius)
-                    .inner_margin(Margin::symmetric(props.padding_x, props.padding_y))
-                    .shadow(shadow)
-                    .show(ui, |ui| {
-                        ui.set_min_height(inner_height);
-                        with_component_overrides(ui, overrides, |ui| {
-                            if let Some(title) = props.title {
-                                draw_sidebar_header(ui, title, runtime, &mut close_requested);
-                                ui.add_space(10.0);
-                                let _ = ui.components().separator();
-                                ui.add_space(10.0);
-                            }
-                            let body_max_height = ui.available_height().max(1.0);
-                            let _ = egui::ScrollArea::vertical()
-                                .auto_shrink([false, false])
-                                .max_height(body_max_height)
-                                .show(ui, |ui| add(ui, &mut close_requested));
-                        });
-                    });
-            });
-
-        if props.close_on_escape && ctx.input(|input| input.key_pressed(Key::Escape)) {
+        if props.close_on_outside_click && backdrop_response.clicked() {
             close_requested = true;
         }
-
-        if close_requested {
-            *open = false;
-        }
     }
+
+    let _ = egui::Area::new(panel_area_id)
+        .order(Order::Foreground)
+        .fixed_pos(panel_rect.min)
+        .constrain_to(host_rect)
+        .show(&ctx, |ui| {
+            ui.set_min_width(props.width);
+            ui.set_max_width(props.width);
+            ui.set_min_height(host_rect.height());
+            ui.set_max_height(host_rect.height());
+
+            let inner_height = (host_rect.height() - f32::from(props.padding_y * 2)).max(1.0);
+            let _ = egui::Frame::new()
+                .fill(fill)
+                .stroke(stroke)
+                .corner_radius(corner_radius)
+                .inner_margin(Margin::symmetric(props.padding_x, props.padding_y))
+                .shadow(shadow)
+                .show(ui, |ui| {
+                    ui.set_min_height(inner_height);
+                    with_component_overrides(ui, overrides, |ui| {
+                        if let Some(title) = props.title {
+                            draw_sidebar_header(ui, title, runtime, &mut close_requested);
+                            ui.add_space(10.0);
+                            let _ = ui.components().separator();
+                            ui.add_space(10.0);
+                        }
+                        let body_max_height = ui.available_height().max(1.0);
+                        let _ = egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .max_height(body_max_height)
+                            .show(ui, |ui| add(ui, &mut close_requested));
+                    });
+                });
+        });
+
+    if props.close_on_escape && ctx.input(|input| input.key_pressed(Key::Escape)) {
+        close_requested = true;
+    }
+
+    if close_requested {
+        *open = false;
+    }
+}
+
+fn sidebar_panel_rect(
+    host_rect: egui::Rect,
+    side: SidebarSide,
+    width: f32,
+    openness: f32,
+) -> egui::Rect {
+    let panel_left = match side {
+        SidebarSide::Left => host_rect.left() - (width * (1.0 - openness)),
+        SidebarSide::Right => host_rect.right() - (width * openness),
+    };
+    egui::Rect::from_min_size(
+        egui::pos2(panel_left, host_rect.top()),
+        egui::vec2(width, host_rect.height()),
+    )
 }
 
 fn draw_sidebar_header(
@@ -223,8 +252,9 @@ fn draw_sidebar_header(
     runtime: crate::theme::ThemeRuntime,
     close_requested: &mut bool,
 ) {
-    let _ = layout::row().gap(8.0).show(ui, |ui| {
-        {
+    let _ = layout::leading_trailing().gap(8.0).min_height(28.0).show(
+        ui,
+        |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new(title)
@@ -232,26 +262,27 @@ fn draw_sidebar_header(
                     .weight(LabelWeight::Semibold)
                     .size(16.0),
             );
-        }
-        let _ = layout::spacer().show(ui);
-        if ui
-            .components()
-            .button(
-                Button::icon_only("x")
-                    .variant(ButtonVariant::Ghost)
-                    .size(super::ControlSize::Sm)
-                    .icon_size(12.0)
-                    .icon_tint(crate::theme::resolved_color(
-                        runtime,
-                        ColorRole::SidebarForeground,
-                    ))
-                    .min_size(egui::vec2(28.0, 28.0)),
-            )
-            .clicked()
-        {
-            *close_requested = true;
-        }
-    });
+        },
+        |ui| {
+            if ui
+                .components()
+                .button(
+                    Button::icon_only("x")
+                        .variant(ButtonVariant::Ghost)
+                        .size(super::ControlSize::Sm)
+                        .icon_size(12.0)
+                        .icon_tint(crate::theme::resolved_color(
+                            runtime,
+                            ColorRole::SidebarForeground,
+                        ))
+                        .min_size(egui::vec2(28.0, 28.0)),
+                )
+                .clicked()
+            {
+                *close_requested = true;
+            }
+        },
+    );
 }
 
 fn sidebar_corner_radius(side: SidebarSide, radius: u8) -> CornerRadius {
@@ -273,10 +304,10 @@ fn sidebar_corner_radius(side: SidebarSide, radius: u8) -> CornerRadius {
 
 #[cfg(test)]
 mod tests {
-    use super::{Sidebar, SidebarSide};
+    use super::{sidebar_panel_rect, Sidebar, SidebarSide};
     use crate::components::{Button, ButtonVariant, ComponentUiExt};
     use crate::theme::{self, ThemeMode};
-    use egui::{CentralPanel, Context, Id, RawInput, SidePanel};
+    use egui::{pos2, vec2, CentralPanel, Context, Id, RawInput, Rect, SidePanel};
 
     #[test]
     fn derived_area_ids_avoid_colliding_with_host_panel_ids() {
@@ -309,5 +340,32 @@ mod tests {
         }));
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn sidebar_panel_rect_anchors_to_host_edges_when_open() {
+        let host_rect = Rect::from_min_size(pos2(24.0, 48.0), vec2(640.0, 320.0));
+
+        let left = sidebar_panel_rect(host_rect, SidebarSide::Left, 240.0, 1.0);
+        let right = sidebar_panel_rect(host_rect, SidebarSide::Right, 240.0, 1.0);
+
+        assert_eq!(left.left(), host_rect.left());
+        assert_eq!(left.width(), 240.0);
+        assert_eq!(left.height(), host_rect.height());
+
+        assert_eq!(right.right(), host_rect.right());
+        assert_eq!(right.width(), 240.0);
+        assert_eq!(right.height(), host_rect.height());
+    }
+
+    #[test]
+    fn sidebar_panel_rect_starts_outside_host_when_closed() {
+        let host_rect = Rect::from_min_size(pos2(24.0, 48.0), vec2(640.0, 320.0));
+
+        let left = sidebar_panel_rect(host_rect, SidebarSide::Left, 240.0, 0.0);
+        let right = sidebar_panel_rect(host_rect, SidebarSide::Right, 240.0, 0.0);
+
+        assert_eq!(left.right(), host_rect.left());
+        assert_eq!(right.left(), host_rect.right());
     }
 }

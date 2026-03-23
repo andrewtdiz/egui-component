@@ -1,6 +1,6 @@
 use super::{
     api::{with_component_overrides, ComponentUi, ComponentUiExt},
-    Button, ButtonVariant, Icon, Label, LabelTone, LabelWeight,
+    Button, ButtonVariant, Label, LabelTone, LabelWeight,
 };
 use crate::layout;
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
@@ -136,7 +136,7 @@ impl ToastViewport {
             width: DEFAULT_TOAST_WIDTH,
             margin: egui::vec2(16.0, 16.0),
             gap: 8.0,
-            overlap: 38.0,
+            overlap: 0.0,
             max_visible: 4,
         }
     }
@@ -227,7 +227,6 @@ struct ToastEntry {
 struct ToastPalette {
     fill: Color32,
     stroke: Stroke,
-    icon: Color32,
 }
 
 impl ComponentUi<'_> {
@@ -329,66 +328,64 @@ fn draw_toast(
     depth: usize,
 ) -> bool {
     let palette = toast_palette(runtime, toast.intent, depth);
-    let icon_name = match toast.intent {
-        ToastIntent::Neutral => "bell",
-        ToastIntent::Success => "circle-check",
-        ToastIntent::Destructive => "circle-alert",
-    };
     let mut dismissed = false;
     let shadow = toast_shadow(runtime, depth);
+    let inner_width = (width - 20.0).max(1.0);
+    let text_width = (inner_width - 30.0).max(96.0);
 
-    let _ = surface_frame(
-        ui,
-        SurfaceFrame::new(palette.fill, palette.stroke)
-            .corner_radius(tokens::radius_lg(runtime))
-            .padding(12, 12)
-            .shadow(shadow),
-        |ui| {
-            ui.set_width(width);
-            with_component_overrides(ui, overrides, |ui| {
-                let _ = layout::row().gap(10.0).show(ui, |ui| {
-                    {
-                        let mut components = ui.components();
-                        let _ = components.icon(Icon::new(icon_name).size(16.0).tint(palette.icon));
-                    }
+    let _ = ui.scope(|ui| {
+        ui.set_min_width(width);
+        ui.set_max_width(width);
 
-                    let text_width = (width - 72.0).max(120.0);
-                    let _ = ui.scope(|ui| {
-                        ui.set_max_width(text_width);
-                        let _ = layout::column().gap(3.0).show(ui, |ui| {
-                            let mut components = ui.components();
-                            let _ = components.label(
-                                Label::new(toast.title.as_str())
-                                    .tone(LabelTone::Primary)
-                                    .weight(LabelWeight::Semibold),
-                            );
-                            if let Some(description) = toast.description.as_deref() {
+        let _ = surface_frame(
+            ui,
+            SurfaceFrame::new(palette.fill, palette.stroke)
+                .corner_radius(tokens::radius_lg(runtime))
+                .padding(10, 10)
+                .shadow(shadow),
+            |ui| {
+                ui.set_min_width(inner_width);
+                ui.set_max_width(inner_width);
+                with_component_overrides(ui, overrides, |ui| {
+                    let _ = ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                        let _ = ui.scope(|ui| {
+                            ui.set_min_width(text_width);
+                            ui.set_max_width(text_width);
+                            let _ = layout::column().gap(4.0).show(ui, |ui| {
+                                let mut components = ui.components();
                                 let _ = components.label(
-                                    Label::new(description).tone(LabelTone::Muted).size(12.0),
+                                    Label::new(toast.title.as_str())
+                                        .tone(LabelTone::Primary)
+                                        .weight(LabelWeight::Semibold),
                                 );
-                            }
+                                if let Some(description) = toast.description.as_deref() {
+                                    let _ = components.label(
+                                        Label::new(description).tone(LabelTone::Muted).size(12.0),
+                                    );
+                                }
+                            });
                         });
-                    });
 
-                    let _ = layout::spacer().show(ui);
-                    if ui
-                        .components()
-                        .button(
-                            Button::icon_only("x")
-                                .variant(ButtonVariant::Ghost)
-                                .size(super::ControlSize::Sm)
-                                .icon_size(12.0)
-                                .icon_tint(tokens::text_muted(runtime))
-                                .min_size(egui::vec2(24.0, 24.0)),
-                        )
-                        .clicked()
-                    {
-                        dismissed = true;
-                    }
+                        let _ = layout::spacer().show(ui);
+                        if ui
+                            .components()
+                            .button(
+                                Button::icon_only("x")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(super::ControlSize::Sm)
+                                    .icon_size(12.0)
+                                    .icon_tint(tokens::text_muted(runtime))
+                                    .min_size(egui::vec2(22.0, 22.0)),
+                            )
+                            .clicked()
+                        {
+                            dismissed = true;
+                        }
+                    });
                 });
-            });
-        },
-    );
+            },
+        );
+    });
 
     dismissed
 }
@@ -411,7 +408,6 @@ fn toast_palette(
         ToastIntent::Neutral => ToastPalette {
             fill: card_fill,
             stroke: Stroke::new(1.0, border),
-            icon: tokens::text_secondary(runtime),
         },
         ToastIntent::Success => {
             let accent = Color32::from_rgb(34, 197, 94);
@@ -419,7 +415,6 @@ fn toast_palette(
                 fill: card_fill
                     .lerp_to_gamma(accent, if runtime.mode.is_dark() { 0.18 } else { 0.1 }),
                 stroke: Stroke::new(1.0, border.lerp_to_gamma(accent, 0.55)),
-                icon: accent,
             }
         }
         ToastIntent::Destructive => {
@@ -428,7 +423,6 @@ fn toast_palette(
                 fill: card_fill
                     .lerp_to_gamma(accent, if runtime.mode.is_dark() { 0.2 } else { 0.12 }),
                 stroke: Stroke::new(1.0, border.lerp_to_gamma(accent, 0.6)),
-                icon: accent,
             }
         }
     };
@@ -443,9 +437,6 @@ fn toast_palette(
         .stroke
         .color
         .lerp_to_gamma(tokens::input_border(runtime), stroke_shade);
-    palette.icon = palette
-        .icon
-        .lerp_to_gamma(tokens::text_muted(runtime), shade * 0.7);
     palette
 }
 

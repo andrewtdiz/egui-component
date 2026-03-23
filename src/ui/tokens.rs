@@ -157,7 +157,7 @@ pub(crate) fn button_secondary_hover_border(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn button_secondary_active_border(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Ring)
+    button_secondary_hover_border(runtime)
 }
 
 pub(crate) fn switch_off_bg(runtime: ThemeRuntime) -> Color32 {
@@ -359,4 +359,20 @@ pub(crate) fn radius_md(runtime: ThemeRuntime) -> u8 {
 
 pub(crate) fn radius_lg(runtime: ThemeRuntime) -> u8 {
     theme::resolved_radius(runtime, RadiusRole::Lg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{button_secondary_active_border, button_secondary_hover_border};
+    use crate::theme::ThemeRuntime;
+
+    #[test]
+    fn button_secondary_active_border_matches_hover_border() {
+        let runtime = ThemeRuntime::default();
+
+        assert_eq!(
+            button_secondary_active_border(runtime),
+            button_secondary_hover_border(runtime)
+        );
+    }
 }

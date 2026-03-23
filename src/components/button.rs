@@ -294,6 +294,14 @@ struct ResolvedButtonStyle {
     min_size: Vec2,
 }
 
+fn active_button_stroke(style: &ResolvedButtonStyle, selected: bool) -> Stroke {
+    if selected {
+        style.hovered_stroke
+    } else {
+        style.active_stroke
+    }
+}
+
 fn resolve_button_style(
     runtime: crate::theme::ThemeRuntime,
     variant: ButtonVariant,
@@ -426,7 +434,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         visuals.active.weak_bg_fill = resolved.active_fill;
         visuals.inactive.bg_stroke = resolved.inactive_stroke;
         visuals.hovered.bg_stroke = resolved.hovered_stroke;
-        visuals.active.bg_stroke = resolved.active_stroke;
+        visuals.active.bg_stroke = active_button_stroke(&resolved, props.selected);
         visuals.inactive.fg_stroke = resolved.inactive_fg;
         visuals.hovered.fg_stroke = resolved.hovered_fg;
         visuals.active.fg_stroke = resolved.active_fg;
@@ -601,10 +609,13 @@ fn resolve_button_label_font(weight: ButtonLabelWeight) -> FontId {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_button_label_font, Button, ButtonLabelWeight, ButtonVariant};
+    use super::{
+        active_button_stroke, resolve_button_label_font, Button, ButtonLabelWeight, ButtonVariant,
+        ResolvedButtonStyle,
+    };
     use crate::components::{Color, ComponentUiExt, ControlSize};
     use crate::ui::typography;
-    use egui::{CentralPanel, Color32, Context, RawInput, Rect};
+    use egui::{vec2, CentralPanel, Color32, Context, RawInput, Rect, Stroke};
 
     #[test]
     fn renders_color_only_button() {
@@ -642,5 +653,28 @@ mod tests {
             resolve_button_label_font(ButtonLabelWeight::Bold).size,
             typography::LABEL_SIZE
         );
+    }
+
+    #[test]
+    fn selected_buttons_keep_hover_border_when_pressed() {
+        let style = ResolvedButtonStyle {
+            inactive_fill: Color32::TRANSPARENT,
+            hovered_fill: Color32::TRANSPARENT,
+            active_fill: Color32::TRANSPARENT,
+            inactive_stroke: Stroke::new(1.0, Color32::BLACK),
+            hovered_stroke: Stroke::new(1.0, Color32::WHITE),
+            active_stroke: Stroke::new(1.0, Color32::RED),
+            inactive_fg: Stroke::NONE,
+            hovered_fg: Stroke::NONE,
+            active_fg: Stroke::NONE,
+            label_color: None,
+            icon_tint: Color32::WHITE,
+            frame: true,
+            button_padding: vec2(0.0, 0.0),
+            min_size: vec2(0.0, 0.0),
+        };
+
+        assert_eq!(active_button_stroke(&style, false), style.active_stroke);
+        assert_eq!(active_button_stroke(&style, true), style.hovered_stroke);
     }
 }

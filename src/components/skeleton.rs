@@ -2,6 +2,13 @@ use super::api::ComponentUi;
 use crate::ui::tokens;
 use egui::{CornerRadius, Response, Sense, StrokeKind, Ui, Vec2};
 
+const SKELETON_PULSE_DURATION_SECS: f32 = 2.0;
+const SKELETON_MIN_OPACITY: f32 = 0.5;
+const SKELETON_EASING_X1: f32 = 0.4;
+const SKELETON_EASING_Y1: f32 = 0.0;
+const SKELETON_EASING_X2: f32 = 0.6;
+const SKELETON_EASING_Y2: f32 = 1.0;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Skeleton {
     pub size: Vec2,
@@ -80,12 +87,27 @@ fn draw_skeleton(ui: &mut Ui, props: Skeleton) -> Response {
     let runtime = crate::theme::runtime_for_ui(ui);
     let (rect, response) = ui.allocate_exact_size(props.size, Sense::hover());
     let base = tokens::muted_surface(runtime);
-    let highlight = tokens::card_background(runtime);
     let fill = if props.animated {
-        let pulse = ((ui.input(|input| input.time) as f32 * 1.8).sin() + 1.0) * 0.5;
-        let eased = pulse * pulse * (3.0 - (2.0 * pulse));
+        let phase = (ui.input(|input| input.time) as f32 / SKELETON_PULSE_DURATION_SECS).fract();
+        let segment_progress = if phase < 0.5 {
+            phase * 2.0
+        } else {
+            (phase - 0.5) * 2.0
+        };
+        let eased = cubic_bezier_ease(
+            segment_progress,
+            SKELETON_EASING_X1,
+            SKELETON_EASING_Y1,
+            SKELETON_EASING_X2,
+            SKELETON_EASING_Y2,
+        );
+        let opacity = if phase < 0.5 {
+            1.0 - ((1.0 - SKELETON_MIN_OPACITY) * eased)
+        } else {
+            SKELETON_MIN_OPACITY + ((1.0 - SKELETON_MIN_OPACITY) * eased)
+        };
         ui.ctx().request_repaint_after_secs(1.0 / 30.0);
-        base.lerp_to_gamma(highlight, 0.07 + (eased * 0.18))
+        base.gamma_multiply(opacity)
     } else {
         base
     };
@@ -99,4 +121,35 @@ fn draw_skeleton(ui: &mut Ui, props: Skeleton) -> Response {
     );
 
     response
+}
+
+fn cubic_bezier_ease(progress: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let progress = progress.clamp(0.0, 1.0);
+    let mut parameter = progress;
+
+    for _ in 0..5 {
+        let slope = cubic_bezier_slope(parameter, x1, x2);
+        if slope.abs() < 1e-5 {
+            break;
+        }
+
+        let error = cubic_bezier_axis(parameter, x1, x2) - progress;
+        parameter = (parameter - (error / slope)).clamp(0.0, 1.0);
+    }
+
+    cubic_bezier_axis(parameter, y1, y2)
+}
+
+fn cubic_bezier_axis(parameter: f32, p1: f32, p2: f32) -> f32 {
+    let inverse = 1.0 - parameter;
+    (3.0 * inverse * inverse * parameter * p1)
+        + (3.0 * inverse * parameter * parameter * p2)
+        + (parameter * parameter * parameter)
+}
+
+fn cubic_bezier_slope(parameter: f32, p1: f32, p2: f32) -> f32 {
+    let inverse = 1.0 - parameter;
+    (3.0 * inverse * inverse * p1)
+        + (6.0 * inverse * parameter * (p2 - p1))
+        + (3.0 * parameter * parameter * (1.0 - p2))
 }

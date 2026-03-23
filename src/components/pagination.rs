@@ -12,7 +12,7 @@ use crate::{
 use egui::{Align2, CornerRadius, Id, Response, Sense, Stroke, Vec2};
 
 const PAGINATION_ITEM_GAP: f32 = 4.0;
-const PAGINATION_PAGE_BUTTON_SIZE: Vec2 = egui::vec2(24.0, 24.0);
+const PAGINATION_PAGE_BUTTON_SIZE: Vec2 = egui::vec2(32.0, 32.0);
 const PAGINATION_NAV_ICON_SIZE: f32 = 12.0;
 const PAGINATION_ELLIPSIS_SIZE: f32 = 14.0;
 
@@ -131,7 +131,7 @@ fn draw_page_button(ui: &mut ComponentUi<'_>, current_page: &mut usize, page: us
     let runtime = crate::theme::runtime_for_ui(ui);
     let is_current = *current_page == page;
     let stroke = if is_current {
-        Stroke::new(1.0, tokens::button_secondary_border(runtime))
+        Stroke::new(1.0, tokens::separator(runtime))
     } else {
         Stroke::NONE
     };
@@ -157,7 +157,7 @@ fn draw_page_button(ui: &mut ComponentUi<'_>, current_page: &mut usize, page: us
         rect.center(),
         Align2::CENTER_CENTER,
         page.to_string(),
-        typography::body_font(),
+        typography::label_font(),
         tokens::text_primary(runtime),
     );
 

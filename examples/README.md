@@ -6,6 +6,26 @@ Run examples from the repo root:
 cargo run --example showcase
 ```
 
+Use the local wrapper command for the showcase:
+
+```bash
+cargo example showcase
+```
+
+Generate isolated showcase snapshots:
+
+```bash
+cargo example snapshot --component canva-position
+cargo example snapshot --all
+cargo screenshot --component canva-position
+```
+
+Enable showcase hot restart:
+
+```bash
+cargo example showcase --hot
+```
+
 Available examples:
 
 - `showcase`
@@ -24,4 +44,14 @@ cargo run --example showcase
 cargo run --example content-composition
 cargo run --example popup-patterns
 cargo run --example theme-playground
+cargo example showcase
+cargo example showcase --hot
+cargo example snapshot --component canva-backgrounds
+cargo example snapshot --all --theme dark
+cargo screenshot --component canva-backgrounds
 ```
+
+Hot mode watches the repo, rebuilds `showcase`, and relaunches the example process on change.
+The window restarts on each rebuild instead of reloading code into the running process.
+
+Snapshot mode is headless and crops the PNG to the component preview itself, without the outer showcase title/subtext/card wrapper.
