@@ -6,11 +6,17 @@ use crate::primitives::{
     row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
 };
 use crate::ui::{tokens, typography};
-use egui::{CursorIcon, Id, Ui};
+use egui::{CursorIcon, FontId, Id, Ui};
 
 const MENU_INNER_PADDING_X: i8 = 3;
 const MENU_INNER_PADDING_Y: i8 = 3;
 const MENU_ROW_HEIGHT: f32 = 32.0;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SelectVariant {
+    Default,
+    Secondary,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Select<'a> {
@@ -19,6 +25,8 @@ pub struct Select<'a> {
     pub options: &'a [&'a str],
     pub width: f32,
     pub placeholder: &'a str,
+    pub variant: SelectVariant,
+    pub leading_icon: Option<&'a str>,
 }
 
 impl<'a> Select<'a> {
@@ -29,6 +37,8 @@ impl<'a> Select<'a> {
             options,
             width: 220.0,
             placeholder: "Select an option",
+            variant: SelectVariant::Default,
+            leading_icon: None,
         }
     }
 
@@ -45,6 +55,16 @@ impl<'a> Select<'a> {
         self.placeholder = placeholder;
         self
     }
+
+    pub fn variant(mut self, variant: SelectVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    pub fn leading_icon(mut self, leading_icon: &'a str) -> Self {
+        self.leading_icon = Some(leading_icon);
+        self
+    }
 }
 
 impl ComponentUi<'_> {
@@ -57,29 +77,71 @@ impl ComponentUi<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct ResolvedSelectStyle {
     fill: egui::Color32,
     stroke: egui::Stroke,
+    height: f32,
+    text_font: FontId,
     text_color: egui::Color32,
+    leading_icon_color: egui::Color32,
     icon_color: egui::Color32,
+    padding_x: f32,
+    leading_gap: f32,
+    trailing_icon_size: f32,
 }
 
 fn resolve_select_style(
     runtime: crate::theme::ThemeRuntime,
+    variant: SelectVariant,
     focused: bool,
     hovered: bool,
     has_selection: bool,
 ) -> ResolvedSelectStyle {
-    ResolvedSelectStyle {
-        fill: tokens::input_bg(runtime, focused, hovered),
-        stroke: tokens::input_stroke(runtime, focused, hovered),
-        text_color: if has_selection {
-            tokens::text_primary(runtime)
-        } else {
-            tokens::text_muted(runtime)
+    match variant {
+        SelectVariant::Default => ResolvedSelectStyle {
+            fill: tokens::input_bg(runtime, focused, hovered),
+            stroke: tokens::input_stroke(runtime, focused, hovered),
+            height: tokens::SPACING_INTERACT_HEIGHT,
+            text_font: typography::label_font(),
+            text_color: if has_selection {
+                tokens::text_primary(runtime)
+            } else {
+                tokens::text_muted(runtime)
+            },
+            leading_icon_color: tokens::text_secondary(runtime),
+            icon_color: tokens::text_secondary(runtime),
+            padding_x: 10.0,
+            leading_gap: 8.0,
+            trailing_icon_size: 12.0,
         },
-        icon_color: tokens::text_secondary(runtime),
+        SelectVariant::Secondary => ResolvedSelectStyle {
+            fill: if focused || hovered {
+                tokens::button_secondary_hover_bg(runtime)
+            } else {
+                tokens::button_secondary_bg(runtime)
+            },
+            stroke: egui::Stroke::new(
+                1.0,
+                if focused || hovered {
+                    tokens::button_secondary_hover_border(runtime)
+                } else {
+                    tokens::button_secondary_border(runtime)
+                },
+            ),
+            height: 38.0,
+            text_font: typography::semibold_font(typography::BODY_SIZE),
+            text_color: if has_selection {
+                tokens::text_primary(runtime)
+            } else {
+                tokens::text_secondary(runtime)
+            },
+            leading_icon_color: tokens::text_muted(runtime),
+            icon_color: tokens::text_secondary(runtime),
+            padding_x: 12.0,
+            leading_gap: 10.0,
+            trailing_icon_size: 16.0,
+        },
     }
 }
 
@@ -141,21 +203,42 @@ fn draw_select(
 
 fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> egui::Response {
     ui.push_id(props.trigger_id, |ui| {
-        let desired_size = egui::vec2(props.width, tokens::SPACING_INTERACT_HEIGHT);
+        let runtime = crate::theme::runtime_for_ui(ui);
+        let preview_style = resolve_select_style(
+            runtime,
+            props.variant,
+            false,
+            false,
+            selected_text.is_some(),
+        );
+        let desired_size = egui::vec2(props.width, preview_style.height);
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
         let hovered = response.hovered();
-        let runtime = crate::theme::runtime_for_ui(ui);
-        let style = resolve_select_style(runtime, focused, hovered, selected_text.is_some());
+        let style = resolve_select_style(
+            runtime,
+            props.variant,
+            focused,
+            hovered,
+            selected_text.is_some(),
+        );
         control_frame(ui, rect, ControlFrame::new(style.fill, style.stroke));
         let row = IconLabelRow::new(
             selected_text.unwrap_or(props.placeholder),
-            typography::label_font(),
+            style.text_font.clone(),
             style.text_color,
         )
+        .padding_x(style.padding_x)
+        .leading_gap(style.leading_gap)
+        .leading_icon_tint(style.leading_icon_color)
         .trailing_icon("chevron-down")
-        .trailing_icon_size(12.0)
+        .trailing_icon_size(style.trailing_icon_size)
         .trailing_icon_tint(style.icon_color);
+        let row = if let Some(icon) = props.leading_icon {
+            row.leading_icon(icon)
+        } else {
+            row
+        };
         let _ = icon_label_row(ui, rect, &row);
         response.on_hover_cursor(CursorIcon::PointingHand)
     })

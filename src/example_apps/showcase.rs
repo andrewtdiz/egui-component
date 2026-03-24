@@ -2,9 +2,10 @@ use crate::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use crate::layout;
 use crate::prelude::*;
 use crate::theme::{self, BaseColor, ColorRole, RadiusRole, ThemeMode, ThemeSpec};
+use crate::ui::tokens;
 use egui::{
-    vec2, Align2, CentralPanel, Color32, CursorIcon, Id, Layout, Rect, ScrollArea, Sense,
-    SidePanel, Stroke, TopBottomPanel, Ui,
+    vec2, Align2, CentralPanel, Color32, CornerRadius, CursorIcon, Id, Layout, Rect, Response,
+    ScrollArea, Sense, SidePanel, Stroke, TopBottomPanel, Ui, UiBuilder,
 };
 
 pub const WINDOW_TITLE: &str = "egui-component Showcase";
@@ -58,6 +59,7 @@ const CANVA_BRAND_CATEGORIES: [&str; 10] = [
     "Icons",
     "Charts",
 ];
+const CANVA_BRAND_SELECT_OPTIONS: [&str; 1] = ["Brand Kit"];
 const CANVA_BRAND_ACCENT: Color32 = Color32::from_rgb(241, 168, 78);
 const CANVA_EDIT_ACCENT: Color32 = Color32::from_rgb(241, 168, 78);
 const CANVA_EDIT_SELECTION_OPTIONS: [CanvaEditChip<'static>; 4] = [
@@ -150,6 +152,8 @@ const CANVA_EFFECT_ITEMS: [CanvaEditRailItem<'static>; 5] = [
 ];
 const CANVA_POSITION_TAB_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Arrange"), TabOption::new(1, "Layers")];
+const CANVA_LAYER_FILTER_OPTIONS: [TabOption<'static>; 2] =
+    [TabOption::new(0, "All"), TabOption::new(1, "Overlapping")];
 const THEME_MODE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Light"), TabOption::new(1, "Dark")];
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
@@ -169,6 +173,17 @@ const TOAST_PLACEMENT_OPTIONS: [&str; 9] = [
     "Bottom Center",
     "Bottom Right",
 ];
+const DRAG_BOARD_ITEMS: [DragBoardItem<'static>; 3] = [
+    DragBoardItem::new("Polish header spacing").description("Shared toolbar chrome"),
+    DragBoardItem::new("Tune sidebar spacing").description("Examples rail"),
+    DragBoardItem::new("Ship drag board").description("Trello-style preview"),
+];
+const DRAG_BOARD_DEFAULT_REGIONS: [DragBoardRegion; 3] = [
+    DragBoardRegion::Left,
+    DragBoardRegion::Left,
+    DragBoardRegion::Right,
+];
+const CANVA_LAYER_DEFAULT_ORDER: [usize; 3] = [0, 1, 2];
 const RADIO_GROUP_OPTIONS: [RadioOption<'static>; 3] = [
     RadioOption::new(0, "Starter").description("Basic surfaces and controls for smaller tools."),
     RadioOption::new(1, "Team").description("Shared tokens, overrides, and example screens."),
@@ -323,6 +338,34 @@ struct CanvaEditRailItem<'a> {
     badge: Option<&'a str>,
 }
 
+#[derive(Clone, Copy)]
+enum CanvaLayerVisual {
+    Sprite,
+    Frame,
+    Text,
+}
+
+#[derive(Clone, Copy)]
+struct CanvaLayerItem {
+    id: usize,
+    visual: CanvaLayerVisual,
+}
+
+const CANVA_LAYER_ITEMS: [CanvaLayerItem; 3] = [
+    CanvaLayerItem {
+        id: 0,
+        visual: CanvaLayerVisual::Sprite,
+    },
+    CanvaLayerItem {
+        id: 1,
+        visual: CanvaLayerVisual::Frame,
+    },
+    CanvaLayerItem {
+        id: 2,
+        visual: CanvaLayerVisual::Text,
+    },
+];
+
 impl<'a> CanvaEditRailItem<'a> {
     const fn new(label: &'a str, fill: Color32, accent: Color32) -> Self {
         Self {
@@ -374,9 +417,11 @@ pub struct ShowcaseApp {
     canva_background_query: String,
     canva_background_color_index: usize,
     canva_brand_query: String,
+    canva_brand_select_index: Option<usize>,
     canva_brand_category_index: usize,
     canva_edit_tool_index: usize,
     canva_edit_filter_index: usize,
+    drag_board_regions: [DragBoardRegion; 3],
     input_value: String,
     field_value: String,
     checkbox_value: bool,
@@ -384,6 +429,9 @@ pub struct ShowcaseApp {
     small_switch_value: bool,
     toolbar_color_index: usize,
     canva_position_tab_index: usize,
+    canva_layer_filter_index: usize,
+    canva_selected_layer_id: usize,
+    canva_layer_order: [usize; 3],
     image_rotation_degrees: f32,
     slider_value: f32,
     number_x_value: f32,
@@ -433,9 +481,11 @@ impl Default for ShowcaseApp {
             canva_background_query: String::new(),
             canva_background_color_index: 2,
             canva_brand_query: String::new(),
+            canva_brand_select_index: Some(0),
             canva_brand_category_index: 0,
             canva_edit_tool_index: 0,
             canva_edit_filter_index: 0,
+            drag_board_regions: DRAG_BOARD_DEFAULT_REGIONS,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             checkbox_value: true,
@@ -443,6 +493,9 @@ impl Default for ShowcaseApp {
             small_switch_value: false,
             toolbar_color_index: 0,
             canva_position_tab_index: 0,
+            canva_layer_filter_index: 0,
+            canva_selected_layer_id: 1,
+            canva_layer_order: CANVA_LAYER_DEFAULT_ORDER,
             image_rotation_degrees: 18.0,
             slider_value: 62.0,
             number_x_value: 42.0,
@@ -499,6 +552,7 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
     match component {
         ComponentKind::CanvaBrandKit => {
             app.canva_brand_query.clear();
+            app.canva_brand_select_index = Some(0);
             app.canva_brand_category_index = 0;
         }
         ComponentKind::CanvaEditImage => {
@@ -511,11 +565,20 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Dialogue => {
             app.dialogue_open = true;
         }
+        ComponentKind::DragBoard => {
+            app.drag_board_regions = DRAG_BOARD_DEFAULT_REGIONS;
+        }
         ComponentKind::Popover => {
             app.popover_open = true;
         }
         ComponentKind::Progress => {
             app.progress_value = 0.68;
+        }
+        ComponentKind::CanvaPosition => {
+            app.canva_position_tab_index = 1;
+            app.canva_layer_filter_index = 0;
+            app.canva_selected_layer_id = 1;
+            app.canva_layer_order = CANVA_LAYER_DEFAULT_ORDER;
         }
         ComponentKind::Sidebar => {
             app.sidebar_preview_open = true;
@@ -597,16 +660,7 @@ impl ShowcaseApp {
 
                     for definition in showcase_component_definitions_by_section(section) {
                         let selected = self.selected_component == definition.kind;
-                        let button = Button::new(definition.label)
-                            .variant(ButtonVariant::Ghost)
-                            .selected(selected)
-                            .label_weight(if selected {
-                                ButtonLabelWeight::Medium
-                            } else {
-                                ButtonLabelWeight::Regular
-                            })
-                            .min_size(vec2(ui.available_width(), 30.0));
-                        if ui.components().button(button).clicked() {
+                        if draw_showcase_sidebar_item(ui, definition.label, selected).clicked() {
                             self.selected_component = definition.kind;
                         }
                     }
@@ -693,6 +747,7 @@ impl ShowcaseApp {
             ComponentKind::Combobox => self.render_combobox_preview(ui),
             ComponentKind::Command => self.render_command_preview(ui),
             ComponentKind::Dialogue => self.render_dialogue_preview(ui),
+            ComponentKind::DragBoard => self.render_drag_board_preview(ui),
             ComponentKind::ImageTile => self.render_image_tile_preview(ui),
             ComponentKind::MenuBar => self.render_menu_bar_preview(ui),
             ComponentKind::Sidebar => self.render_sidebar_preview(ui),
@@ -781,7 +836,11 @@ fn show_section_title_with_trailing_label(
     title: &str,
     trailing_label: &str,
 ) -> egui::Response {
-    layout::leading_trailing().gap(8.0).show(
+    layout::leading_trailing()
+        .gap(8.0)
+        .min_height(30.0)
+        .align(layout::Align::Center)
+        .show(
         ui,
         |ui| {
             let _ = ui.components().label(
@@ -791,10 +850,10 @@ fn show_section_title_with_trailing_label(
             );
         },
         |ui| {
-            let _ = ui.components().label(
-                Label::new(trailing_label)
-                    .tone(LabelTone::Muted)
-                    .weight(LabelWeight::Semibold),
+            let _ = ui.components().button(
+                Button::new(trailing_label)
+                    .variant(ButtonVariant::Ghost)
+                    .label_weight(ButtonLabelWeight::Regular),
             );
         },
     )
@@ -803,26 +862,68 @@ fn show_section_title_with_trailing_label(
 fn show_section_link_row(ui: &mut Ui, icon: &str, label: &str) -> egui::Response {
     let primary_tint = text_secondary(ui);
     let muted_tint = text_muted(ui);
-    layout::leading_trailing().gap(10.0).show(
-        ui,
-        |ui| {
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
+    layout::leading_trailing()
+        .gap(10.0)
+        .min_height(22.0)
+        .align(layout::Align::Center)
+        .show(
+            ui,
+            |ui| {
+                let _ = layout::row()
+                    .gap(10.0)
+                    .align(layout::Align::Center)
+                    .show(ui, |ui| {
+                        let _ = ui
+                            .components()
+                            .icon(Icon::new(icon).size(18.0).tint(primary_tint));
+                        let _ = ui.components().label(
+                            Label::new(label)
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Semibold),
+                        );
+                    });
+            },
+            |ui| {
                 let _ = ui
                     .components()
-                    .icon(Icon::new(icon).size(18.0).tint(primary_tint));
-                let _ = ui.components().label(
-                    Label::new(label)
-                        .tone(LabelTone::Primary)
-                        .weight(LabelWeight::Semibold),
-                );
-            });
-        },
-        |ui| {
-            let _ = ui
-                .components()
-                .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
-        },
-    )
+                    .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
+            },
+        )
+}
+
+fn draw_showcase_sidebar_item(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let selected_fill = crate::ui::tokens::button_secondary_active_bg(runtime);
+    let hover_fill = crate::ui::tokens::button_secondary_hover_bg(runtime).linear_multiply(0.78);
+    let foreground = if selected {
+        theme::color(ui, ColorRole::Foreground)
+    } else {
+        text_secondary(ui)
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+
+    let fill = if selected {
+        selected_fill
+    } else if response.hovered() {
+        hover_fill
+    } else {
+        Color32::TRANSPARENT
+    };
+
+    if selected || response.hovered() {
+        ui.painter()
+            .rect_filled(rect, egui::CornerRadius::same(radius_md(ui)), fill);
+    }
+
+    ui.painter().text(
+        egui::pos2(rect.left() + 10.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        crate::ui::typography::label_font(),
+        foreground,
+    );
+
+    response
 }
 
 fn show_preview_host(
@@ -1070,11 +1171,13 @@ impl ShowcaseApp {
                     ui.set_width(panel_width);
                     let full_width = ui.available_width();
 
-                    let _ = ui.components().text_input(
+                        let _ = ui.components().text_input(
                         &mut self.canva_background_query,
                         TextInput::new()
                             .width(full_width)
-                            .placeholder("Search backgrounds"),
+                            .placeholder("Search backgrounds")
+                            .leading_icon("search")
+                            .border_color(CANVA_BRAND_ACCENT),
                     );
 
                     ui.add_space(12.0);
@@ -1166,22 +1269,35 @@ impl ShowcaseApp {
 
                                 let _ = ui.components().text_input(
                                     &mut self.canva_brand_query,
-                                    TextInput::new().width(left_width).placeholder("Search"),
+                                    TextInput::new()
+                                        .width(left_width)
+                                        .placeholder("Search")
+                                        .leading_icon("search")
+                                        .border_color(CANVA_BRAND_ACCENT),
                                 );
 
-                                ui.add_space(14.0);
+                                ui.add_space(10.0);
                                 let _ = ui.components().label(
                                     Label::new("All Brand Templates")
                                         .tone(LabelTone::Secondary)
                                         .weight(LabelWeight::Semibold),
                                 );
 
-                                ui.add_space(14.0);
+                                ui.add_space(10.0);
                                 let _ = ui.components().separator();
-                                ui.add_space(14.0);
-                                draw_canva_brand_dropdown(ui, left_width);
+                                ui.add_space(10.0);
+                                let _ = ui.components().select(
+                                    &mut self.canva_brand_select_index,
+                                    Select::from_id(
+                                        Id::new("component_showcase_canva_brand_select"),
+                                        &CANVA_BRAND_SELECT_OPTIONS,
+                                    )
+                                    .width(left_width)
+                                    .variant(SelectVariant::Secondary)
+                                    .leading_icon("badge-cent"),
+                                );
 
-                                ui.add_space(8.0);
+                                ui.add_space(6.0);
                                 for (index, category) in CANVA_BRAND_CATEGORIES.iter().enumerate() {
                                     let selected = self.canva_brand_category_index == index;
                                     if draw_canva_brand_nav_item(ui, category, selected, left_width)
@@ -1189,7 +1305,9 @@ impl ShowcaseApp {
                                     {
                                         self.canva_brand_category_index = index;
                                     }
-                                    ui.add_space(4.0);
+                                    if index + 1 < CANVA_BRAND_CATEGORIES.len() {
+                                        ui.add_space(2.0);
+                                    }
                                 }
                             });
                         });
@@ -1233,12 +1351,8 @@ impl ShowcaseApp {
                         draw_canva_edit_tool_row(ui, &mut self.canva_edit_tool_index);
 
                         ui.add_space(12.0);
-                        let _ = ui.components().separator();
-                        ui.add_space(12.0);
                         draw_canva_edit_navigation_row(ui, "sliders-horizontal", "Adjust");
 
-                        ui.add_space(12.0);
-                        let _ = ui.components().separator();
                         ui.add_space(12.0);
                         let _ = ui.components().label(
                             Label::new("Magic Studio")
@@ -1255,8 +1369,6 @@ impl ShowcaseApp {
                         );
 
                         ui.add_space(14.0);
-                        let _ = ui.components().separator();
-                        ui.add_space(12.0);
                         let _ = show_section_title_with_trailing_label(ui, "Filters", "See all");
                         ui.add_space(10.0);
                         draw_canva_edit_rail(
@@ -1268,13 +1380,7 @@ impl ShowcaseApp {
                         );
 
                         ui.add_space(14.0);
-                        let _ = ui.components().separator();
-                        ui.add_space(12.0);
-                        let _ = ui.components().label(
-                            Label::new("Effects")
-                                .tone(LabelTone::Primary)
-                                .weight(LabelWeight::Semibold),
-                        );
+                        let _ = show_section_title_with_trailing_label(ui, "Effects", "See all");
                         ui.add_space(10.0);
                         draw_canva_edit_rail(
                             ui,
@@ -1306,10 +1412,10 @@ impl ShowcaseApp {
                         &CANVA_POSITION_TAB_OPTIONS,
                     );
 
-                    ui.add_space(14.0);
-                    draw_canva_position_button_grid(ui, &CANVA_POSITION_ACTIONS);
-
                     if self.canva_position_tab_index == 0 {
+                        ui.add_space(14.0);
+                        draw_canva_position_button_grid(ui, &CANVA_POSITION_ACTIONS);
+
                         ui.add_space(18.0);
                         let _ = ui.components().label(
                             Label::new("Align to page")
@@ -1318,93 +1424,107 @@ impl ShowcaseApp {
                         );
                         ui.add_space(10.0);
                         draw_canva_position_button_grid(ui, &CANVA_POSITION_ALIGN_ACTIONS);
+                        ui.add_space(18.0);
+                        let _ = ui.components().label(
+                            Label::new("Advanced")
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Semibold),
+                        );
+                        ui.add_space(12.0);
+
+                        let field_gap = 8.0;
+                        let field_width = ((ui.available_width() - (field_gap * 2.0)) / 3.0)
+                            .floor()
+                            .max(96.0);
+
+                        let _ = layout::row().gap(field_gap).show(ui, |ui| {
+                            draw_canva_number_field(
+                                ui,
+                                "Width",
+                                &mut self.canva_width_value,
+                                NumberInput::new(Id::new("component_showcase_canva_width"))
+                                    .width(field_width)
+                                    .range(1.0..=4_000.0)
+                                    .speed(1.0)
+                                    .fine_speed(0.01)
+                                    .decimals(0)
+                                    .fine_decimals(2)
+                                    .suffix("px"),
+                            );
+                            draw_canva_number_field(
+                                ui,
+                                "Height",
+                                &mut self.canva_height_value,
+                                NumberInput::new(Id::new("component_showcase_canva_height"))
+                                    .width(field_width)
+                                    .range(1.0..=4_000.0)
+                                    .speed(1.0)
+                                    .fine_speed(0.01)
+                                    .decimals(0)
+                                    .fine_decimals(2)
+                                    .suffix("px"),
+                            );
+                            draw_canva_ratio_field(ui, field_width, &mut self.canva_ratio_locked);
+                        });
+
+                        ui.add_space(10.0);
+                        let _ = layout::row().gap(field_gap).show(ui, |ui| {
+                            draw_canva_number_field(
+                                ui,
+                                "X",
+                                &mut self.canva_x_value,
+                                NumberInput::new(Id::new("component_showcase_canva_x"))
+                                    .width(field_width)
+                                    .range(-4_000.0..=4_000.0)
+                                    .speed(1.0)
+                                    .fine_speed(0.01)
+                                    .decimals(0)
+                                    .fine_decimals(2)
+                                    .suffix("px"),
+                            );
+                            draw_canva_number_field(
+                                ui,
+                                "Y",
+                                &mut self.canva_y_value,
+                                NumberInput::new(Id::new("component_showcase_canva_y"))
+                                    .width(field_width)
+                                    .range(-4_000.0..=4_000.0)
+                                    .speed(1.0)
+                                    .fine_speed(0.01)
+                                    .decimals(0)
+                                    .fine_decimals(2)
+                                    .suffix("px"),
+                            );
+                            draw_canva_number_field(
+                                ui,
+                                "Rotate",
+                                &mut self.canva_rotate_value,
+                                NumberInput::new(Id::new("component_showcase_canva_rotate"))
+                                    .width(field_width)
+                                    .range(-360.0..=360.0)
+                                    .speed(1.0)
+                                    .fine_speed(0.01)
+                                    .decimals(0)
+                                    .fine_decimals(2)
+                                    .suffix("°"),
+                            );
+                        });
+                    } else {
+                        ui.add_space(14.0);
+                        ui.components().segmented_tabs(
+                            Id::new("component_showcase_canva_layer_filter"),
+                            &mut self.canva_layer_filter_index,
+                            &CANVA_LAYER_FILTER_OPTIONS,
+                        );
+                        ui.add_space(16.0);
+                        draw_canva_layers_list(
+                            ui,
+                            Id::new("component_showcase_canva_layers"),
+                            &mut self.canva_layer_order,
+                            &mut self.canva_selected_layer_id,
+                            &CANVA_LAYER_ITEMS,
+                        );
                     }
-
-                    ui.add_space(18.0);
-                    let _ = ui.components().label(
-                        Label::new("Advanced")
-                            .tone(LabelTone::Primary)
-                            .weight(LabelWeight::Semibold),
-                    );
-                    ui.add_space(12.0);
-
-                    let field_gap = 8.0;
-                    let field_width = ((ui.available_width() - (field_gap * 2.0)) / 3.0)
-                        .floor()
-                        .max(96.0);
-
-                    let _ = layout::row().gap(field_gap).show(ui, |ui| {
-                        draw_canva_number_field(
-                            ui,
-                            "Width",
-                            &mut self.canva_width_value,
-                            NumberInput::new(Id::new("component_showcase_canva_width"))
-                                .width(field_width)
-                                .range(1.0..=4_000.0)
-                                .speed(1.0)
-                                .fine_speed(0.01)
-                                .decimals(0)
-                                .fine_decimals(2)
-                                .suffix("px"),
-                        );
-                        draw_canva_number_field(
-                            ui,
-                            "Height",
-                            &mut self.canva_height_value,
-                            NumberInput::new(Id::new("component_showcase_canva_height"))
-                                .width(field_width)
-                                .range(1.0..=4_000.0)
-                                .speed(1.0)
-                                .fine_speed(0.01)
-                                .decimals(0)
-                                .fine_decimals(2)
-                                .suffix("px"),
-                        );
-                        draw_canva_ratio_field(ui, field_width, &mut self.canva_ratio_locked);
-                    });
-
-                    ui.add_space(10.0);
-                    let _ = layout::row().gap(field_gap).show(ui, |ui| {
-                        draw_canva_number_field(
-                            ui,
-                            "X",
-                            &mut self.canva_x_value,
-                            NumberInput::new(Id::new("component_showcase_canva_x"))
-                                .width(field_width)
-                                .range(-4_000.0..=4_000.0)
-                                .speed(1.0)
-                                .fine_speed(0.01)
-                                .decimals(0)
-                                .fine_decimals(2)
-                                .suffix("px"),
-                        );
-                        draw_canva_number_field(
-                            ui,
-                            "Y",
-                            &mut self.canva_y_value,
-                            NumberInput::new(Id::new("component_showcase_canva_y"))
-                                .width(field_width)
-                                .range(-4_000.0..=4_000.0)
-                                .speed(1.0)
-                                .fine_speed(0.01)
-                                .decimals(0)
-                                .fine_decimals(2)
-                                .suffix("px"),
-                        );
-                        draw_canva_number_field(
-                            ui,
-                            "Rotate",
-                            &mut self.canva_rotate_value,
-                            NumberInput::new(Id::new("component_showcase_canva_rotate"))
-                                .width(field_width)
-                                .range(-360.0..=360.0)
-                                .speed(1.0)
-                                .fine_speed(0.01)
-                                .decimals(0)
-                                .fine_decimals(2)
-                                .suffix("°"),
-                        );
-                    });
                 });
         });
     }
@@ -2332,6 +2452,24 @@ impl ShowcaseApp {
         });
     }
 
+    fn render_drag_board_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().label(
+            Label::new("Drag cards between the two regions to see each column update as a stack.")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(10.0);
+        let _ = ui.components().drag_board(
+            &mut self.drag_board_regions,
+            DragBoard::new(
+                Id::new("component_showcase_drag_board"),
+                "Backlog",
+                "Done",
+                &DRAG_BOARD_ITEMS,
+            ),
+        );
+    }
+
     fn render_toolbar_preview(&mut self, ui: &mut Ui) {
         let canvas_fill = if self.theme_mode.is_dark() {
             app_background(ui)
@@ -2457,49 +2595,6 @@ fn draw_toolbar_divider(ui: &mut Ui) {
     );
 }
 
-fn draw_canva_brand_dropdown(ui: &mut Ui, width: f32) {
-    let runtime = crate::theme::runtime_for_ui(ui);
-    let border = crate::ui::tokens::button_secondary_border(runtime);
-    let fill = crate::ui::tokens::button_secondary_bg(runtime);
-    let foreground = theme::color(ui, ColorRole::Foreground);
-    let muted = text_muted(ui);
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 38.0), Sense::hover());
-
-    ui.painter().rect(
-        rect,
-        egui::CornerRadius::same(radius_md(ui)),
-        fill,
-        Stroke::new(1.0, border),
-        egui::StrokeKind::Inside,
-    );
-
-    let icon_rect = egui::Rect::from_center_size(
-        egui::pos2(rect.left() + 20.0, rect.center().y),
-        vec2(16.0, 16.0),
-    );
-    if let Some(image) = crate::icons::image(ui.ctx(), "badge-cent", 16.0) {
-        let _ = image.tint(muted).paint_at(ui, icon_rect);
-    }
-
-    ui.painter().text(
-        egui::pos2(rect.left() + 38.0, rect.center().y),
-        Align2::LEFT_CENTER,
-        "Brand Kit",
-        crate::ui::typography::semibold_font(crate::ui::typography::BODY_SIZE),
-        foreground,
-    );
-
-    if let Some(image) = crate::icons::image(ui.ctx(), "chevron-down", 16.0) {
-        let _ = image.tint(muted).paint_at(
-            ui,
-            egui::Rect::from_center_size(
-                egui::pos2(rect.right() - 18.0, rect.center().y),
-                vec2(16.0, 16.0),
-            ),
-        );
-    }
-}
-
 fn draw_canva_brand_nav_item(
     ui: &mut Ui,
     label: &str,
@@ -2515,7 +2610,7 @@ fn draw_canva_brand_nav_item(
     } else {
         text_secondary(ui)
     };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, 34.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
 
     let fill = if selected {
         selected_fill
@@ -2534,11 +2629,7 @@ fn draw_canva_brand_nav_item(
         egui::pos2(rect.left() + 12.0, rect.center().y),
         Align2::LEFT_CENTER,
         label,
-        if selected {
-            crate::ui::typography::semibold_font(crate::ui::typography::BODY_SIZE)
-        } else {
-            crate::ui::typography::body_font()
-        },
+        crate::ui::typography::body_font(),
         foreground,
     );
 
@@ -3511,6 +3602,273 @@ fn paint_canva_background_placeholder(ui: &Ui, rect: egui::Rect, index: usize) {
     painter.rect_stroke(rect, radius, border, egui::StrokeKind::Inside);
 }
 
+#[derive(Clone, Copy)]
+struct CanvaLayerDragPayload {
+    list_id: Id,
+    item_id: usize,
+}
+
+fn draw_canva_layers_list(
+    ui: &mut Ui,
+    list_id: Id,
+    order: &mut [usize; 3],
+    selected_layer_id: &mut usize,
+    items: &[CanvaLayerItem],
+) {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let mut pending_move = None;
+    let ordered_ids = ordered_canva_layer_ids(order, items);
+
+    let _ = layout::column().gap(14.0).show(ui, |ui| {
+        for (row_index, item_id) in ordered_ids.iter().copied().enumerate() {
+            let item = items
+                .iter()
+                .find(|candidate| candidate.id == item_id)
+                .expect("missing canva layer item");
+            let response =
+                draw_canva_layer_row(ui, list_id, item, *selected_layer_id == item.id, runtime);
+
+            if response.clicked() {
+                *selected_layer_id = item.id;
+            }
+
+            if let Some(payload) =
+                hovered_canva_layer_payload(ui.ctx(), &response, list_id).filter(|payload| {
+                    payload.item_id != item.id && ui.ctx().pointer_interact_pos().is_some()
+                })
+            {
+                let insert_after = ui
+                    .ctx()
+                    .pointer_interact_pos()
+                    .is_some_and(|pointer| pointer.y > response.rect.center().y);
+                let y = if insert_after {
+                    response.rect.bottom()
+                } else {
+                    response.rect.top()
+                };
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(response.rect.left() + 6.0, y),
+                        egui::pos2(response.rect.right() - 6.0, y),
+                    ],
+                    Stroke::new(3.0, CANVA_EDIT_ACCENT),
+                );
+                if released_canva_layer_payload(ui.ctx(), &response, list_id).is_some() {
+                    pending_move = Some((payload.item_id, row_index + usize::from(insert_after)));
+                }
+            }
+        }
+    });
+
+    if let Some((item_id, target_index)) = pending_move {
+        move_canva_layer_item(order, item_id, target_index);
+        *selected_layer_id = item_id;
+    }
+}
+
+fn draw_canva_layer_row(
+    ui: &mut Ui,
+    list_id: Id,
+    item: &CanvaLayerItem,
+    selected: bool,
+    runtime: crate::theme::ThemeRuntime,
+) -> Response {
+    let row_height = 84.0;
+    let row_width = ui.available_width();
+    let (rect, response) = ui.allocate_exact_size(vec2(row_width, row_height), Sense::click());
+    let hovered_payload = hovered_canva_layer_payload(ui.ctx(), &response, list_id);
+    let fill = if hovered_payload.is_some_and(|payload| payload.item_id != item.id) {
+        tokens::button_secondary_hover_bg(runtime)
+    } else {
+        tokens::button_secondary_bg(runtime)
+    };
+    let stroke = if selected {
+        Stroke::new(2.0, CANVA_EDIT_ACCENT)
+    } else {
+        Stroke::new(1.0, tokens::separator(runtime))
+    };
+    paint_canva_layer_row(ui, rect, item, runtime, selected, fill, stroke);
+
+    let payload = CanvaLayerDragPayload {
+        list_id,
+        item_id: item.id,
+    };
+    let mut row_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    let _ = row_ui.dnd_drag_source(list_id.with(("layer_row", item.id)), payload, |ui| {
+        ui.set_min_size(rect.size());
+        paint_canva_layer_row(ui, ui.max_rect(), item, runtime, selected, fill, stroke);
+    });
+
+    response.on_hover_cursor(CursorIcon::Grab)
+}
+
+fn paint_canva_layer_row(
+    ui: &Ui,
+    rect: Rect,
+    item: &CanvaLayerItem,
+    runtime: crate::theme::ThemeRuntime,
+    selected: bool,
+    fill: Color32,
+    stroke: Stroke,
+) {
+    let painter = ui.painter();
+    painter.rect(
+        rect,
+        CornerRadius::same(tokens::radius_lg(runtime)),
+        fill,
+        stroke,
+        egui::StrokeKind::Outside,
+    );
+    let dot_color = if selected {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 164)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 136)
+    };
+    let handle_x = rect.left() + 22.0;
+    let handle_y = rect.center().y - 14.0;
+    for row in 0..3 {
+        for column in 0..2 {
+            painter.circle_filled(
+                egui::pos2(
+                    handle_x + column as f32 * 10.0,
+                    handle_y + row as f32 * 10.0,
+                ),
+                2.4,
+                dot_color,
+            );
+        }
+    }
+
+    match item.visual {
+        CanvaLayerVisual::Sprite => {
+            let sprite_rect =
+                Rect::from_center_size(rect.center() + vec2(0.0, -1.0), vec2(26.0, 34.0));
+            painter.rect_filled(
+                sprite_rect,
+                CornerRadius::same(8),
+                Color32::from_rgb(72, 84, 136),
+            );
+            painter.rect_filled(
+                Rect::from_center_size(sprite_rect.center(), vec2(14.0, 18.0)),
+                CornerRadius::same(5),
+                Color32::from_rgb(206, 168, 92),
+            );
+            painter.rect_stroke(
+                sprite_rect,
+                CornerRadius::same(8),
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 32)),
+                egui::StrokeKind::Inside,
+            );
+        }
+        CanvaLayerVisual::Frame => {
+            let frame_rect =
+                Rect::from_center_size(rect.center() + vec2(0.0, -1.0), vec2(54.0, 54.0));
+            painter.rect_stroke(
+                frame_rect,
+                CornerRadius::same(10),
+                Stroke::new(3.0, Color32::from_rgb(159, 191, 235)),
+                egui::StrokeKind::Inside,
+            );
+            painter.rect_filled(
+                frame_rect.shrink(6.0),
+                CornerRadius::same(8),
+                Color32::from_rgb(37, 38, 45),
+            );
+        }
+        CanvaLayerVisual::Text => {
+            let text_rect = Rect::from_center_size(
+                rect.center() + vec2(-12.0, -1.0),
+                vec2(rect.width() * 0.62, 28.0),
+            );
+            painter.rect_filled(
+                text_rect,
+                CornerRadius::same(4),
+                Color32::from_rgb(36, 35, 42),
+            );
+            let accent_rect = Rect::from_center_size(
+                egui::pos2(rect.right() - 30.0, rect.center().y),
+                vec2(20.0, 20.0),
+            );
+            for step in 0..5 {
+                let x = accent_rect.left() + step as f32 * 4.0;
+                painter.line_segment(
+                    [
+                        egui::pos2(x, accent_rect.bottom()),
+                        egui::pos2(x + 8.0, accent_rect.top()),
+                    ],
+                    Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 172)),
+                );
+            }
+        }
+    }
+
+    if selected {
+        painter.rect_stroke(
+            rect.shrink(1.0),
+            CornerRadius::same(tokens::radius_lg(runtime)),
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 26)),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
+fn ordered_canva_layer_ids(order: &[usize; 3], items: &[CanvaLayerItem]) -> Vec<usize> {
+    order
+        .iter()
+        .copied()
+        .filter(|item_id| items.iter().any(|candidate| candidate.id == *item_id))
+        .collect()
+}
+
+fn move_canva_layer_item(order: &mut [usize; 3], item_id: usize, target_index: usize) {
+    let Some(source_index) = order.iter().position(|candidate| *candidate == item_id) else {
+        return;
+    };
+
+    let mut reordered = order.to_vec();
+    let item = reordered.remove(source_index);
+    let mut target_index = target_index.min(reordered.len());
+    if source_index < target_index {
+        target_index = target_index.saturating_sub(1);
+    }
+    reordered.insert(target_index, item);
+    order.copy_from_slice(&reordered);
+}
+
+fn hovered_canva_layer_payload(
+    ctx: &egui::Context,
+    response: &Response,
+    list_id: Id,
+) -> Option<CanvaLayerDragPayload> {
+    if !response.contains_pointer() {
+        return None;
+    }
+
+    egui::DragAndDrop::payload::<CanvaLayerDragPayload>(ctx)
+        .map(|payload| *payload)
+        .filter(|payload| payload.list_id == list_id)
+}
+
+fn released_canva_layer_payload(
+    ctx: &egui::Context,
+    response: &Response,
+    list_id: Id,
+) -> Option<CanvaLayerDragPayload> {
+    if !response.contains_pointer() || !ctx.input(|input| input.pointer.any_released()) {
+        return None;
+    }
+
+    let payload = egui::DragAndDrop::payload::<CanvaLayerDragPayload>(ctx)
+        .map(|payload| *payload)
+        .filter(|payload| payload.list_id == list_id)?;
+    let _ = egui::DragAndDrop::take_payload::<CanvaLayerDragPayload>(ctx);
+    Some(payload)
+}
+
 fn draw_canva_number_field(ui: &mut Ui, label: &str, value: &mut f32, input: NumberInput) {
     let _ = layout::column().gap(6.0).show(ui, |ui| {
         let _ = ui.components().label(
@@ -3624,6 +3982,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         ComponentKind::MenuBar
         | ComponentKind::Toolbar
         | ComponentKind::ImageTile
+        | ComponentKind::DragBoard
         | ComponentKind::Sidebar
         | ComponentKind::Toast => ShowcaseSection::Examples,
         _ => match catalog_component_definition(kind).group {
@@ -3639,6 +3998,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::CanvaBrandKit => available_width.min(640.0),
         ComponentKind::CanvaEditImage => available_width.min(420.0),
         ComponentKind::CanvaPosition => available_width.min(440.0),
+        ComponentKind::DragBoard => available_width.min(560.0),
         ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
         ComponentKind::Sidebar => available_width.min(820.0),
@@ -3689,6 +4049,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Combobox => "Filterable text-backed option picker.",
         ComponentKind::Command => "Searchable command list with preview mode.",
         ComponentKind::Dialogue => "Modal confirmation flow.",
+        ComponentKind::DragBoard => {
+            "Single-card drag and drop between two board regions using egui's built-in DnD."
+        }
         ComponentKind::ImageTile => "Media tile with body and playback states.",
         ComponentKind::MenuBar => "Desktop-style menu bar surface.",
         ComponentKind::Sidebar => "Overlay sidebar previewed inside a host surface.",
@@ -3786,6 +4149,9 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.canva_position_tab_index = state
         .canva_position_tab_index
         .min(CANVA_POSITION_TAB_OPTIONS.len().saturating_sub(1));
+    state.canva_layer_filter_index = state
+        .canva_layer_filter_index
+        .min(CANVA_LAYER_FILTER_OPTIONS.len().saturating_sub(1));
     state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
     state.segmented_tab_index = state
@@ -3824,6 +4190,12 @@ fn clamp_state(state: &mut ShowcaseApp) {
         .is_some_and(|index| index >= SELECT_OPTIONS.len())
     {
         state.select_index = None;
+    }
+    if state
+        .canva_brand_select_index
+        .is_some_and(|index| index >= CANVA_BRAND_SELECT_OPTIONS.len())
+    {
+        state.canva_brand_select_index = Some(CANVA_BRAND_SELECT_OPTIONS.len().saturating_sub(1));
     }
     if state
         .toast_placement_index
@@ -3867,6 +4239,7 @@ mod tests {
             ComponentKind::CanvaBrandKit,
             ComponentKind::CanvaEditImage,
             ComponentKind::CanvaPosition,
+            ComponentKind::DragBoard,
             ComponentKind::Sidebar,
             ComponentKind::Toast,
         ] {

@@ -15,6 +15,7 @@ pub enum ComponentKind {
     Combobox,
     Command,
     Dialogue,
+    DragBoard,
     DropdownMenu,
     Field,
     Icon,
@@ -270,6 +271,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Dialogue,
         id: "dialogue",
         label: "Dialogue",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::DragBoard,
+        id: "drag-board",
+        label: "Drag Board",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {

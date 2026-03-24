@@ -12,6 +12,7 @@ mod combobox;
 mod command;
 mod common;
 mod dialogue;
+mod drag_board;
 mod dropdown_menu;
 mod field;
 mod icon;
@@ -53,6 +54,7 @@ pub use combobox::Combobox;
 pub use command::{Command, CommandItem};
 pub use common::ControlSize;
 pub use dialogue::{Dialogue, DialogueHeader, DialogueIntent, DialogueModal};
+pub use drag_board::{DragBoard, DragBoardItem, DragBoardRegion};
 pub use dropdown_menu::{
     DropdownMenu, DropdownMenuAction, DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu,
 };
@@ -68,7 +70,7 @@ pub use pagination::Pagination;
 pub use popover::{Popover, PopoverAlign, PopoverResponse, PopoverSide};
 pub use progress::Progress;
 pub use radio::{Radio, RadioGroup, RadioOption};
-pub use select::Select;
+pub use select::{Select, SelectVariant};
 pub use sidebar::{Sidebar, SidebarSide};
 pub use skeleton::Skeleton;
 pub use slider::{NumberInput, NumberInputAxis, Slider};

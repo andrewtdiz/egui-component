@@ -71,6 +71,7 @@ pub struct IconLabelRow<'a> {
     label_font: FontId,
     label_color: Color32,
     leading_icon: Option<&'a str>,
+    leading_icon_tint: Color32,
     leading_icon_size: f32,
     leading_gap: f32,
     trailing_text: Option<&'a str>,
@@ -90,6 +91,7 @@ impl<'a> IconLabelRow<'a> {
             label_font,
             label_color,
             leading_icon: None,
+            leading_icon_tint: label_color,
             leading_icon_size: 16.0,
             leading_gap: 8.0,
             trailing_text: None,
@@ -109,6 +111,11 @@ impl<'a> IconLabelRow<'a> {
 
     pub fn leading_icon(mut self, leading_icon: &'a str) -> Self {
         self.leading_icon = Some(leading_icon);
+        self
+    }
+
+    pub fn leading_icon_tint(mut self, leading_icon_tint: Color32) -> Self {
+        self.leading_icon_tint = leading_icon_tint;
         self
     }
 
@@ -192,7 +199,7 @@ pub fn icon_label_row(ui: &mut Ui, rect: Rect, row: &IconLabelRow<'_>) -> Option
 
     if let Some(icon_name) = row.leading_icon {
         if let Some(image) = icons::image(ui.ctx(), icon_name, row.leading_icon_size) {
-            image.tint(row.label_color).paint_at(
+            image.tint(row.leading_icon_tint).paint_at(
                 ui,
                 Rect::from_center_size(
                     egui::pos2(
