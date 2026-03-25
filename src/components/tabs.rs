@@ -16,6 +16,10 @@ const RAIL_TAB_GAP: f32 = 4.0;
 const RAIL_TAB_ICON_SIZE: f32 = 16.0;
 const RAIL_TAB_ICON_OFFSET_Y: f32 = -9.0;
 const RAIL_TAB_LABEL_OFFSET_Y: f32 = 10.0;
+const BLENDER_TAB_HEIGHT: f32 = 28.0;
+const BLENDER_TAB_GAP: f32 = 1.0;
+const BLENDER_TAB_MIN_WIDTH: f32 = 72.0;
+const BLENDER_TAB_PADDING_X: f32 = 14.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TabOption<'a> {
@@ -47,6 +51,7 @@ pub enum TabsVariant {
     #[default]
     Underline,
     Segmented,
+    BlenderTopbar,
 }
 
 impl ComponentUi<'_> {
@@ -66,6 +71,9 @@ impl ComponentUi<'_> {
             TabsVariant::Segmented => {
                 let _ = draw_segmented_tabs(self.ui_mut(), id, current, options);
             }
+            TabsVariant::BlenderTopbar => {
+                let _ = draw_blender_topbar_tabs(self.ui_mut(), id, current, options);
+            }
         }
     }
 
@@ -75,6 +83,10 @@ impl ComponentUi<'_> {
 
     pub fn stacked_tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
         let _ = draw_stacked_tabs(self.ui_mut(), id, current, options);
+    }
+
+    pub fn blender_topbar_tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
+        let _ = draw_blender_topbar_tabs(self.ui_mut(), id, current, options);
     }
 
     pub fn rail_tabs(&mut self, id: Id, current: &mut usize, options: &[TabOption<'_>]) {
@@ -357,6 +369,162 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
     .inner
 }
 
+fn draw_blender_topbar_tabs(
+    ui: &mut Ui,
+    id: Id,
+    current: &mut usize,
+    options: &[TabOption<'_>],
+) -> Rect {
+    if options.is_empty() {
+        return Rect::NOTHING;
+    }
+
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let label_font = typography::label_font();
+
+    ui.push_id(id, |ui| {
+        let tab_widths = options
+            .iter()
+            .map(|option| {
+                let label_width = ui.fonts_mut(|fonts| {
+                    fonts
+                        .layout_no_wrap(
+                            option.label.to_owned(),
+                            label_font.clone(),
+                            tokens::text_primary(runtime),
+                        )
+                        .size()
+                        .x
+                });
+                (label_width + (BLENDER_TAB_PADDING_X * 2.0)).max(BLENDER_TAB_MIN_WIDTH)
+            })
+            .collect::<Vec<_>>();
+
+        let tabs_width = tab_widths.iter().sum::<f32>()
+            + (BLENDER_TAB_GAP * tab_widths.len().saturating_sub(1) as f32);
+        let group_size = egui::vec2(tabs_width, BLENDER_TAB_HEIGHT);
+        let (group_rect, _) = ui.allocate_exact_size(group_size, egui::Sense::hover());
+        let mut left = group_rect.left();
+
+        for (option, width) in options.iter().zip(tab_widths.iter().copied()) {
+            let rect = Rect::from_min_size(
+                egui::pos2(left, group_rect.top()),
+                egui::vec2(width, BLENDER_TAB_HEIGHT),
+            );
+            let response = ui.interact(rect, ui.id().with(option.value), egui::Sense::click());
+            let selected = *current == option.value;
+            let fill = if selected {
+                blender_topbar_selected_fill(runtime)
+            } else if response.is_pointer_button_down_on() {
+                blender_topbar_pressed_fill(runtime)
+            } else if response.hovered() {
+                blender_topbar_hover_fill(runtime)
+            } else {
+                blender_topbar_idle_fill(runtime)
+            };
+            let corner_radius = blender_topbar_corner_radius(selected);
+
+            ui.painter()
+                .rect(rect, corner_radius, fill, Stroke::NONE, StrokeKind::Outside);
+            paint_blender_topbar_border(ui, rect, runtime, corner_radius);
+
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                option.label,
+                label_font.clone(),
+                if selected {
+                    tokens::text_primary(runtime)
+                } else {
+                    blender_topbar_idle_text(runtime)
+                },
+            );
+
+            if response.clicked() && !selected {
+                *current = option.value;
+            }
+
+            let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+            left = rect.right() + BLENDER_TAB_GAP;
+        }
+
+        group_rect
+    })
+    .inner
+}
+
+fn blender_topbar_corner_radius(selected: bool) -> CornerRadius {
+    let radius = if selected { 4 } else { 3 };
+    CornerRadius {
+        nw: radius,
+        ne: radius,
+        sw: 0,
+        se: 0,
+    }
+}
+
+fn paint_blender_topbar_border(
+    ui: &Ui,
+    rect: Rect,
+    runtime: crate::theme::ThemeRuntime,
+    corner_radius: CornerRadius,
+) {
+    ui.painter().rect_stroke(
+        rect,
+        corner_radius,
+        Stroke::new(1.0, blender_topbar_border(runtime)),
+        StrokeKind::Inside,
+    );
+}
+
+fn blender_topbar_idle_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::muted_surface(runtime).linear_multiply(0.7)
+    } else {
+        tokens::muted_surface(runtime)
+    }
+}
+
+fn blender_topbar_hover_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::button_secondary_hover_bg(runtime).linear_multiply(0.92)
+    } else {
+        tokens::button_secondary_hover_bg(runtime)
+    }
+}
+
+fn blender_topbar_pressed_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::button_secondary_active_bg(runtime).linear_multiply(0.9)
+    } else {
+        tokens::button_secondary_active_bg(runtime)
+    }
+}
+
+fn blender_topbar_selected_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::card_background(runtime).linear_multiply(1.06)
+    } else {
+        tokens::card_background(runtime)
+    }
+}
+
+fn blender_topbar_border(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::separator(runtime).linear_multiply(0.78)
+    } else {
+        tokens::separator(runtime)
+    }
+}
+
+fn blender_topbar_idle_text(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        tokens::text_secondary(runtime).linear_multiply(0.95)
+    } else {
+        tokens::text_secondary(runtime)
+    }
+}
+
 fn draw_rail_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>]) -> Rect {
     if options.is_empty() {
         return Rect::NOTHING;
@@ -524,9 +692,11 @@ fn draw_toggle_rail_tabs(
 #[cfg(test)]
 mod tests {
     use super::{
-        draw_rail_tabs, draw_segmented_tabs, draw_stacked_tabs, draw_toggle_rail_tabs,
-        segmented_tabs_group_size, segmented_tabs_rects, TabOption, INLINE_TAB_GROUP_PADDING,
-        INLINE_TAB_HEIGHT, RAIL_TAB_GAP, RAIL_TAB_SIZE, STACKED_TAB_GAP, STACKED_TAB_SIZE,
+        blender_topbar_corner_radius, draw_blender_topbar_tabs, draw_rail_tabs,
+        draw_segmented_tabs, draw_stacked_tabs, draw_toggle_rail_tabs, segmented_tabs_group_size,
+        segmented_tabs_rects, TabOption, BLENDER_TAB_GAP, BLENDER_TAB_HEIGHT,
+        INLINE_TAB_GROUP_PADDING, INLINE_TAB_HEIGHT, RAIL_TAB_GAP, RAIL_TAB_SIZE, STACKED_TAB_GAP,
+        STACKED_TAB_SIZE,
     };
     use egui::{CentralPanel, Context, Id, RawInput, Rect};
 
@@ -619,6 +789,46 @@ mod tests {
             + (RAIL_TAB_GAP * options.len().saturating_sub(1) as f32);
         assert_eq!(rect.width(), RAIL_TAB_SIZE.x);
         assert_eq!(rect.height(), expected_height);
+    }
+
+    #[test]
+    fn renders_blender_topbar_tabs() {
+        let context = Context::default();
+        let mut rect = Rect::NOTHING;
+        let options = [
+            TabOption::new(0, "Layout"),
+            TabOption::new(1, "Modeling"),
+            TabOption::new(2, "Sculpting"),
+        ];
+        let mut current = 1;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                rect = draw_blender_topbar_tabs(
+                    ui,
+                    Id::new("blender_topbar_tabs_test"),
+                    &mut current,
+                    &options,
+                );
+            });
+        });
+
+        assert!(rect.width() > 0.0);
+        assert_eq!(rect.height(), BLENDER_TAB_HEIGHT);
+        assert!(rect.width() >= (BLENDER_TAB_GAP * options.len().saturating_sub(1) as f32));
+    }
+
+    #[test]
+    fn blender_topbar_tabs_only_round_top_corners() {
+        let selected = blender_topbar_corner_radius(true);
+        let idle = blender_topbar_corner_radius(false);
+
+        assert_eq!(selected.sw, 0);
+        assert_eq!(selected.se, 0);
+        assert_eq!(idle.sw, 0);
+        assert_eq!(idle.se, 0);
+        assert!(selected.nw > idle.nw);
+        assert!(selected.ne > idle.ne);
     }
 
     #[test]

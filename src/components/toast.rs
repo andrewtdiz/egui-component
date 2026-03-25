@@ -6,10 +6,13 @@ use crate::layout;
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
 use crate::ui::tokens;
-use egui::{Align, Align2, Color32, Id, Layout, Order, Stroke, Ui, Vec2};
+use egui::{Align, Align2, Color32, Id, Layout, Order, Rect, Stroke, Ui, Vec2};
 
 const DEFAULT_TOAST_WIDTH: f32 = 320.0;
 const DEFAULT_TOAST_DURATION_SECS: f32 = 4.0;
+const TOAST_FRAME_PADDING_X: i8 = 10;
+const TOAST_FRAME_PADDING_Y: i8 = 10;
+const TOAST_CLOSE_BUTTON_SIZE: f32 = 22.0;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ToastIntent {
@@ -231,13 +234,17 @@ struct ToastPalette {
 
 impl ComponentUi<'_> {
     pub fn toast_viewport(&mut self, stack: &mut ToastStack, props: impl Into<ToastViewport>) {
-        draw_toast_viewport(self, stack, props.into());
+        let _ = draw_toast_viewport(self, stack, props.into());
     }
 }
 
-fn draw_toast_viewport(ui: &mut ComponentUi<'_>, stack: &mut ToastStack, props: ToastViewport) {
+fn draw_toast_viewport(
+    ui: &mut ComponentUi<'_>,
+    stack: &mut ToastStack,
+    props: ToastViewport,
+) -> Rect {
     if stack.entries.is_empty() {
-        return;
+        return Rect::NOTHING;
     }
 
     let ctx = ui.ctx().clone();
@@ -261,7 +268,7 @@ fn draw_toast_viewport(ui: &mut ComponentUi<'_>, stack: &mut ToastStack, props: 
 
     stack.entries.retain(|entry| !toast_expired(entry, now));
     if stack.entries.is_empty() {
-        return;
+        return Rect::NOTHING;
     }
 
     if let Some(expiry) = next_expiration {
@@ -279,7 +286,7 @@ fn draw_toast_viewport(ui: &mut ComponentUi<'_>, stack: &mut ToastStack, props: 
     let overrides = ui.overrides();
     let viewport_area_id = props.id.with("viewport");
 
-    let _ = egui::Area::new(viewport_area_id)
+    let area_response = egui::Area::new(viewport_area_id)
         .order(Order::Foreground)
         .anchor(
             props.placement.anchor(),
@@ -295,14 +302,15 @@ fn draw_toast_viewport(ui: &mut ComponentUi<'_>, stack: &mut ToastStack, props: 
             let _ = ui.with_layout(props.placement.area_layout(), |ui| {
                 for (depth, entry) in visible_entries.iter().enumerate() {
                     let _ = ui.push_id(entry.id, |ui| {
-                        if draw_toast(
+                        let result = draw_toast(
                             ui,
                             overrides,
                             entry.toast.clone(),
                             runtime,
                             props.width,
                             depth,
-                        ) {
+                        );
+                        if result.dismissed {
                             dismiss_ids.push(entry.id);
                         }
                     });
@@ -317,6 +325,13 @@ fn draw_toast_viewport(ui: &mut ComponentUi<'_>, stack: &mut ToastStack, props: 
     stack
         .entries
         .retain(|entry| !dismiss_ids.iter().any(|dismissed| *dismissed == entry.id));
+    area_response.response.rect
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ToastDrawResult {
+    rect: Rect,
+    dismissed: bool,
 }
 
 fn draw_toast(
@@ -326,68 +341,78 @@ fn draw_toast(
     runtime: crate::theme::ThemeRuntime,
     width: f32,
     depth: usize,
-) -> bool {
+) -> ToastDrawResult {
     let palette = toast_palette(runtime, toast.intent, depth);
-    let mut dismissed = false;
+    let mut result = ToastDrawResult {
+        rect: Rect::NOTHING,
+        dismissed: false,
+    };
     let shadow = toast_shadow(runtime, depth);
-    let inner_width = (width - 20.0).max(1.0);
-    let text_width = (inner_width - 30.0).max(96.0);
+    let inner_width = (width - f32::from(TOAST_FRAME_PADDING_X * 2)).max(1.0);
 
-    let _ = ui.scope(|ui| {
+    let response = ui.with_layout(Layout::top_down(Align::Min), |ui| {
         ui.set_min_width(width);
         ui.set_max_width(width);
 
-        let _ = surface_frame(
+        let frame_response = surface_frame(
             ui,
             SurfaceFrame::new(palette.fill, palette.stroke)
                 .corner_radius(tokens::radius_lg(runtime))
-                .padding(10, 10)
+                .padding(TOAST_FRAME_PADDING_X, TOAST_FRAME_PADDING_Y)
                 .shadow(shadow),
             |ui| {
                 ui.set_min_width(inner_width);
                 ui.set_max_width(inner_width);
                 with_component_overrides(ui, overrides, |ui| {
-                    let _ = ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-                        let _ = ui.scope(|ui| {
-                            ui.set_min_width(text_width);
-                            ui.set_max_width(text_width);
-                            let _ = layout::column().gap(4.0).show(ui, |ui| {
-                                let mut components = ui.components();
-                                let _ = components.label(
-                                    Label::new(toast.title.as_str())
-                                        .tone(LabelTone::Primary)
-                                        .weight(LabelWeight::Semibold),
-                                );
-                                if let Some(description) = toast.description.as_deref() {
-                                    let _ = components.label(
-                                        Label::new(description).tone(LabelTone::Muted).size(12.0),
+                    let _ = ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                        let _ = layout::leading_trailing()
+                            .gap(8.0)
+                            .min_height(TOAST_CLOSE_BUTTON_SIZE)
+                            .show(
+                                ui,
+                                |ui| {
+                                    let _ = ui.components().label(
+                                        Label::new(toast.title.as_str())
+                                            .tone(LabelTone::Primary)
+                                            .weight(LabelWeight::Semibold),
                                     );
-                                }
-                            });
-                        });
+                                },
+                                |ui| {
+                                    if ui
+                                        .components()
+                                        .button(
+                                            Button::icon_only("x")
+                                                .variant(ButtonVariant::Ghost)
+                                                .size(super::ControlSize::Sm)
+                                                .icon_size(12.0)
+                                                .icon_tint(tokens::text_muted(runtime))
+                                                .min_size(egui::vec2(
+                                                    TOAST_CLOSE_BUTTON_SIZE,
+                                                    TOAST_CLOSE_BUTTON_SIZE,
+                                                )),
+                                        )
+                                        .clicked()
+                                    {
+                                        result.dismissed = true;
+                                    }
+                                },
+                            );
 
-                        let _ = layout::spacer().show(ui);
-                        if ui
-                            .components()
-                            .button(
-                                Button::icon_only("x")
-                                    .variant(ButtonVariant::Ghost)
-                                    .size(super::ControlSize::Sm)
-                                    .icon_size(12.0)
-                                    .icon_tint(tokens::text_muted(runtime))
-                                    .min_size(egui::vec2(22.0, 22.0)),
-                            )
-                            .clicked()
-                        {
-                            dismissed = true;
+                        if let Some(description) = toast.description.as_deref() {
+                            ui.add_space(4.0);
+                            let _ = ui
+                                .components()
+                                .label(Label::new(description).tone(LabelTone::Muted).size(12.0));
                         }
                     });
                 });
             },
         );
+        frame_response.response.rect
     });
+    result.rect = response.inner;
 
-    dismissed
+    result
 }
 
 fn toast_expired(entry: &ToastEntry, now: f64) -> bool {
@@ -450,7 +475,13 @@ fn toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> egui::Shad
 
 #[cfg(test)]
 mod tests {
-    use super::{Toast, ToastIntent, ToastStack};
+    use super::{
+        draw_toast, draw_toast_viewport, Toast, ToastIntent, ToastPlacement, ToastStack,
+        ToastViewport,
+    };
+    use crate::components::api::ComponentOverrides;
+    use crate::components::ComponentUiExt;
+    use egui::{Align, CentralPanel, Context, Id, Layout, RawInput, Rect, UiBuilder};
 
     #[test]
     fn stack_pushes_ordered_toasts() {
@@ -461,5 +492,120 @@ mod tests {
         assert_eq!(stack.entries.len(), 2);
         assert_eq!(stack.entries[0].toast.title, "First");
         assert_eq!(stack.entries[1].toast.intent, ToastIntent::Success);
+    }
+
+    #[test]
+    fn toast_respects_requested_width_with_close_button() {
+        let context = Context::default();
+        let mut toast_rect = Rect::NOTHING;
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let runtime = crate::theme::runtime_for_ui(ui);
+                toast_rect = draw_toast(
+                    ui,
+                    ComponentOverrides::default(),
+                    Toast::new("Build failed")
+                        .description("A component export is missing a required icon mapping.")
+                        .intent(ToastIntent::Destructive),
+                    runtime,
+                    280.0,
+                    0,
+                )
+                .rect;
+            });
+        });
+
+        assert!(toast_rect.width() >= 280.0);
+        assert!(toast_rect.width() <= 282.0);
+    }
+
+    #[test]
+    fn toast_stays_compact_inside_bottom_up_layout() {
+        let context = Context::default();
+        let mut toast_rect = Rect::NOTHING;
+        let host_rect = Rect::from_min_size(egui::pos2(40.0, 30.0), egui::vec2(320.0, 240.0));
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = ui.scope_builder(
+                    UiBuilder::new()
+                        .max_rect(host_rect)
+                        .layout(Layout::bottom_up(Align::Center)),
+                    |ui| {
+                        let runtime = crate::theme::runtime_for_ui(ui);
+                        toast_rect = draw_toast(
+                            ui,
+                            ComponentOverrides::default(),
+                            Toast::new("Changes saved")
+                                .description("Your layout tokens were published successfully.")
+                                .intent(ToastIntent::Success)
+                                .duration(0.0),
+                            runtime,
+                            280.0,
+                            0,
+                        )
+                        .rect;
+                    },
+                );
+            });
+        });
+
+        assert!(toast_rect.width() >= 280.0);
+        assert!(toast_rect.width() <= 282.0);
+        assert!(toast_rect.height() < 120.0);
+    }
+
+    #[test]
+    fn top_right_toast_viewport_stays_within_host_rect() {
+        let context = Context::default();
+        let mut viewport_rect = Rect::NOTHING;
+        let host_rect = Rect::from_min_size(egui::pos2(40.0, 30.0), egui::vec2(320.0, 240.0));
+        let mut stack = ToastStack::default();
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
+        stack.push(
+            Toast::new("Build failed")
+                .description("A component export is missing a required icon mapping.")
+                .intent(ToastIntent::Destructive)
+                .duration(0.0),
+        );
+        stack.push(
+            Toast::new("Build failed")
+                .description("A component export is missing a required icon mapping.")
+                .intent(ToastIntent::Destructive)
+                .duration(0.0),
+        );
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = ui.scope_builder(UiBuilder::new().max_rect(host_rect), |ui| {
+                    let mut components = ui.components();
+                    viewport_rect = draw_toast_viewport(
+                        &mut components,
+                        &mut stack,
+                        ToastViewport::new(Id::new("toast_viewport_top_right_test"))
+                            .placement(ToastPlacement::TopRight)
+                            .width(280.0),
+                    );
+                });
+            });
+        });
+
+        assert!(viewport_rect.right() <= host_rect.right());
+        assert!(viewport_rect.left() >= host_rect.left());
     }
 }

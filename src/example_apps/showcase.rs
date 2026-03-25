@@ -22,6 +22,13 @@ const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(206, 164, 84),
 ];
 const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
+const TWEMOJI_SEQUENCE_SAMPLES: [(&str, &str); 5] = [
+    ("🙂", "Simple"),
+    ("👩‍💻", "ZWJ"),
+    ("🧑🏽‍🚀", "Skin tone"),
+    ("❤️", "Variant"),
+    ("🇺🇸", "Flag"),
+];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
 const COMBOBOX_OPTIONS: [&str; 6] = [
     "Material 1",
@@ -35,6 +42,13 @@ const TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::new(0, "Design"),
     TabOption::new(1, "Code"),
     TabOption::new(2, "History"),
+];
+const BLENDER_TAB_OPTIONS: [TabOption<'static>; 5] = [
+    TabOption::new(0, "Layout"),
+    TabOption::new(1, "Modeling"),
+    TabOption::new(2, "Sculpting"),
+    TabOption::new(3, "UV Editing"),
+    TabOption::new(4, "Texture Paint"),
 ];
 const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
     TabOption::with_icon(0, "Templates", "layout-template"),
@@ -183,6 +197,7 @@ const DRAG_BOARD_DEFAULT_REGIONS: [DragBoardRegion; 3] = [
     DragBoardRegion::Left,
     DragBoardRegion::Right,
 ];
+const HIERARCHY_DEFAULT_SELECTED_ID: usize = 1;
 const CANVA_LAYER_DEFAULT_ORDER: [usize; 3] = [0, 1, 2];
 const RADIO_GROUP_OPTIONS: [RadioOption<'static>; 3] = [
     RadioOption::new(0, "Starter").description("Basic surfaces and controls for smaller tools."),
@@ -318,6 +333,28 @@ const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const NUMBER_INPUT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
 const NUMBER_INPUT_RED: Color32 = Color32::from_rgb(239, 68, 68);
 
+fn default_hierarchy_nodes() -> Vec<HierarchyNode<'static>> {
+    vec![
+        HierarchyNode::new(1, "Gameplay_Systems", HierarchyItemKind::Folder)
+            .locked(true)
+            .children(vec![HierarchyNode::new(
+                2,
+                "Character_Rig_A",
+                HierarchyItemKind::Group,
+            )
+            .children(vec![HierarchyNode::new(
+                3,
+                "Player_Controller",
+                HierarchyItemKind::Player,
+            )
+            .children(vec![
+                HierarchyNode::new(4, "Iron_Sword_01", HierarchyItemKind::Weapon),
+                HierarchyNode::new(5, "Red_Shirt_1", HierarchyItemKind::Clothing),
+                HierarchyNode::new(6, "Hitbox_Main", HierarchyItemKind::Hitbox),
+            ])])]),
+    ]
+}
+
 #[derive(Clone, Copy)]
 struct CanvaEditChip<'a> {
     label: &'a str,
@@ -422,6 +459,8 @@ pub struct ShowcaseApp {
     canva_edit_tool_index: usize,
     canva_edit_filter_index: usize,
     drag_board_regions: [DragBoardRegion; 3],
+    hierarchy_nodes: Vec<HierarchyNode<'static>>,
+    hierarchy_selected_id: Option<usize>,
     input_value: String,
     field_value: String,
     checkbox_value: bool,
@@ -450,6 +489,7 @@ pub struct ShowcaseApp {
     sidebar_preview_open: bool,
     sidebar_side_index: usize,
     tab_index: usize,
+    blender_tab_index: usize,
     segmented_tab_index: usize,
     stacked_tab_index: usize,
     rail_tab_index: usize,
@@ -486,6 +526,8 @@ impl Default for ShowcaseApp {
             canva_edit_tool_index: 0,
             canva_edit_filter_index: 0,
             drag_board_regions: DRAG_BOARD_DEFAULT_REGIONS,
+            hierarchy_nodes: default_hierarchy_nodes(),
+            hierarchy_selected_id: Some(HIERARCHY_DEFAULT_SELECTED_ID),
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             checkbox_value: true,
@@ -514,6 +556,7 @@ impl Default for ShowcaseApp {
             sidebar_preview_open: false,
             sidebar_side_index: 0,
             tab_index: 0,
+            blender_tab_index: 2,
             segmented_tab_index: 0,
             stacked_tab_index: 0,
             rail_tab_index: 0,
@@ -567,6 +610,10 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         }
         ComponentKind::DragBoard => {
             app.drag_board_regions = DRAG_BOARD_DEFAULT_REGIONS;
+        }
+        ComponentKind::Hierarchy => {
+            app.hierarchy_nodes = default_hierarchy_nodes();
+            app.hierarchy_selected_id = Some(HIERARCHY_DEFAULT_SELECTED_ID);
         }
         ComponentKind::Popover => {
             app.popover_open = true;
@@ -719,6 +766,7 @@ impl ShowcaseApp {
             ComponentKind::Color => self.render_color_preview(ui),
             ComponentKind::Image => self.render_image_preview(ui),
             ComponentKind::Icon => self.render_icon_preview(ui),
+            ComponentKind::Twemoji => self.render_twemoji_preview(ui),
             ComponentKind::Kbd => self.render_kbd_preview(ui),
             ComponentKind::Input => self.render_input_preview(ui),
             ComponentKind::Field => self.render_field_preview(ui),
@@ -748,6 +796,7 @@ impl ShowcaseApp {
             ComponentKind::Command => self.render_command_preview(ui),
             ComponentKind::Dialogue => self.render_dialogue_preview(ui),
             ComponentKind::DragBoard => self.render_drag_board_preview(ui),
+            ComponentKind::Hierarchy => self.render_hierarchy_preview(ui),
             ComponentKind::ImageTile => self.render_image_tile_preview(ui),
             ComponentKind::MenuBar => self.render_menu_bar_preview(ui),
             ComponentKind::Sidebar => self.render_sidebar_preview(ui),
@@ -825,7 +874,9 @@ fn show_canva_panel_header(ui: &mut Ui, title: &str) -> egui::Response {
             let _ = ui.components().button(
                 Button::icon_only("x")
                     .variant(ButtonVariant::Ghost)
-                    .icon_size(18.0),
+                    .size(ControlSize::Sm)
+                    .icon_size(14.0)
+                    .min_size(egui::vec2(28.0, 28.0)),
             );
         },
     )
@@ -841,22 +892,22 @@ fn show_section_title_with_trailing_label(
         .min_height(30.0)
         .align(layout::Align::Center)
         .show(
-        ui,
-        |ui| {
-            let _ = ui.components().label(
-                Label::new(title)
-                    .tone(LabelTone::Primary)
-                    .weight(LabelWeight::Semibold),
-            );
-        },
-        |ui| {
-            let _ = ui.components().button(
-                Button::new(trailing_label)
-                    .variant(ButtonVariant::Ghost)
-                    .label_weight(ButtonLabelWeight::Regular),
-            );
-        },
-    )
+            ui,
+            |ui| {
+                let _ = ui.components().label(
+                    Label::new(title)
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold),
+                );
+            },
+            |ui| {
+                let _ = ui.components().button(
+                    Button::new(trailing_label)
+                        .variant(ButtonVariant::Ghost)
+                        .label_weight(ButtonLabelWeight::Regular),
+                );
+            },
+        )
 }
 
 fn show_section_link_row(ui: &mut Ui, icon: &str, label: &str) -> egui::Response {
@@ -1066,6 +1117,42 @@ impl ShowcaseApp {
         });
     }
 
+    fn render_twemoji_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().label(
+            Label::new("Scales with the same image loader pipeline used by Image and Icon.")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+
+        let _ = layout::row().gap(12.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.twemoji(Twemoji::new("🔥").size(16.0));
+            let _ = components.twemoji(Twemoji::new("🔥").size(24.0));
+            let _ = components.twemoji(Twemoji::new("🔥").size(32.0));
+            let _ = components.twemoji(Twemoji::new("🔥").size(48.0));
+        });
+
+        ui.add_space(12.0);
+        let _ = ui.components().label(
+            Label::new("Sequence coverage")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+
+        let _ = layout::row().gap(14.0).show(ui, |ui| {
+            for (emoji, label) in TWEMOJI_SEQUENCE_SAMPLES {
+                let _ = layout::column().gap(6.0).show(ui, |ui| {
+                    let _ = ui.components().twemoji(Twemoji::new(emoji).size(32.0));
+                    let _ = ui
+                        .components()
+                        .label(Label::new(label).tone(LabelTone::Muted).size(SMALL_TEXT));
+                });
+            }
+        });
+    }
+
     fn render_kbd_preview(&mut self, ui: &mut Ui) {
         let _ = ui.components().kbd_group((), |ui| {
             let mut components = ui.components();
@@ -1171,7 +1258,7 @@ impl ShowcaseApp {
                     ui.set_width(panel_width);
                     let full_width = ui.available_width();
 
-                        let _ = ui.components().text_input(
+                    let _ = ui.components().text_input(
                         &mut self.canva_background_query,
                         TextInput::new()
                             .width(full_width)
@@ -1644,6 +1731,14 @@ impl ShowcaseApp {
             Label::new(selected_tab)
                 .tone(LabelTone::Muted)
                 .size(SMALL_TEXT),
+        );
+
+        ui.add_space(18.0);
+        ui.components().tabs_variant(
+            Id::new("component_showcase_blender_tabs"),
+            &mut self.blender_tab_index,
+            &BLENDER_TAB_OPTIONS,
+            TabsVariant::BlenderTopbar,
         );
 
         ui.add_space(18.0);
@@ -2467,6 +2562,23 @@ impl ShowcaseApp {
                 "Done",
                 &DRAG_BOARD_ITEMS,
             ),
+        );
+    }
+
+    fn render_hierarchy_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().label(
+            Label::new("Select a node to highlight its subtree. Drag rows to reorder within the same parent.")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(10.0);
+        let _ = ui.components().hierarchy(
+            &mut self.hierarchy_selected_id,
+            Hierarchy::new(
+                Id::new("component_showcase_hierarchy"),
+                &mut self.hierarchy_nodes,
+            )
+            .width(360.0),
         );
     }
 
@@ -3983,6 +4095,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         | ComponentKind::Toolbar
         | ComponentKind::ImageTile
         | ComponentKind::DragBoard
+        | ComponentKind::Hierarchy
         | ComponentKind::Sidebar
         | ComponentKind::Toast => ShowcaseSection::Examples,
         _ => match catalog_component_definition(kind).group {
@@ -3999,6 +4112,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::CanvaEditImage => available_width.min(420.0),
         ComponentKind::CanvaPosition => available_width.min(440.0),
         ComponentKind::DragBoard => available_width.min(560.0),
+        ComponentKind::Hierarchy => available_width.min(440.0),
         ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
         ComponentKind::Sidebar => available_width.min(820.0),
@@ -4013,6 +4127,7 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Color => "Circular solid color swatches.",
         ComponentKind::Image => "PNG-backed raster image rendering.",
         ComponentKind::Icon => "Lucide icon rendering.",
+        ComponentKind::Twemoji => "Color emoji rendering from vendored Twemoji SVG assets.",
         ComponentKind::Kbd => "Keyboard keycaps and shortcuts.",
         ComponentKind::Input => "Single-line text input.",
         ComponentKind::Field => "Label + input + helper text.",
@@ -4051,6 +4166,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Dialogue => "Modal confirmation flow.",
         ComponentKind::DragBoard => {
             "Single-card drag and drop between two board regions using egui's built-in DnD."
+        }
+        ComponentKind::Hierarchy => {
+            "Figma-style hierarchy tree with selection, subtree highlighting, and same-parent drag reordering."
         }
         ComponentKind::ImageTile => "Media tile with body and playback states.",
         ComponentKind::MenuBar => "Desktop-style menu bar surface.",
@@ -4154,6 +4272,9 @@ fn clamp_state(state: &mut ShowcaseApp) {
         .min(CANVA_LAYER_FILTER_OPTIONS.len().saturating_sub(1));
     state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
+    state.blender_tab_index = state
+        .blender_tab_index
+        .min(BLENDER_TAB_OPTIONS.len().saturating_sub(1));
     state.segmented_tab_index = state
         .segmented_tab_index
         .min(TAB_OPTIONS.len().saturating_sub(1));

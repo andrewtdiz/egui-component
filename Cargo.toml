@@ -32,6 +32,7 @@ crate-type = ["rlib", "dylib"]
 egui = "0.33.3"
 egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
 serde = { version = "1.0.228", features = ["derive"] }
+twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg"] }
 
 [dev-dependencies]
 eframe = "0.33.3"

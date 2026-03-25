@@ -18,6 +18,7 @@ pub enum ComponentKind {
     DragBoard,
     DropdownMenu,
     Field,
+    Hierarchy,
     Icon,
     Image,
     ImageTile,
@@ -42,6 +43,7 @@ pub enum ComponentKind {
     Toast,
     Toolbar,
     Tooltip,
+    Twemoji,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -94,6 +96,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::Twemoji,
+        id: "twemoji",
+        label: "Twemoji",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Kbd,
         id: "kbd",
         label: "Kbd",
@@ -110,6 +118,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         id: "field",
         label: "Field",
         group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Hierarchy,
+        id: "hierarchy",
+        label: "Hierarchy",
+        group: ComponentGroup::Composed,
     },
     ComponentDefinition {
         kind: ComponentKind::Button,
@@ -389,6 +403,7 @@ mod tests {
         assert!(ids.contains(&"spinner"));
         assert!(ids.contains(&"toast"));
         assert!(ids.contains(&"toolbar"));
+        assert!(ids.contains(&"twemoji"));
         assert!(!ids.contains(&"alert-dialogue"));
         assert!(!ids.contains(&"accordion"));
     }
@@ -408,6 +423,10 @@ mod tests {
             Some(ComponentKind::NumberInput)
         );
         assert_eq!(parse_component_kind("icon"), Some(ComponentKind::Icon));
+        assert_eq!(
+            parse_component_kind("twemoji"),
+            Some(ComponentKind::Twemoji)
+        );
         assert_eq!(
             parse_component_kind("popover"),
             Some(ComponentKind::Popover)

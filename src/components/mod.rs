@@ -15,6 +15,7 @@ mod dialogue;
 mod drag_board;
 mod dropdown_menu;
 mod field;
+mod hierarchy;
 mod icon;
 mod image;
 mod image_tile;
@@ -38,6 +39,7 @@ mod toast;
 mod toggle_group;
 mod toolbar;
 mod tooltip;
+mod twemoji;
 // xtask:component-modules:end
 
 pub use api::{ComponentUi, ComponentUiExt};
@@ -59,6 +61,7 @@ pub use dropdown_menu::{
     DropdownMenu, DropdownMenuAction, DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu,
 };
 pub use field::Field;
+pub use hierarchy::{Hierarchy, HierarchyItemKind, HierarchyNode};
 pub use icon::Icon;
 pub use image::Image;
 pub use image_tile::{ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState};
@@ -81,4 +84,5 @@ pub use toast::{Toast, ToastIntent, ToastPlacement, ToastStack, ToastViewport};
 pub use toggle_group::ToggleGroup;
 pub use toolbar::Toolbar;
 pub use tooltip::{Tooltip, TooltipPlacement};
+pub use twemoji::Twemoji;
 // xtask:component-exports:end

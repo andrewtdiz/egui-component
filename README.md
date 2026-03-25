@@ -149,6 +149,14 @@ let _ = layout::row().gap(8.0).show(ui, |ui| {
 });
 ```
 
+Twemoji rendering is available through the typed facade:
+
+```rust
+use egui_component::prelude::*;
+
+let _ = ui.components().twemoji(Twemoji::new("🧑🏽‍🚀").size(28.0));
+```
+
 ## Examples
 
 The repo currently ships these examples:
@@ -195,3 +203,8 @@ In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the
 The window is restarted on each rebuild rather than patched in place.
 
 Snapshot mode renders offscreen without opening a native window and crops the output to the component preview itself rather than the outer showcase wrapper card.
+
+## Twemoji Attribution
+
+Twemoji graphics are included for the `Twemoji` component and are licensed under CC-BY 4.0.
+Keep attribution to the Twemoji project in your app's README, About screen, or legal notices when you ship builds that use these graphics.
