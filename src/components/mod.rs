@@ -14,6 +14,7 @@ mod common;
 mod dialogue;
 mod drag_board;
 mod dropdown_menu;
+mod emoji_selector;
 mod field;
 mod hierarchy;
 mod icon;
@@ -60,8 +61,9 @@ pub use drag_board::{DragBoard, DragBoardItem, DragBoardRegion};
 pub use dropdown_menu::{
     DropdownMenu, DropdownMenuAction, DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu,
 };
+pub use emoji_selector::EmojiSelector;
 pub use field::Field;
-pub use hierarchy::{Hierarchy, HierarchyItemKind, HierarchyNode};
+pub use hierarchy::{Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode};
 pub use icon::Icon;
 pub use image::Image;
 pub use image_tile::{ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState};

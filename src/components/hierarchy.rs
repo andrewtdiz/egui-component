@@ -10,10 +10,13 @@ const HIERARCHY_ROW_HEIGHT: f32 = 32.0;
 const HIERARCHY_INDENT_WIDTH: f32 = 18.0;
 const HIERARCHY_PANEL_PADDING: i8 = 6;
 const HIERARCHY_ROW_PADDING_X: f32 = 8.0;
-const HIERARCHY_ICON_SIZE: f32 = 16.0;
+const HIERARCHY_ICON_SIZE: f32 = 13.0;
 const HIERARCHY_ACTION_ICON_SIZE: f32 = 15.0;
-const HIERARCHY_DISCLOSURE_SIZE: f32 = 14.0;
+const HIERARCHY_LOCK_GLYPH_SIZE: f32 = 10.0;
+const HIERARCHY_DISCLOSURE_BUTTON_SIZE: f32 = 20.0;
+const HIERARCHY_DISCLOSURE_GLYPH_SIZE: f32 = 12.0;
 const HIERARCHY_DROP_ZONE_HEIGHT: f32 = 6.0;
+const HIERARCHY_DROP_EDGE_HEIGHT: f32 = 8.0;
 const HIERARCHY_SELECTION_LINE: Color32 = Color32::from_rgb(138, 182, 255);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -28,17 +31,36 @@ pub enum HierarchyItemKind {
     Vector,
 }
 
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub enum HierarchyIconStyle {
+    #[default]
+    Emoji,
+    Icons,
+}
+
 impl HierarchyItemKind {
-    fn icon(self) -> HierarchyItemIcon {
-        match self {
-            Self::Folder => HierarchyItemIcon::Icon("bootstrap:folder-fill"),
-            Self::Frame => HierarchyItemIcon::Twemoji("🧩"),
-            Self::Group => HierarchyItemIcon::Twemoji("⚙️"),
-            Self::Player => HierarchyItemIcon::Twemoji("🧍"),
-            Self::Weapon => HierarchyItemIcon::Twemoji("⚔️"),
-            Self::Clothing => HierarchyItemIcon::Twemoji("👕"),
-            Self::Hitbox => HierarchyItemIcon::Twemoji("🎯"),
-            Self::Vector => HierarchyItemIcon::Twemoji("🔷"),
+    fn icon(self, icon_style: HierarchyIconStyle) -> HierarchyItemIcon {
+        match icon_style {
+            HierarchyIconStyle::Emoji => match self {
+                Self::Folder => HierarchyItemIcon::Icon("bootstrap:folder-fill"),
+                Self::Frame => HierarchyItemIcon::Twemoji("🧩"),
+                Self::Group => HierarchyItemIcon::Twemoji("⚙️"),
+                Self::Player => HierarchyItemIcon::Twemoji("🧍"),
+                Self::Weapon => HierarchyItemIcon::Twemoji("⚔️"),
+                Self::Clothing => HierarchyItemIcon::Twemoji("👕"),
+                Self::Hitbox => HierarchyItemIcon::Twemoji("🎯"),
+                Self::Vector => HierarchyItemIcon::Twemoji("🔷"),
+            },
+            HierarchyIconStyle::Icons => match self {
+                Self::Folder => HierarchyItemIcon::Icon("bootstrap:folder-fill"),
+                Self::Frame => HierarchyItemIcon::Icon("frame"),
+                Self::Group => HierarchyItemIcon::Icon("group"),
+                Self::Player => HierarchyItemIcon::Icon("person-standing"),
+                Self::Weapon => HierarchyItemIcon::Icon("sword"),
+                Self::Clothing => HierarchyItemIcon::Icon("shirt"),
+                Self::Hitbox => HierarchyItemIcon::Icon("crosshair"),
+                Self::Vector => HierarchyItemIcon::Icon("diamond"),
+            },
         }
     }
 }
@@ -94,6 +116,7 @@ pub struct Hierarchy<'a, 'nodes> {
     pub width: f32,
     pub row_height: f32,
     pub indent_width: f32,
+    pub icon_style: HierarchyIconStyle,
 }
 
 impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
@@ -104,6 +127,7 @@ impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
             width: HIERARCHY_DEFAULT_WIDTH,
             row_height: HIERARCHY_ROW_HEIGHT,
             indent_width: HIERARCHY_INDENT_WIDTH,
+            icon_style: HierarchyIconStyle::default(),
         }
     }
 
@@ -119,6 +143,11 @@ impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
 
     pub fn indent_width(mut self, indent_width: f32) -> Self {
         self.indent_width = indent_width.max(8.0);
+        self
+    }
+
+    pub fn icon_style(mut self, icon_style: HierarchyIconStyle) -> Self {
+        self.icon_style = icon_style;
         self
     }
 }
@@ -142,15 +171,17 @@ struct HierarchyDragPayload {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct PendingMove {
-    parent_id: Option<usize>,
     node_id: usize,
+    target_parent_id: Option<usize>,
     target_index: usize,
+    expand_target_id: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
 struct RowOutcome {
     response: Response,
     has_children: bool,
+    child_count: usize,
     node_id: usize,
     expanded: bool,
 }
@@ -194,6 +225,7 @@ fn draw_hierarchy(
                     runtime,
                     props.row_height,
                     props.indent_width,
+                    props.icon_style,
                     &mut pending_move,
                     &mut changed,
                     &mut pointer_over_interaction,
@@ -203,11 +235,12 @@ fn draw_hierarchy(
         .response;
 
     if let Some(move_request) = pending_move {
-        if move_hierarchy_node_within_parent(
+        if move_hierarchy_node(
             props.nodes,
-            move_request.parent_id,
             move_request.node_id,
+            move_request.target_parent_id,
             move_request.target_index,
+            move_request.expand_target_id,
         ) {
             *selected_id = Some(move_request.node_id);
             changed = true;
@@ -242,6 +275,7 @@ fn draw_hierarchy_list(
     runtime: crate::theme::ThemeRuntime,
     row_height: f32,
     indent_width: f32,
+    icon_style: HierarchyIconStyle,
     pending_move: &mut Option<PendingMove>,
     changed: &mut bool,
     pointer_over_interaction: &mut bool,
@@ -261,6 +295,7 @@ fn draw_hierarchy_list(
                 runtime,
                 row_height,
                 indent_width,
+                icon_style,
                 changed,
                 pointer_over_interaction,
             )
@@ -273,6 +308,7 @@ fn draw_hierarchy_list(
             parent_id,
             row_outcome.node_id,
             row_index,
+            row_outcome.child_count,
         ) {
             *pending_move = Some(move_request);
         }
@@ -290,6 +326,7 @@ fn draw_hierarchy_list(
                 runtime,
                 row_height,
                 indent_width,
+                icon_style,
                 pending_move,
                 changed,
                 pointer_over_interaction,
@@ -301,11 +338,7 @@ fn draw_hierarchy_list(
         vec2(ui.available_width(), HIERARCHY_DROP_ZONE_HEIGHT),
         Sense::hover(),
     );
-    if let Some(payload) =
-        hovered_hierarchy_payload(ui.ctx(), &drop_response, hierarchy_id).filter(|payload| {
-            payload.parent_id == parent_id && !nodes.iter().any(|node| node.id == payload.node_id)
-        })
-    {
+    if let Some(payload) = hovered_hierarchy_payload(ui.ctx(), &drop_response, hierarchy_id) {
         ui.painter().line_segment(
             [
                 egui::pos2(drop_rect.left() + 8.0, drop_rect.center().y),
@@ -315,9 +348,10 @@ fn draw_hierarchy_list(
         );
         if released_hierarchy_payload(ui.ctx(), &drop_response, hierarchy_id).is_some() {
             *pending_move = Some(PendingMove {
-                parent_id,
                 node_id: payload.node_id,
+                target_parent_id: parent_id,
                 target_index: nodes.len(),
+                expand_target_id: None,
             });
         }
     }
@@ -335,6 +369,7 @@ fn draw_hierarchy_row(
     runtime: crate::theme::ThemeRuntime,
     row_height: f32,
     indent_width: f32,
+    icon_style: HierarchyIconStyle,
     changed: &mut bool,
     pointer_over_interaction: &mut bool,
 ) -> RowOutcome {
@@ -369,22 +404,6 @@ fn draw_hierarchy_row(
         Stroke::NONE
     };
 
-    paint_hierarchy_row(
-        ui,
-        rect,
-        depth,
-        node,
-        runtime,
-        fill,
-        stroke,
-        hovered,
-        shows_child_lock,
-        indent_width,
-        selected_exact,
-        round_top,
-        round_bottom,
-    );
-
     let payload = HierarchyDragPayload {
         hierarchy_id,
         parent_id,
@@ -395,10 +414,13 @@ fn draw_hierarchy_row(
     let left_offset = HIERARCHY_ROW_PADDING_X + depth as f32 * indent_width;
     let disclosure_rect = Rect::from_center_size(
         egui::pos2(
-            rect.left() + left_offset + HIERARCHY_DISCLOSURE_SIZE * 0.5,
+            rect.left() + left_offset + HIERARCHY_DISCLOSURE_BUTTON_SIZE * 0.5,
             rect.center().y,
         ),
-        vec2(HIERARCHY_DISCLOSURE_SIZE, HIERARCHY_DISCLOSURE_SIZE),
+        vec2(
+            HIERARCHY_DISCLOSURE_BUTTON_SIZE,
+            HIERARCHY_DISCLOSURE_BUTTON_SIZE,
+        ),
     );
     let actions_right = rect.right() - HIERARCHY_ROW_PADDING_X;
     let lock_rect = Rect::from_center_size(
@@ -426,6 +448,24 @@ fn draw_hierarchy_row(
         )
     });
 
+    paint_hierarchy_row(
+        ui,
+        rect,
+        depth,
+        node,
+        runtime,
+        fill,
+        stroke,
+        hovered,
+        disclosure_response.as_ref(),
+        shows_child_lock,
+        indent_width,
+        icon_style,
+        selected_exact,
+        round_top,
+        round_bottom,
+    );
+
     *pointer_over_interaction |= response.contains_pointer()
         || disclosure_response
             .as_ref()
@@ -450,6 +490,7 @@ fn draw_hierarchy_row(
     RowOutcome {
         response: response.on_hover_cursor(CursorIcon::Grab),
         has_children: !node.children.is_empty(),
+        child_count: node.children.len(),
         node_id: node.id,
         expanded: node.expanded,
     }
@@ -464,8 +505,10 @@ fn paint_hierarchy_row(
     fill: Color32,
     stroke: Stroke,
     hovered: bool,
+    disclosure_response: Option<&Response>,
     shows_child_lock: bool,
     indent_width: f32,
+    icon_style: HierarchyIconStyle,
     _selected_exact: bool,
     round_top: bool,
     round_bottom: bool,
@@ -479,26 +522,76 @@ fn paint_hierarchy_row(
     );
 
     let left_offset = HIERARCHY_ROW_PADDING_X + depth as f32 * indent_width;
-    let disclosure_center_x = rect.left() + left_offset + HIERARCHY_DISCLOSURE_SIZE * 0.5;
+    let disclosure_rect = Rect::from_center_size(
+        egui::pos2(
+            rect.left() + left_offset + HIERARCHY_DISCLOSURE_BUTTON_SIZE * 0.5,
+            rect.center().y,
+        ),
+        vec2(
+            HIERARCHY_DISCLOSURE_BUTTON_SIZE,
+            HIERARCHY_DISCLOSURE_BUTTON_SIZE,
+        ),
+    );
     if !node.children.is_empty() {
+        let (disclosure_fill, disclosure_stroke) =
+            if disclosure_response.is_some_and(Response::is_pointer_button_down_on) {
+                (
+                    tokens::button_secondary_active_bg(runtime),
+                    Stroke::new(1.0, tokens::button_secondary_hover_border(runtime)),
+                )
+            } else if disclosure_response.is_some_and(Response::hovered) {
+                (
+                    tokens::button_secondary_hover_bg(runtime),
+                    Stroke::new(1.0, tokens::button_secondary_hover_border(runtime)),
+                )
+            } else {
+                (Color32::TRANSPARENT, Stroke::NONE)
+            };
+        if disclosure_fill != Color32::TRANSPARENT || disclosure_stroke != Stroke::NONE {
+            ui.painter().rect(
+                disclosure_rect,
+                CornerRadius::same(6),
+                disclosure_fill,
+                disclosure_stroke,
+                StrokeKind::Inside,
+            );
+        }
+
         let disclosure_name = if node.expanded {
             "chevron-down"
         } else {
             "chevron-right"
         };
-        if let Some(image) = icons::image(ui.ctx(), disclosure_name, 14.0) {
-            let _ = image.tint(tokens::text_muted(runtime)).paint_at(
+        if let Some(image) =
+            icons::image(ui.ctx(), disclosure_name, HIERARCHY_DISCLOSURE_GLYPH_SIZE)
+        {
+            let chevron_tint = if disclosure_response.is_some_and(Response::hovered) {
+                tokens::text_secondary(runtime)
+            } else {
+                tokens::text_muted(runtime)
+            };
+            let _ = image.tint(chevron_tint).paint_at(
                 ui,
                 Rect::from_center_size(
-                    egui::pos2(disclosure_center_x, rect.center().y),
-                    vec2(14.0, 14.0),
+                    disclosure_rect.center(),
+                    vec2(
+                        HIERARCHY_DISCLOSURE_GLYPH_SIZE,
+                        HIERARCHY_DISCLOSURE_GLYPH_SIZE,
+                    ),
                 ),
             );
         }
     }
 
-    let icon_left = rect.left() + left_offset + HIERARCHY_DISCLOSURE_SIZE + 6.0;
-    paint_hierarchy_item_icon(ui, node.kind, runtime, icon_left, rect.center().y);
+    let icon_left = rect.left() + left_offset + HIERARCHY_DISCLOSURE_BUTTON_SIZE + 6.0;
+    paint_hierarchy_item_icon(
+        ui,
+        node.kind,
+        icon_style,
+        runtime,
+        icon_left,
+        rect.center().y,
+    );
 
     let label_left = icon_left + HIERARCHY_ICON_SIZE + 10.0;
     let label_color =
@@ -531,7 +624,7 @@ fn paint_hierarchy_row(
         } else {
             tokens::text_muted(runtime)
         };
-        if let Some(image) = icons::image(ui.ctx(), lock_icon, HIERARCHY_ACTION_ICON_SIZE) {
+        if let Some(image) = icons::image(ui.ctx(), lock_icon, HIERARCHY_LOCK_GLYPH_SIZE) {
             let _ = image.tint(lock_tint).paint_at(ui, lock_rect);
         }
     }
@@ -540,6 +633,7 @@ fn paint_hierarchy_row(
 fn paint_hierarchy_item_icon(
     ui: &mut Ui,
     kind: HierarchyItemKind,
+    icon_style: HierarchyIconStyle,
     runtime: crate::theme::ThemeRuntime,
     icon_left: f32,
     center_y: f32,
@@ -549,7 +643,7 @@ fn paint_hierarchy_item_icon(
         vec2(HIERARCHY_ICON_SIZE, HIERARCHY_ICON_SIZE),
     );
 
-    match kind.icon() {
+    match kind.icon(icon_style) {
         HierarchyItemIcon::Icon(name) => {
             if let Some(image) = icons::image(ui.ctx(), name, HIERARCHY_ICON_SIZE) {
                 let _ = image
@@ -572,31 +666,77 @@ fn hierarchy_pending_move(
     parent_id: Option<usize>,
     node_id: usize,
     row_index: usize,
+    child_count: usize,
 ) -> Option<PendingMove> {
     hovered_hierarchy_payload(ui.ctx(), response, hierarchy_id)
-        .filter(|payload| payload.parent_id == parent_id && payload.node_id != node_id)
+        .filter(|payload| payload.node_id != node_id)
         .and_then(|payload| {
             ui.ctx().pointer_interact_pos().map(|pointer| {
-                let insert_after = pointer.y > response.rect.center().y;
-                let y = if insert_after {
-                    response.rect.bottom()
+                let placement = if pointer.y <= response.rect.top() + HIERARCHY_DROP_EDGE_HEIGHT {
+                    HierarchyDropPlacement::Before
+                } else if pointer.y >= response.rect.bottom() - HIERARCHY_DROP_EDGE_HEIGHT {
+                    HierarchyDropPlacement::After
                 } else {
-                    response.rect.top()
+                    HierarchyDropPlacement::Into
                 };
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(response.rect.left() + 8.0, y),
-                        egui::pos2(response.rect.right() - 8.0, y),
-                    ],
-                    Stroke::new(2.0, HIERARCHY_SELECTION_LINE),
-                );
-                released_hierarchy_payload(ui.ctx(), response, hierarchy_id).map(|_| PendingMove {
-                    parent_id,
-                    node_id: payload.node_id,
-                    target_index: row_index + usize::from(insert_after),
-                })
+
+                let pending_move = match placement {
+                    HierarchyDropPlacement::Before => {
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(response.rect.left() + 8.0, response.rect.top()),
+                                egui::pos2(response.rect.right() - 8.0, response.rect.top()),
+                            ],
+                            Stroke::new(2.0, HIERARCHY_SELECTION_LINE),
+                        );
+                        PendingMove {
+                            node_id: payload.node_id,
+                            target_parent_id: parent_id,
+                            target_index: row_index,
+                            expand_target_id: None,
+                        }
+                    }
+                    HierarchyDropPlacement::After => {
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(response.rect.left() + 8.0, response.rect.bottom()),
+                                egui::pos2(response.rect.right() - 8.0, response.rect.bottom()),
+                            ],
+                            Stroke::new(2.0, HIERARCHY_SELECTION_LINE),
+                        );
+                        PendingMove {
+                            node_id: payload.node_id,
+                            target_parent_id: parent_id,
+                            target_index: row_index + 1,
+                            expand_target_id: None,
+                        }
+                    }
+                    HierarchyDropPlacement::Into => {
+                        ui.painter().rect_stroke(
+                            response.rect.shrink2(vec2(8.0, 4.0)),
+                            CornerRadius::same(6),
+                            Stroke::new(1.5, HIERARCHY_SELECTION_LINE),
+                            StrokeKind::Inside,
+                        );
+                        PendingMove {
+                            node_id: payload.node_id,
+                            target_parent_id: Some(node_id),
+                            target_index: child_count,
+                            expand_target_id: Some(node_id),
+                        }
+                    }
+                };
+
+                released_hierarchy_payload(ui.ctx(), response, hierarchy_id).map(|_| pending_move)
             })?
         })
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum HierarchyDropPlacement {
+    Before,
+    Into,
+    After,
 }
 
 fn hovered_hierarchy_payload(
@@ -621,31 +761,72 @@ fn released_hierarchy_payload(
         .map(|payload| *payload)
 }
 
-fn move_hierarchy_node_within_parent<'a>(
+fn move_hierarchy_node<'a>(
     nodes: &mut Vec<HierarchyNode<'a>>,
-    parent_id: Option<usize>,
     node_id: usize,
+    target_parent_id: Option<usize>,
     target_index: usize,
+    expand_target_id: Option<usize>,
 ) -> bool {
-    let siblings = match find_hierarchy_siblings_mut(nodes, parent_id) {
+    if target_parent_id == Some(node_id) {
+        return false;
+    }
+
+    if target_parent_id
+        .is_some_and(|target_parent_id| hierarchy_node_contains(nodes, node_id, target_parent_id))
+    {
+        return false;
+    }
+
+    if target_parent_id.is_some_and(|target_parent_id| {
+        find_hierarchy_node(nodes.as_slice(), target_parent_id).is_none()
+    }) {
+        return false;
+    }
+
+    let (node, source_parent_id, source_index) = match take_hierarchy_node(nodes, None, node_id) {
+        Some(result) => result,
+        None => return false,
+    };
+
+    let siblings = match find_hierarchy_siblings_mut(nodes, target_parent_id) {
         Some(siblings) => siblings,
         None => return false,
     };
 
-    let current_index = match siblings.iter().position(|node| node.id == node_id) {
-        Some(index) => index,
-        None => return false,
-    };
-
-    let node = siblings.remove(current_index);
-    let adjusted_index = if target_index > current_index {
+    let adjusted_index = if source_parent_id == target_parent_id && source_index < target_index {
         target_index.saturating_sub(1)
     } else {
         target_index
     }
     .min(siblings.len());
     siblings.insert(adjusted_index, node);
+
+    if let Some(expand_target_id) = expand_target_id {
+        if let Some(target_node) = find_hierarchy_node_mut(nodes, expand_target_id) {
+            target_node.expanded = true;
+        }
+    }
+
     true
+}
+
+fn take_hierarchy_node<'nodes, 'data>(
+    nodes: &'nodes mut Vec<HierarchyNode<'data>>,
+    parent_id: Option<usize>,
+    node_id: usize,
+) -> Option<(HierarchyNode<'data>, Option<usize>, usize)> {
+    if let Some(index) = nodes.iter().position(|node| node.id == node_id) {
+        return Some((nodes.remove(index), parent_id, index));
+    }
+
+    for node in nodes.iter_mut() {
+        if let Some(result) = take_hierarchy_node(&mut node.children, Some(node.id), node_id) {
+            return Some(result);
+        }
+    }
+
+    None
 }
 
 fn find_hierarchy_siblings_mut<'nodes, 'data>(
@@ -666,6 +847,55 @@ fn find_hierarchy_siblings_mut<'nodes, 'data>(
     }
 
     None
+}
+
+fn find_hierarchy_node<'nodes, 'data>(
+    nodes: &'nodes [HierarchyNode<'data>],
+    node_id: usize,
+) -> Option<&'nodes HierarchyNode<'data>> {
+    for node in nodes {
+        if node.id == node_id {
+            return Some(node);
+        }
+        if let Some(found) = find_hierarchy_node(node.children.as_slice(), node_id) {
+            return Some(found);
+        }
+    }
+
+    None
+}
+
+fn find_hierarchy_node_mut<'nodes, 'data>(
+    nodes: &'nodes mut Vec<HierarchyNode<'data>>,
+    node_id: usize,
+) -> Option<&'nodes mut HierarchyNode<'data>> {
+    for node in nodes.iter_mut() {
+        if node.id == node_id {
+            return Some(node);
+        }
+        if let Some(found) = find_hierarchy_node_mut(&mut node.children, node_id) {
+            return Some(found);
+        }
+    }
+
+    None
+}
+
+fn hierarchy_node_contains(
+    nodes: &[HierarchyNode<'_>],
+    ancestor_id: usize,
+    candidate_id: usize,
+) -> bool {
+    find_hierarchy_node(nodes, ancestor_id)
+        .is_some_and(|ancestor| hierarchy_subtree_contains(ancestor, candidate_id))
+}
+
+fn hierarchy_subtree_contains(node: &HierarchyNode<'_>, candidate_id: usize) -> bool {
+    node.id == candidate_id
+        || node
+            .children
+            .iter()
+            .any(|child| hierarchy_subtree_contains(child, candidate_id))
 }
 
 fn hierarchy_selection_fill() -> Color32 {
@@ -745,7 +975,7 @@ fn collect_selection_subtree_ids(node: &HierarchyNode<'_>, ids: &mut Vec<usize>)
 #[cfg(test)]
 mod tests {
     use super::{
-        draw_hierarchy, move_hierarchy_node_within_parent, Hierarchy, HierarchyItemKind,
+        draw_hierarchy, move_hierarchy_node, Hierarchy, HierarchyIconStyle, HierarchyItemKind,
         HierarchyNode,
     };
     use egui::{CentralPanel, Context, Id, RawInput};
@@ -758,7 +988,7 @@ mod tests {
             HierarchyNode::new(3, "C", HierarchyItemKind::Frame),
         ];
 
-        assert!(move_hierarchy_node_within_parent(&mut nodes, None, 1, 3));
+        assert!(move_hierarchy_node(&mut nodes, 1, None, 3, None));
         assert_eq!(
             nodes.iter().map(|node| node.id).collect::<Vec<_>>(),
             vec![2, 3, 1]
@@ -768,12 +998,61 @@ mod tests {
     #[test]
     fn move_hierarchy_node_ignores_missing_parent() {
         let mut nodes = vec![HierarchyNode::new(1, "A", HierarchyItemKind::Frame)];
-        assert!(!move_hierarchy_node_within_parent(
-            &mut nodes,
-            Some(99),
-            1,
-            0
-        ));
+        assert!(!move_hierarchy_node(&mut nodes, 1, Some(99), 0, Some(99)));
+    }
+
+    #[test]
+    fn move_hierarchy_node_into_other_parent_appends_as_last_child() {
+        let mut nodes = vec![
+            HierarchyNode::new(1, "FolderA", HierarchyItemKind::Folder).children(vec![
+                HierarchyNode::new(2, "Child", HierarchyItemKind::Player),
+            ]),
+            HierarchyNode::new(3, "FolderB", HierarchyItemKind::Folder),
+        ];
+
+        assert!(move_hierarchy_node(&mut nodes, 2, Some(3), 0, Some(3)));
+        assert!(nodes[0].children.is_empty());
+        assert_eq!(
+            nodes[1]
+                .children
+                .iter()
+                .map(|node| node.id)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert!(nodes[1].expanded);
+    }
+
+    #[test]
+    fn move_hierarchy_node_to_root_from_child_parent() {
+        let mut nodes = vec![
+            HierarchyNode::new(1, "Folder", HierarchyItemKind::Folder).children(vec![
+                HierarchyNode::new(2, "Child", HierarchyItemKind::Player),
+            ]),
+        ];
+
+        assert!(move_hierarchy_node(&mut nodes, 2, None, 1, None));
+        assert_eq!(
+            nodes.iter().map(|node| node.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert!(nodes[0].children.is_empty());
+    }
+
+    #[test]
+    fn move_hierarchy_node_rejects_descendant_target_parent() {
+        let mut nodes = vec![
+            HierarchyNode::new(1, "Root", HierarchyItemKind::Folder).children(vec![
+                HierarchyNode::new(2, "Child", HierarchyItemKind::Group).children(vec![
+                    HierarchyNode::new(3, "Leaf", HierarchyItemKind::Vector),
+                ]),
+            ]),
+        ];
+
+        assert!(!move_hierarchy_node(&mut nodes, 1, Some(3), 0, Some(3)));
+        assert_eq!(nodes[0].id, 1);
+        assert_eq!(nodes[0].children[0].id, 2);
+        assert_eq!(nodes[0].children[0].children[0].id, 3);
     }
 
     #[test]
@@ -794,6 +1073,30 @@ mod tests {
                     ui,
                     &mut selected_id,
                     Hierarchy::new(Id::new("hierarchy_test"), &mut nodes),
+                );
+            });
+        });
+    }
+
+    #[test]
+    fn renders_hierarchy_tree_in_icon_mode() {
+        let context = Context::default();
+        let mut selected_id = Some(1usize);
+        let mut nodes = vec![
+            HierarchyNode::new(1, "Gameplay_Systems", HierarchyItemKind::Folder).children(vec![
+                HierarchyNode::new(2, "Player_Controller", HierarchyItemKind::Player),
+                HierarchyNode::new(3, "Iron_Sword_01", HierarchyItemKind::Weapon),
+                HierarchyNode::new(4, "Hitbox_Main", HierarchyItemKind::Hitbox),
+            ]),
+        ];
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = draw_hierarchy(
+                    ui,
+                    &mut selected_id,
+                    Hierarchy::new(Id::new("hierarchy_icon_mode_test"), &mut nodes)
+                        .icon_style(HierarchyIconStyle::Icons),
                 );
             });
         });

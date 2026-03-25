@@ -168,6 +168,8 @@ const CANVA_POSITION_TAB_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Arrange"), TabOption::new(1, "Layers")];
 const CANVA_LAYER_FILTER_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "All"), TabOption::new(1, "Overlapping")];
+const HIERARCHY_ICON_STYLE_OPTIONS: [TabOption<'static>; 2] =
+    [TabOption::new(0, "Emoji"), TabOption::new(1, "Icons")];
 const THEME_MODE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Light"), TabOption::new(1, "Dark")];
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
@@ -461,8 +463,10 @@ pub struct ShowcaseApp {
     drag_board_regions: [DragBoardRegion; 3],
     hierarchy_nodes: Vec<HierarchyNode<'static>>,
     hierarchy_selected_id: Option<usize>,
+    hierarchy_icon_style_index: usize,
     input_value: String,
     field_value: String,
+    emoji_selector_value: String,
     checkbox_value: bool,
     switch_value: bool,
     small_switch_value: bool,
@@ -498,7 +502,7 @@ pub struct ShowcaseApp {
     collapsible_open: bool,
     dropdown_action: Option<usize>,
     combobox_query: String,
-    combobox_index: usize,
+    combobox_indices: Vec<usize>,
     command_query: String,
     dialogue_open: bool,
     popover_open: bool,
@@ -528,8 +532,10 @@ impl Default for ShowcaseApp {
             drag_board_regions: DRAG_BOARD_DEFAULT_REGIONS,
             hierarchy_nodes: default_hierarchy_nodes(),
             hierarchy_selected_id: Some(HIERARCHY_DEFAULT_SELECTED_ID),
+            hierarchy_icon_style_index: 0,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
+            emoji_selector_value: "🙂".to_owned(),
             checkbox_value: true,
             switch_value: true,
             small_switch_value: false,
@@ -565,7 +571,7 @@ impl Default for ShowcaseApp {
             collapsible_open: true,
             dropdown_action: None,
             combobox_query: "mat".to_owned(),
-            combobox_index: 0,
+            combobox_indices: vec![0, 2],
             command_query: String::new(),
             dialogue_open: false,
             popover_open: false,
@@ -605,6 +611,9 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Command => {
             app.command_query = "view".to_owned();
         }
+        ComponentKind::EmojiSelector => {
+            app.emoji_selector_value = "🍕".to_owned();
+        }
         ComponentKind::Dialogue => {
             app.dialogue_open = true;
         }
@@ -614,6 +623,7 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Hierarchy => {
             app.hierarchy_nodes = default_hierarchy_nodes();
             app.hierarchy_selected_id = Some(HIERARCHY_DEFAULT_SELECTED_ID);
+            app.hierarchy_icon_style_index = 0;
         }
         ComponentKind::Popover => {
             app.popover_open = true;
@@ -767,6 +777,7 @@ impl ShowcaseApp {
             ComponentKind::Image => self.render_image_preview(ui),
             ComponentKind::Icon => self.render_icon_preview(ui),
             ComponentKind::Twemoji => self.render_twemoji_preview(ui),
+            ComponentKind::EmojiSelector => self.render_emoji_selector_preview(ui),
             ComponentKind::Kbd => self.render_kbd_preview(ui),
             ComponentKind::Input => self.render_input_preview(ui),
             ComponentKind::Field => self.render_field_preview(ui),
@@ -1151,6 +1162,13 @@ impl ShowcaseApp {
                 });
             }
         });
+    }
+
+    fn render_emoji_selector_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().emoji_selector(
+            &mut self.emoji_selector_value,
+            EmojiSelector::new(Id::new("component_showcase_emoji_selector")),
+        );
     }
 
     fn render_kbd_preview(&mut self, ui: &mut Ui) {
@@ -2197,12 +2215,22 @@ impl ShowcaseApp {
     fn render_combobox_preview(&mut self, ui: &mut Ui) {
         let _ = ui.components().combobox(
             &mut self.combobox_query,
-            &mut self.combobox_index,
+            &mut self.combobox_indices,
             Combobox::new(Id::new("component_showcase_combobox"), &COMBOBOX_OPTIONS).width(280.0),
         );
         ui.add_space(8.0);
+        let selected_summary = if self.combobox_indices.is_empty() {
+            "No options selected".to_owned()
+        } else {
+            self.combobox_indices
+                .iter()
+                .filter_map(|index| COMBOBOX_OPTIONS.get(*index))
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         let _ = ui.components().label(
-            Label::new(COMBOBOX_OPTIONS[self.combobox_index])
+            Label::new(&selected_summary)
                 .tone(LabelTone::Muted)
                 .size(SMALL_TEXT),
         );
@@ -2567,18 +2595,30 @@ impl ShowcaseApp {
 
     fn render_hierarchy_preview(&mut self, ui: &mut Ui) {
         let _ = ui.components().label(
-            Label::new("Select a node to highlight its subtree. Drag rows to reorder within the same parent.")
+            Label::new("Select a node to highlight its subtree. Drag row edges to reorder, or drop on a row body to move into that parent.")
                 .tone(LabelTone::Muted)
                 .size(SMALL_TEXT),
         );
         ui.add_space(10.0);
+        ui.components().segmented_tabs(
+            Id::new("component_showcase_hierarchy_icon_style"),
+            &mut self.hierarchy_icon_style_index,
+            &HIERARCHY_ICON_STYLE_OPTIONS,
+        );
+        ui.add_space(10.0);
+        let icon_style = if self.hierarchy_icon_style_index == 1 {
+            HierarchyIconStyle::Icons
+        } else {
+            HierarchyIconStyle::Emoji
+        };
         let _ = ui.components().hierarchy(
             &mut self.hierarchy_selected_id,
             Hierarchy::new(
                 Id::new("component_showcase_hierarchy"),
                 &mut self.hierarchy_nodes,
             )
-            .width(360.0),
+            .width(360.0)
+            .icon_style(icon_style),
         );
     }
 
@@ -4128,6 +4168,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Image => "PNG-backed raster image rendering.",
         ComponentKind::Icon => "Lucide icon rendering.",
         ComponentKind::Twemoji => "Color emoji rendering from vendored Twemoji SVG assets.",
+        ComponentKind::EmojiSelector => {
+            "Button-triggered emoji picker with search, categories, and Twemoji rendering."
+        }
         ComponentKind::Kbd => "Keyboard keycaps and shortcuts.",
         ComponentKind::Input => "Single-line text input.",
         ComponentKind::Field => "Label + input + helper text.",
@@ -4161,14 +4204,14 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
         ComponentKind::Collapsible => "Expandable content section.",
         ComponentKind::AudioPlayback => "Playback row with optional trailing actions.",
-        ComponentKind::Combobox => "Filterable text-backed option picker.",
+        ComponentKind::Combobox => "Filterable multi-select picker with checkbox menu rows.",
         ComponentKind::Command => "Searchable command list with preview mode.",
         ComponentKind::Dialogue => "Modal confirmation flow.",
         ComponentKind::DragBoard => {
             "Single-card drag and drop between two board regions using egui's built-in DnD."
         }
         ComponentKind::Hierarchy => {
-            "Figma-style hierarchy tree with selection, subtree highlighting, and same-parent drag reordering."
+            "Game-style hierarchy tree with selection, subtree highlighting, and cross-parent drag reparenting."
         }
         ComponentKind::ImageTile => "Media tile with body and playback states.",
         ComponentKind::MenuBar => "Desktop-style menu bar surface.",
@@ -4270,6 +4313,9 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.canva_layer_filter_index = state
         .canva_layer_filter_index
         .min(CANVA_LAYER_FILTER_OPTIONS.len().saturating_sub(1));
+    state.hierarchy_icon_style_index = state
+        .hierarchy_icon_style_index
+        .min(HIERARCHY_ICON_STYLE_OPTIONS.len().saturating_sub(1));
     state.image_rotation_degrees = state.image_rotation_degrees.clamp(-180.0, 180.0);
     state.tab_index = state.tab_index.min(TAB_OPTIONS.len().saturating_sub(1));
     state.blender_tab_index = state
@@ -4336,9 +4382,11 @@ fn clamp_state(state: &mut ShowcaseApp) {
     {
         state.menu_bar_action = None;
     }
-    state.combobox_index = state
-        .combobox_index
-        .min(COMBOBOX_OPTIONS.len().saturating_sub(1));
+    state
+        .combobox_indices
+        .retain(|index| *index < COMBOBOX_OPTIONS.len());
+    state.combobox_indices.sort_unstable();
+    state.combobox_indices.dedup();
 }
 
 #[cfg(test)]
@@ -4361,6 +4409,7 @@ mod tests {
             ComponentKind::CanvaEditImage,
             ComponentKind::CanvaPosition,
             ComponentKind::DragBoard,
+            ComponentKind::EmojiSelector,
             ComponentKind::Sidebar,
             ComponentKind::Toast,
         ] {

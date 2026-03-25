@@ -17,6 +17,7 @@ pub enum ComponentKind {
     Dialogue,
     DragBoard,
     DropdownMenu,
+    EmojiSelector,
     Field,
     Hierarchy,
     Icon,
@@ -252,6 +253,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::EmojiSelector,
+        id: "emoji-selector",
+        label: "Emoji Selector",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Collapsible,
         id: "collapsible",
         label: "Collapsible",
@@ -396,6 +403,7 @@ mod tests {
         assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
         assert!(ids.contains(&"menu-bar"));
+        assert!(ids.contains(&"emoji-selector"));
         assert!(ids.contains(&"radio"));
         assert!(ids.contains(&"radio-group"));
         assert!(ids.contains(&"sidebar"));
@@ -417,6 +425,10 @@ mod tests {
         assert_eq!(
             parse_component_kind("dialogue"),
             Some(ComponentKind::Dialogue)
+        );
+        assert_eq!(
+            parse_component_kind("emoji_selector"),
+            Some(ComponentKind::EmojiSelector)
         );
         assert_eq!(
             parse_component_kind("number_input"),
