@@ -1,4 +1,4 @@
-use crate::theme::{self, RadiusRole, ThemeRuntime};
+use crate::theme::{self, RadiusRole, ThemeMode, ThemeRuntime, ThemeState};
 use crate::ui::{tokens, typography};
 use egui::{
     CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
@@ -8,15 +8,19 @@ pub(crate) fn install_context_resources(context: &egui::Context) {
     context.set_fonts(component_font_definitions());
 }
 
-pub(crate) fn install(context: &egui::Context, runtime: ThemeRuntime) {
+pub(crate) fn install(context: &egui::Context, state: ThemeState) {
     install_context_resources(context);
-    set_theme_runtime(context, runtime);
+    set_theme_runtime(context, state);
 }
 
-pub(crate) fn set_theme_runtime(context: &egui::Context, runtime: ThemeRuntime) {
-    let mut style = (*context.style()).clone();
-    apply_to_style(&mut style, runtime);
-    context.set_style(style);
+pub(crate) fn set_theme_runtime(context: &egui::Context, state: ThemeState) {
+    context.set_style_of(egui::Theme::Light, themed_style(state, ThemeMode::Light));
+    context.set_style_of(egui::Theme::Dark, themed_style(state, ThemeMode::Dark));
+    context.set_theme(match state.mode {
+        ThemeMode::Light => egui::ThemePreference::Light,
+        ThemeMode::Dark => egui::ThemePreference::Dark,
+        ThemeMode::System => egui::ThemePreference::System,
+    });
 }
 
 pub(crate) fn apply_to_ui(ui: &mut Ui, runtime: ThemeRuntime) {
@@ -27,6 +31,15 @@ fn apply_to_style(style: &mut Style, runtime: ThemeRuntime) {
     style.visuals = mode_visuals(runtime);
     apply_typography(style);
     apply_component_style_profile(style, runtime);
+}
+
+fn themed_style(state: ThemeState, mode: ThemeMode) -> Style {
+    let mut style = match mode {
+        ThemeMode::Light => egui::Theme::Light.default_style(),
+        ThemeMode::Dark | ThemeMode::System => egui::Theme::Dark.default_style(),
+    };
+    apply_to_style(&mut style, ThemeRuntime::new(state.spec, mode));
+    style
 }
 
 fn component_font_definitions() -> FontDefinitions {
@@ -183,7 +196,7 @@ fn mode_visuals(runtime: ThemeRuntime) -> Visuals {
 #[cfg(test)]
 mod tests {
     use super::{component_font_definitions, install, set_theme_runtime};
-    use crate::theme::{BaseColor, ThemeMode, ThemeRuntime, ThemeSpec};
+    use crate::theme::{BaseColor, ThemeMode, ThemeRuntime, ThemeSpec, ThemeState};
     use crate::ui::{tokens, typography};
     use egui::{Context, TextStyle};
 
@@ -206,7 +219,7 @@ mod tests {
         let context = Context::default();
         install(
             &context,
-            ThemeRuntime::new(ThemeSpec::default(), ThemeMode::Dark),
+            ThemeState::new(ThemeSpec::default(), ThemeMode::Dark),
         );
 
         let style = context.style();
@@ -230,7 +243,7 @@ mod tests {
         let context = Context::default();
         install(
             &context,
-            ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light),
+            ThemeState::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light),
         );
 
         assert_eq!(
@@ -243,7 +256,7 @@ mod tests {
 
         set_theme_runtime(
             &context,
-            crate::theme::ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark),
+            crate::theme::ThemeState::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark),
         );
 
         assert_eq!(

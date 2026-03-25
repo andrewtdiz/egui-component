@@ -5,12 +5,14 @@ mod button;
 mod button_group;
 mod card;
 mod checkbox;
+mod collab_cursor;
 mod collapsible;
 mod color;
 mod color_input;
 mod combobox;
 mod command;
 mod common;
+mod context_menu;
 mod dialogue;
 mod drag_board;
 mod dropdown_menu;
@@ -50,12 +52,14 @@ pub use button::{Button, ButtonLabelWeight, ButtonOverride, ButtonVariant};
 pub use button_group::ButtonGroup;
 pub use card::{Card, CardOverride};
 pub use checkbox::Checkbox;
+pub use collab_cursor::CollabCursor;
 pub use collapsible::Collapsible;
 pub use color::Color;
 pub use color_input::ColorInput;
 pub use combobox::Combobox;
 pub use command::{Command, CommandItem};
 pub use common::ControlSize;
+pub use context_menu::{ContextMenu, ContextMenuState};
 pub use dialogue::{Dialogue, DialogueHeader, DialogueIntent, DialogueModal};
 pub use drag_board::{DragBoard, DragBoardItem, DragBoardRegion};
 pub use dropdown_menu::{
@@ -63,7 +67,9 @@ pub use dropdown_menu::{
 };
 pub use emoji_selector::EmojiSelector;
 pub use field::Field;
-pub use hierarchy::{Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode};
+pub use hierarchy::{
+    Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle,
+};
 pub use icon::Icon;
 pub use image::Image;
 pub use image_tile::{ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState};

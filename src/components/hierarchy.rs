@@ -11,8 +11,8 @@ const HIERARCHY_INDENT_WIDTH: f32 = 18.0;
 const HIERARCHY_PANEL_PADDING: i8 = 6;
 const HIERARCHY_ROW_PADDING_X: f32 = 8.0;
 const HIERARCHY_ICON_SIZE: f32 = 13.0;
-const HIERARCHY_ACTION_ICON_SIZE: f32 = 15.0;
-const HIERARCHY_LOCK_GLYPH_SIZE: f32 = 10.0;
+const HIERARCHY_ACTION_ICON_SIZE: f32 = HIERARCHY_ICON_SIZE;
+const HIERARCHY_LOCK_GLYPH_SIZE: f32 = HIERARCHY_ACTION_ICON_SIZE;
 const HIERARCHY_DISCLOSURE_BUTTON_SIZE: f32 = 20.0;
 const HIERARCHY_DISCLOSURE_GLYPH_SIZE: f32 = 12.0;
 const HIERARCHY_DROP_ZONE_HEIGHT: f32 = 6.0;
@@ -36,6 +36,13 @@ pub enum HierarchyIconStyle {
     #[default]
     Emoji,
     Icons,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub enum HierarchyStyle {
+    #[default]
+    Normal,
+    Component,
 }
 
 impl HierarchyItemKind {
@@ -117,6 +124,7 @@ pub struct Hierarchy<'a, 'nodes> {
     pub row_height: f32,
     pub indent_width: f32,
     pub icon_style: HierarchyIconStyle,
+    pub style: HierarchyStyle,
 }
 
 impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
@@ -128,6 +136,7 @@ impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
             row_height: HIERARCHY_ROW_HEIGHT,
             indent_width: HIERARCHY_INDENT_WIDTH,
             icon_style: HierarchyIconStyle::default(),
+            style: HierarchyStyle::default(),
         }
     }
 
@@ -148,6 +157,11 @@ impl<'a, 'nodes> Hierarchy<'a, 'nodes> {
 
     pub fn icon_style(mut self, icon_style: HierarchyIconStyle) -> Self {
         self.icon_style = icon_style;
+        self
+    }
+
+    pub fn style(mut self, style: HierarchyStyle) -> Self {
+        self.style = style;
         self
     }
 }
@@ -226,6 +240,7 @@ fn draw_hierarchy(
                     props.row_height,
                     props.indent_width,
                     props.icon_style,
+                    props.style,
                     &mut pending_move,
                     &mut changed,
                     &mut pointer_over_interaction,
@@ -276,6 +291,7 @@ fn draw_hierarchy_list(
     row_height: f32,
     indent_width: f32,
     icon_style: HierarchyIconStyle,
+    style: HierarchyStyle,
     pending_move: &mut Option<PendingMove>,
     changed: &mut bool,
     pointer_over_interaction: &mut bool,
@@ -296,6 +312,7 @@ fn draw_hierarchy_list(
                 row_height,
                 indent_width,
                 icon_style,
+                style,
                 changed,
                 pointer_over_interaction,
             )
@@ -327,6 +344,7 @@ fn draw_hierarchy_list(
                 row_height,
                 indent_width,
                 icon_style,
+                style,
                 pending_move,
                 changed,
                 pointer_over_interaction,
@@ -370,6 +388,7 @@ fn draw_hierarchy_row(
     row_height: f32,
     indent_width: f32,
     icon_style: HierarchyIconStyle,
+    style: HierarchyStyle,
     changed: &mut bool,
     pointer_over_interaction: &mut bool,
 ) -> RowOutcome {
@@ -398,11 +417,7 @@ fn draw_hierarchy_row(
     } else {
         Color32::TRANSPARENT
     };
-    let stroke = if selected_exact {
-        Stroke::new(1.0, hierarchy_selection_stroke())
-    } else {
-        Stroke::NONE
-    };
+    let stroke = Stroke::NONE;
 
     let payload = HierarchyDragPayload {
         hierarchy_id,
@@ -461,6 +476,7 @@ fn draw_hierarchy_row(
         shows_child_lock,
         indent_width,
         icon_style,
+        style,
         selected_exact,
         round_top,
         round_bottom,
@@ -509,13 +525,19 @@ fn paint_hierarchy_row(
     shows_child_lock: bool,
     indent_width: f32,
     icon_style: HierarchyIconStyle,
+    style: HierarchyStyle,
     _selected_exact: bool,
     round_top: bool,
     round_bottom: bool,
 ) {
     ui.painter().rect(
         rect,
-        hierarchy_row_corner_radius(runtime, round_top, round_bottom),
+        hierarchy_row_corner_radius(
+            runtime,
+            hovered && !round_top && !round_bottom,
+            round_top,
+            round_bottom,
+        ),
         fill,
         stroke,
         StrokeKind::Inside,
@@ -588,14 +610,14 @@ fn paint_hierarchy_row(
         ui,
         node.kind,
         icon_style,
+        style,
         runtime,
         icon_left,
         rect.center().y,
     );
 
     let label_left = icon_left + HIERARCHY_ICON_SIZE + 10.0;
-    let label_color =
-        tokens::text_primary(runtime).lerp_to_gamma(tokens::text_secondary(runtime), 0.28);
+    let label_color = hierarchy_label_color(style, runtime);
     ui.painter().text(
         egui::pos2(label_left, rect.center().y),
         Align2::LEFT_CENTER,
@@ -634,6 +656,7 @@ fn paint_hierarchy_item_icon(
     ui: &mut Ui,
     kind: HierarchyItemKind,
     icon_style: HierarchyIconStyle,
+    style: HierarchyStyle,
     runtime: crate::theme::ThemeRuntime,
     icon_left: f32,
     center_y: f32,
@@ -647,7 +670,7 @@ fn paint_hierarchy_item_icon(
         HierarchyItemIcon::Icon(name) => {
             if let Some(image) = icons::image(ui.ctx(), name, HIERARCHY_ICON_SIZE) {
                 let _ = image
-                    .tint(tokens::text_secondary(runtime))
+                    .tint(hierarchy_icon_tint(style, runtime))
                     .paint_at(ui, icon_rect);
             }
         }
@@ -656,6 +679,22 @@ fn paint_hierarchy_item_icon(
                 let _ = image.paint_at(ui, icon_rect);
             }
         }
+    }
+}
+
+fn hierarchy_label_color(style: HierarchyStyle, runtime: crate::theme::ThemeRuntime) -> Color32 {
+    match style {
+        HierarchyStyle::Normal => {
+            tokens::text_primary(runtime).lerp_to_gamma(tokens::text_secondary(runtime), 0.28)
+        }
+        HierarchyStyle::Component => Color32::from_rgb(193, 153, 255),
+    }
+}
+
+fn hierarchy_icon_tint(style: HierarchyStyle, runtime: crate::theme::ThemeRuntime) -> Color32 {
+    match style {
+        HierarchyStyle::Normal => tokens::text_secondary(runtime),
+        HierarchyStyle::Component => hierarchy_label_color(style, runtime),
     }
 }
 
@@ -906,15 +945,16 @@ fn hierarchy_selection_strong_fill() -> Color32 {
     Color32::from_rgba_unmultiplied(118, 162, 255, 68)
 }
 
-fn hierarchy_selection_stroke() -> Color32 {
-    Color32::from_rgba_unmultiplied(138, 182, 255, 132)
-}
-
 fn hierarchy_row_corner_radius(
     runtime: crate::theme::ThemeRuntime,
+    hovered: bool,
     round_top: bool,
     round_bottom: bool,
 ) -> CornerRadius {
+    if hovered {
+        return CornerRadius::same(tokens::radius_sm(runtime));
+    }
+
     if !(round_top || round_bottom) {
         return CornerRadius::ZERO;
     }
@@ -976,9 +1016,34 @@ fn collect_selection_subtree_ids(node: &HierarchyNode<'_>, ids: &mut Vec<usize>)
 mod tests {
     use super::{
         draw_hierarchy, move_hierarchy_node, Hierarchy, HierarchyIconStyle, HierarchyItemKind,
-        HierarchyNode,
+        HierarchyNode, HierarchyStyle,
     };
+    use crate::ui::tokens;
     use egui::{CentralPanel, Context, Id, RawInput};
+
+    #[test]
+    fn hovered_hierarchy_rows_use_uniform_corner_radius() {
+        let runtime = crate::theme::ThemeRuntime::default();
+        let radius = super::hierarchy_row_corner_radius(runtime, true, false, false);
+        let expected = tokens::radius_sm(runtime);
+
+        assert_eq!(radius.nw, expected);
+        assert_eq!(radius.ne, expected);
+        assert_eq!(radius.sw, expected);
+        assert_eq!(radius.se, expected);
+    }
+
+    #[test]
+    fn selected_hierarchy_ranges_only_round_exposed_edges() {
+        let runtime = crate::theme::ThemeRuntime::default();
+        let radius = super::hierarchy_row_corner_radius(runtime, false, true, false);
+        let expected = tokens::radius_sm(runtime);
+
+        assert_eq!(radius.nw, expected);
+        assert_eq!(radius.ne, expected);
+        assert_eq!(radius.sw, 0);
+        assert_eq!(radius.se, 0);
+    }
 
     #[test]
     fn move_hierarchy_node_within_same_parent_reorders_siblings() {
@@ -1097,6 +1162,31 @@ mod tests {
                     &mut selected_id,
                     Hierarchy::new(Id::new("hierarchy_icon_mode_test"), &mut nodes)
                         .icon_style(HierarchyIconStyle::Icons),
+                );
+            });
+        });
+    }
+
+    #[test]
+    fn renders_hierarchy_tree_in_component_style() {
+        let context = Context::default();
+        let mut selected_id = Some(1usize);
+        let mut nodes = vec![
+            HierarchyNode::new(1, "Gameplay_Systems", HierarchyItemKind::Folder).children(vec![
+                HierarchyNode::new(2, "Character_Rig_A", HierarchyItemKind::Group).children(vec![
+                    HierarchyNode::new(3, "Player_Controller", HierarchyItemKind::Player),
+                ]),
+            ]),
+        ];
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = draw_hierarchy(
+                    ui,
+                    &mut selected_id,
+                    Hierarchy::new(Id::new("hierarchy_component_style_test"), &mut nodes)
+                        .icon_style(HierarchyIconStyle::Icons)
+                        .style(HierarchyStyle::Component),
                 );
             });
         });

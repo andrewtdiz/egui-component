@@ -1,6 +1,6 @@
 use super::{
     api::{ComponentUi, ComponentUiExt},
-    Button, ButtonVariant, Popover, PopoverAlign, PopoverSide, TextInput,
+    Button, ButtonVariant, Popover, PopoverAlign, PopoverSide, TextInput, Tooltip,
 };
 use crate::layout;
 use crate::primitives::{
@@ -8,7 +8,7 @@ use crate::primitives::{
     control::{control_frame, ControlFrame},
 };
 use crate::ui::{tokens, twemoji, typography};
-use egui::{Align2, CursorIcon, Id, Margin, Response, Sense, Stroke, StrokeKind, Ui};
+use egui::{Align2, CursorIcon, Id, Response, Sense, Stroke, StrokeKind, Ui};
 
 const EMOJI_TRIGGER_SIZE: f32 = 38.0;
 const EMOJI_TRIGGER_EMOJI_SIZE: f32 = 20.0;
@@ -17,10 +17,10 @@ const EMOJI_POPUP_MAX_HEIGHT: f32 = 360.0;
 const EMOJI_CELL_SIZE: f32 = 32.0;
 const EMOJI_CELL_EMOJI_SIZE: f32 = 20.0;
 const EMOJI_CELL_GAP: f32 = 6.0;
-const EMOJI_GRID_INSET_X: i8 = 2;
 const EMOJI_SECTION_GAP: f32 = 10.0;
 const CATEGORY_BUTTON_SIZE: f32 = 30.0;
 const CATEGORY_ICON_SIZE: f32 = 14.0;
+const CATEGORY_BUTTON_GAP: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct EmojiSelector<'a> {
@@ -804,9 +804,10 @@ fn draw_emoji_trigger(
     };
     paint_emoji_or_text(ui, rect, display, EMOJI_TRIGGER_EMOJI_SIZE, text_color);
 
+    let response = response.on_hover_cursor(CursorIcon::PointingHand);
+    ui.components()
+        .tooltip_for(&response, Tooltip::text("Choose emoji"));
     response
-        .on_hover_cursor(CursorIcon::PointingHand)
-        .on_hover_text("Choose emoji")
 }
 
 fn draw_emoji_panel(
@@ -821,12 +822,12 @@ fn draw_emoji_panel(
     ui.set_min_width(props.popup_width);
     ui.set_max_width(props.popup_width);
 
-    let available_width = ui.available_width();
+    let content_width = ui.available_width();
     let mut components = ui.components();
     let input_response = components.text_input(
         &mut state.query,
         TextInput::new()
-            .width(available_width)
+            .width(content_width)
             .placeholder("Search emoji")
             .leading_icon("search"),
     );
@@ -842,64 +843,80 @@ fn draw_emoji_panel(
         .max_height((props.popup_max_height - 104.0).max(96.0))
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            let body_width = ui.available_width();
+            ui.set_min_width(body_width);
+            ui.set_max_width(body_width);
+
             if entries.is_empty() {
                 let _ = muted_empty_state(ui, "No emoji found");
                 return;
             }
 
-            let _ = egui::Frame::new()
-                .inner_margin(Margin::symmetric(EMOJI_GRID_INSET_X, 0))
-                .show(ui, |ui| {
-                    let previous_spacing = ui.spacing().item_spacing;
-                    ui.spacing_mut().item_spacing = egui::vec2(EMOJI_CELL_GAP, EMOJI_CELL_GAP);
+            let previous_spacing = ui.spacing().item_spacing;
+            ui.spacing_mut().item_spacing = egui::vec2(EMOJI_CELL_GAP, EMOJI_CELL_GAP);
 
-                    let _ = ui.horizontal_wrapped(|ui| {
-                        for entry in entries {
-                            let selected = value == entry.emoji;
-                            let response = draw_emoji_cell(ui, entry, selected);
-                            if response.clicked() {
-                                value.clear();
-                                value.push_str(entry.emoji);
-                                state.query.clear();
-                                *open = false;
-                                *value_changed = true;
-                            }
-                        }
-                    });
+            let _ = ui.horizontal_wrapped(|ui| {
+                ui.set_min_width(body_width);
+                ui.set_max_width(body_width);
+                for entry in entries {
+                    let selected = value == entry.emoji;
+                    let response = draw_emoji_cell(ui, entry, selected);
+                    if response.clicked() {
+                        value.clear();
+                        value.push_str(entry.emoji);
+                        state.query.clear();
+                        *open = false;
+                        *value_changed = true;
+                    }
+                }
+            });
 
-                    ui.spacing_mut().item_spacing = previous_spacing;
-                });
+            ui.spacing_mut().item_spacing = previous_spacing;
         });
 
     ui.add_space(EMOJI_SECTION_GAP);
-    let _ = ui.separator();
+    draw_panel_separator(ui, content_width);
     ui.add_space(EMOJI_SECTION_GAP);
-    let _ = egui::Frame::new()
-        .inner_margin(Margin::symmetric(EMOJI_GRID_INSET_X, 0))
-        .show(ui, |ui| {
-            draw_category_bar(ui, state);
-        });
+    draw_category_bar(ui, state, content_width);
 }
 
-fn draw_category_bar(ui: &mut Ui, state: &mut EmojiSelectorState) {
-    let _ = layout::row().gap(4.0).show(ui, |ui| {
-        for tab in CATEGORY_TABS {
-            let selected = state.category == tab.category;
-            let response = ui.components().button(
-                Button::icon_only(tab.icon)
-                    .variant(if selected {
-                        ButtonVariant::Secondary
-                    } else {
-                        ButtonVariant::Ghost
-                    })
-                    .icon_size(CATEGORY_ICON_SIZE)
-                    .min_size(egui::vec2(CATEGORY_BUTTON_SIZE, CATEGORY_BUTTON_SIZE)),
-            );
-            if response.clicked() && !selected {
-                state.category = tab.category;
+fn draw_category_bar(ui: &mut Ui, state: &mut EmojiSelectorState, content_width: f32) {
+    let button_width = ((content_width
+        - CATEGORY_BUTTON_GAP * (CATEGORY_TABS.len().saturating_sub(1) as f32))
+        / CATEGORY_TABS.len() as f32)
+        .max(1.0);
+    let _ = layout::sized_box().width(content_width).show(ui, |ui| {
+        let _ = layout::row().gap(CATEGORY_BUTTON_GAP).show(ui, |ui| {
+            for tab in CATEGORY_TABS {
+                let selected = state.category == tab.category;
+                let response = ui.components().button(
+                    Button::icon_only(tab.icon)
+                        .variant(if selected {
+                            ButtonVariant::Secondary
+                        } else {
+                            ButtonVariant::Ghost
+                        })
+                        .icon_size(CATEGORY_ICON_SIZE)
+                        .min_size(egui::vec2(button_width, CATEGORY_BUTTON_SIZE)),
+                );
+                if response.clicked() && !selected {
+                    state.category = tab.category;
+                }
             }
-        }
+        });
     });
+}
+
+fn draw_panel_separator(ui: &mut Ui, width: f32) {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 1.0), Sense::hover());
+    ui.painter().line_segment(
+        [
+            egui::pos2(rect.left(), rect.center().y),
+            egui::pos2(rect.right(), rect.center().y),
+        ],
+        Stroke::new(1.0, tokens::separator(runtime)),
+    );
 }
 
 fn draw_emoji_cell(ui: &mut Ui, entry: &EmojiEntry, selected: bool) -> Response {
@@ -933,9 +950,10 @@ fn draw_emoji_cell(ui: &mut Ui, entry: &EmojiEntry, selected: bool) -> Response 
         },
     );
 
+    let response = response.on_hover_cursor(CursorIcon::PointingHand);
+    ui.components()
+        .tooltip_for(&response, Tooltip::text(entry.label));
     response
-        .on_hover_cursor(CursorIcon::PointingHand)
-        .on_hover_text(entry.label)
 }
 
 fn paint_emoji_or_text(

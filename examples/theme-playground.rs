@@ -17,7 +17,7 @@ fn main() -> eframe::Result {
             egui_component::theme::install(
                 &creation_context.egui_ctx,
                 ThemeSpec::preset(BaseColor::Neutral),
-                ThemeMode::Dark,
+                ThemeMode::System,
             );
             Ok(Box::<ThemePlaygroundApp>::default())
         }),
@@ -41,10 +41,10 @@ impl Default for ThemePlaygroundApp {
         let spec = ThemeSpec::preset(BaseColor::Neutral).with_radius(10.0);
         Self {
             draft_base: BaseColor::Neutral,
-            draft_mode: ThemeMode::Dark,
+            draft_mode: ThemeMode::System,
             draft_radius: 10.0,
             applied_spec: spec,
-            applied_mode: ThemeMode::Dark,
+            applied_mode: ThemeMode::System,
             scoped_base: BaseColor::Mauve,
             scoped_mode: ThemeMode::Light,
             scoped_radius: 12.0,
@@ -143,7 +143,7 @@ impl ThemePlaygroundApp {
                         .button(
                             Button::new("Reapply mode")
                                 .variant(ButtonVariant::Secondary)
-                                .leading_icon("moon-star"),
+                                .leading_icon(mode_icon(self.draft_mode)),
                         )
                         .clicked()
                     {
@@ -199,43 +199,19 @@ impl ThemePlaygroundApp {
                     .weight(LabelWeight::Semibold)
                     .tone(LabelTone::Secondary),
             );
-            let _ = layout::row().gap(8.0).show(ui, |ui| {
-                let mut components = ui.components();
-                if components
-                    .button(
-                        Button::new("Light")
-                            .variant(if self.draft_mode == ThemeMode::Light {
-                                ButtonVariant::Primary
-                            } else {
-                                ButtonVariant::Secondary
-                            })
-                            .selected(self.draft_mode == ThemeMode::Light),
-                    )
-                    .clicked()
-                {
-                    self.draft_mode = ThemeMode::Light;
-                    egui_component::theme::set_mode(ctx, self.draft_mode);
-                    self.applied_mode = self.draft_mode;
-                    self.status = "Applied Light mode.".to_owned();
-                }
-                if components
-                    .button(
-                        Button::new("Dark")
-                            .variant(if self.draft_mode == ThemeMode::Dark {
-                                ButtonVariant::Primary
-                            } else {
-                                ButtonVariant::Secondary
-                            })
-                            .selected(self.draft_mode == ThemeMode::Dark),
-                    )
-                    .clicked()
-                {
-                    self.draft_mode = ThemeMode::Dark;
-                    egui_component::theme::set_mode(ctx, self.draft_mode);
-                    self.applied_mode = self.draft_mode;
-                    self.status = "Applied Dark mode.".to_owned();
-                }
-            });
+            let mut selected_mode = theme_mode_index(self.draft_mode);
+            ui.components().segmented_tabs(
+                Id::new("theme-mode"),
+                &mut selected_mode,
+                &THEME_MODE_OPTIONS,
+            );
+            let next_mode = theme_mode_from_index(selected_mode);
+            if next_mode != self.draft_mode {
+                self.draft_mode = next_mode;
+                egui_component::theme::set_mode(ctx, self.draft_mode);
+                self.applied_mode = self.draft_mode;
+                self.status = format!("Applied {} mode.", mode_label(self.draft_mode));
+            }
         });
     }
 
@@ -331,11 +307,41 @@ fn base_color_index(base: BaseColor) -> usize {
 
 fn mode_label(mode: ThemeMode) -> &'static str {
     match mode {
+        ThemeMode::System => "System",
         ThemeMode::Light => "Light",
         ThemeMode::Dark => "Dark",
     }
 }
 
+fn mode_icon(mode: ThemeMode) -> &'static str {
+    match mode {
+        ThemeMode::System => "monitor",
+        ThemeMode::Light => "sun-medium",
+        ThemeMode::Dark => "moon-star",
+    }
+}
+
+fn theme_mode_index(mode: ThemeMode) -> usize {
+    match mode {
+        ThemeMode::Light => 0,
+        ThemeMode::Dark => 1,
+        ThemeMode::System => 2,
+    }
+}
+
+fn theme_mode_from_index(index: usize) -> ThemeMode {
+    match index {
+        0 => ThemeMode::Light,
+        1 => ThemeMode::Dark,
+        _ => ThemeMode::System,
+    }
+}
+
 const BASE_COLOR_OPTIONS: [&str; 7] = [
     "Neutral", "Stone", "Zinc", "Mauve", "Olive", "Mist", "Taupe",
+];
+const THEME_MODE_OPTIONS: [TabOption<'static>; 3] = [
+    TabOption::icon_only(0, "Light", "sun-medium"),
+    TabOption::icon_only(1, "Dark", "moon-star"),
+    TabOption::icon_only(2, "System", "monitor"),
 ];

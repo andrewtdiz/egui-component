@@ -1,4 +1,7 @@
-use super::{api::ComponentUi, Button, ButtonVariant, LabelTone};
+use super::{
+    api::{with_component_overrides, ComponentOverrides, ComponentUi},
+    Button, ButtonVariant, LabelTone,
+};
 use crate::ui::tokens;
 use egui::util::IdTypeMap;
 use egui::{CursorIcon, Response};
@@ -36,6 +39,10 @@ impl<'a> Tooltip<'a> {
         }
     }
 
+    pub fn text(text: &'a str) -> Self {
+        Self::new("", text)
+    }
+
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
         self
@@ -67,82 +74,96 @@ impl ComponentUi<'_> {
                     )
                     .on_hover_cursor(CursorIcon::PointingHand);
 
-                let hover_started_id = response.id.with("tooltip_hover_started_at");
-                let now = response.ctx.input(|input| input.time);
-                let delay_secs = props.delay_ms as f64 / 1000.0;
-
-                let show_tooltip = if response.enabled() && response.hovered() {
-                    let hover_started_at = response.ctx.data_mut(|data: &mut IdTypeMap| {
-                        if let Some(hover_started_at) = data.get_temp::<f64>(hover_started_id) {
-                            hover_started_at
-                        } else {
-                            data.insert_temp(hover_started_id, now);
-                            now
-                        }
-                    });
-
-                    let hovered_for = now - hover_started_at;
-                    let should_show = hovered_for >= delay_secs;
-
-                    if !should_show {
-                        response
-                            .ctx
-                            .request_repaint_after_secs((delay_secs - hovered_for) as f32);
-                    }
-
-                    should_show
-                } else {
-                    response
-                        .ctx
-                        .data_mut(|data: &mut IdTypeMap| data.remove::<f64>(hover_started_id));
-                    false
-                };
-
-                if show_tooltip {
-                    let tooltip_frame =
-                        tooltip_frame(ui.style(), crate::theme::runtime_for_ui(&ui));
-                    let mut tooltip = egui::Tooltip::for_widget(&response).gap(TOOLTIP_GAP);
-                    tooltip.popup = tooltip.popup.frame(tooltip_frame);
-                    match props.placement {
-                        TooltipPlacement::Auto => {}
-                        TooltipPlacement::Top => {
-                            tooltip.popup = tooltip
-                                .popup
-                                .align(egui::RectAlign::TOP)
-                                .align_alternatives(&[egui::RectAlign::TOP]);
-                        }
-                        TooltipPlacement::Right => {
-                            tooltip.popup = tooltip
-                                .popup
-                                .align(egui::RectAlign::RIGHT)
-                                .align_alternatives(&[egui::RectAlign::RIGHT]);
-                        }
-                        TooltipPlacement::Bottom => {
-                            tooltip.popup = tooltip
-                                .popup
-                                .align(egui::RectAlign::BOTTOM)
-                                .align_alternatives(&[egui::RectAlign::BOTTOM]);
-                        }
-                        TooltipPlacement::Left => {
-                            tooltip.popup = tooltip
-                                .popup
-                                .align(egui::RectAlign::LEFT)
-                                .align_alternatives(&[egui::RectAlign::LEFT]);
-                        }
-                    }
-
-                    let _ = tooltip.show(|ui| {
-                        let mut ui = ComponentUi::new(ui);
-                        let _ = ui.label(
-                            crate::components::Label::new(props.text).tone(LabelTone::Secondary),
-                        );
-                    });
-                }
+                show_tooltip_for_response(&response, props, overrides);
 
                 response
             })
             .inner
     }
+
+    pub fn tooltip_for<'a>(&mut self, response: &Response, props: impl Into<Tooltip<'a>>) {
+        show_tooltip_for_response(response, props.into(), self.overrides);
+    }
+}
+
+fn show_tooltip_for_response(
+    response: &Response,
+    props: Tooltip<'_>,
+    overrides: ComponentOverrides,
+) {
+    let hover_started_id = response.id.with("tooltip_hover_started_at");
+    let now = response.ctx.input(|input| input.time);
+    let delay_secs = props.delay_ms as f64 / 1000.0;
+
+    let show_tooltip = if response.enabled() && response.hovered() {
+        let hover_started_at = response.ctx.data_mut(|data: &mut IdTypeMap| {
+            if let Some(hover_started_at) = data.get_temp::<f64>(hover_started_id) {
+                hover_started_at
+            } else {
+                data.insert_temp(hover_started_id, now);
+                now
+            }
+        });
+
+        let hovered_for = now - hover_started_at;
+        let should_show = hovered_for >= delay_secs;
+
+        if !should_show {
+            response
+                .ctx
+                .request_repaint_after_secs((delay_secs - hovered_for) as f32);
+        }
+
+        should_show
+    } else {
+        response
+            .ctx
+            .data_mut(|data: &mut IdTypeMap| data.remove::<f64>(hover_started_id));
+        false
+    };
+
+    if !show_tooltip {
+        return;
+    }
+
+    let runtime = crate::theme::runtime_for_context(&response.ctx);
+    let tooltip_frame = tooltip_frame(&response.ctx.style(), runtime);
+    let mut tooltip = egui::Tooltip::for_widget(response).gap(TOOLTIP_GAP);
+    tooltip.popup = tooltip.popup.frame(tooltip_frame);
+    match props.placement {
+        TooltipPlacement::Auto => {}
+        TooltipPlacement::Top => {
+            tooltip.popup = tooltip
+                .popup
+                .align(egui::RectAlign::TOP)
+                .align_alternatives(&[egui::RectAlign::TOP]);
+        }
+        TooltipPlacement::Right => {
+            tooltip.popup = tooltip
+                .popup
+                .align(egui::RectAlign::RIGHT)
+                .align_alternatives(&[egui::RectAlign::RIGHT]);
+        }
+        TooltipPlacement::Bottom => {
+            tooltip.popup = tooltip
+                .popup
+                .align(egui::RectAlign::BOTTOM)
+                .align_alternatives(&[egui::RectAlign::BOTTOM]);
+        }
+        TooltipPlacement::Left => {
+            tooltip.popup = tooltip
+                .popup
+                .align(egui::RectAlign::LEFT)
+                .align_alternatives(&[egui::RectAlign::LEFT]);
+        }
+    }
+
+    let _ = tooltip.show(|ui| {
+        with_component_overrides(ui, overrides, |ui| {
+            let mut ui = ComponentUi::new(ui);
+            let _ = ui.label(crate::components::Label::new(props.text).tone(LabelTone::Secondary));
+        });
+    });
 }
 
 fn tooltip_frame(style: &egui::Style, runtime: crate::theme::ThemeRuntime) -> egui::Frame {
@@ -157,10 +178,14 @@ fn tooltip_frame(style: &egui::Style, runtime: crate::theme::ThemeRuntime) -> eg
 
 #[cfg(test)]
 mod tests {
-    use super::{tooltip_frame, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y};
+    use super::{tooltip_frame, Tooltip, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y};
+    use crate::components::ComponentUiExt;
     use crate::theme::ThemeMode;
     use crate::ui::tokens;
-    use egui::{Context, CornerRadius, Margin};
+    use egui::{
+        pos2, vec2, CentralPanel, Context, CornerRadius, Event, Margin, Modifiers, PointerButton,
+        RawInput, Rect, Sense,
+    };
 
     #[test]
     fn tooltip_frame_overrides_popup_padding_and_shadow() {
@@ -189,6 +214,40 @@ mod tests {
             CornerRadius::same(tokens::radius_sm(crate::theme::runtime_for_context(
                 &context
             )))
+        );
+    }
+
+    #[test]
+    fn tooltip_can_attach_to_existing_response() {
+        let context = Context::default();
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            ThemeMode::Dark,
+        );
+        let hover_pos = pos2(64.0, 48.0);
+
+        let _ = context.run(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(320.0, 200.0))),
+                events: vec![
+                    Event::PointerMoved(hover_pos),
+                    Event::PointerButton {
+                        pos: hover_pos,
+                        button: PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| {
+                CentralPanel::default().show(ctx, |ui| {
+                    let (_, response) = ui.allocate_exact_size(vec2(128.0, 48.0), Sense::hover());
+                    ui.components()
+                        .tooltip_for(&response, Tooltip::text("Attached tooltip"));
+                });
+            },
         );
     }
 }

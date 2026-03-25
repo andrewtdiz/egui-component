@@ -1,20 +1,25 @@
-use super::{api::ComponentUi, TextInput};
+use super::{
+    api::{ComponentUi, ComponentUiExt},
+    TextInput,
+};
+use crate::layout;
 use crate::primitives::{
     content::muted_empty_state,
+    control::{control_frame, ControlFrame},
     popup::{popup_panel, PopupPanel},
     row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
 };
 use crate::ui::{tokens, typography};
 use egui::{
-    containers::scroll_area::ScrollSource, CornerRadius, Id, Response, Stroke, StrokeKind, Ui,
+    containers::scroll_area::ScrollSource, Align, CursorIcon, Id, Layout, Response, Stroke, Ui,
 };
 
 const MENU_INNER_PADDING_X: i8 = 3;
 const MENU_INNER_PADDING_Y: i8 = 3;
 const MENU_ROW_HEIGHT: f32 = 32.0;
-const CHECKBOX_SIZE: f32 = 16.0;
-const CHECKBOX_CORNER_RADIUS: u8 = 4;
-const CHECKBOX_LABEL_GAP: f32 = 8.0;
+const CHECKMARK_SLOT_WIDTH: f32 = 16.0;
+const CHECKMARK_SIZE: f32 = 11.0;
+const CHECKMARK_LABEL_GAP: f32 = 8.0;
 const ROW_PADDING_X: f32 = 10.0;
 
 #[derive(Debug, Clone, Copy)]
@@ -24,6 +29,8 @@ pub struct Combobox<'a> {
     pub width: f32,
     pub max_height: f32,
     pub placeholder: &'a str,
+    pub filter_placeholder: &'a str,
+    pub searchable: bool,
 }
 
 impl<'a> Combobox<'a> {
@@ -33,7 +40,9 @@ impl<'a> Combobox<'a> {
             options,
             width: 220.0,
             max_height: 104.0,
-            placeholder: "Filter",
+            placeholder: "Select options",
+            filter_placeholder: "Filter",
+            searchable: true,
         }
     }
 
@@ -51,6 +60,16 @@ impl<'a> Combobox<'a> {
         self.placeholder = placeholder;
         self
     }
+
+    pub fn filter_placeholder(mut self, filter_placeholder: &'a str) -> Self {
+        self.filter_placeholder = filter_placeholder;
+        self
+    }
+
+    pub fn searchable(mut self, searchable: bool) -> Self {
+        self.searchable = searchable;
+        self
+    }
 }
 
 impl ComponentUi<'_> {
@@ -64,24 +83,31 @@ impl ComponentUi<'_> {
         sanitize_selected_indices(selected_indices, props.options.len());
 
         let popup_id = props.id.with("popup");
-        let mut input_response = self.text_input(
-            query,
-            TextInput::new()
-                .width(props.width)
-                .placeholder(props.placeholder),
+        let open_state_id = props.id.with("open");
+        let was_open = load_combobox_open(self.ui_mut(), open_state_id);
+        let summary_text = selection_summary(selected_indices, props.options, props.placeholder);
+        let mut trigger_response = draw_trigger(
+            self.ui_mut(),
+            popup_id,
+            props.width,
+            summary_text.as_str(),
+            !selected_indices.is_empty(),
         );
-        let mut popup_open =
-            input_response.has_focus() || egui::Popup::is_id_open(self.ctx(), popup_id);
+        let mut popup_open = was_open;
 
-        if input_response.clicked() || input_response.changed() {
-            popup_open = true;
+        if trigger_response.clicked() {
+            popup_open = !was_open;
         }
 
-        let _ = egui::Popup::menu(&input_response)
+        let just_opened = popup_open && !was_open;
+
+        let _ = egui::Popup::from_response(&trigger_response)
             .id(popup_id)
+            .kind(egui::PopupKind::Popup)
             .open_bool(&mut popup_open)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .gap(4.0)
+            .layout(Layout::top_down(Align::Min))
             .show(|ui| {
                 let row_width = (props.width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
                 popup_panel(
@@ -91,6 +117,19 @@ impl ComponentUi<'_> {
                     |ui| {
                         ui.set_min_width(row_width);
                         ui.set_max_width(row_width);
+                        if props.searchable {
+                            let input_response = ui.components().text_input(
+                                query,
+                                TextInput::new()
+                                    .width(row_width)
+                                    .placeholder(props.filter_placeholder),
+                            );
+                            if just_opened {
+                                input_response.request_focus();
+                            }
+
+                            ui.add_space(6.0);
+                        }
                         let _ = egui::ScrollArea::vertical()
                             .id_salt(props.id.with("scroll"))
                             .scroll_source(ScrollSource {
@@ -101,41 +140,81 @@ impl ComponentUi<'_> {
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 let runtime = crate::theme::runtime_for_ui(ui);
-                                let query_lower = query.to_ascii_lowercase();
+                                let query_lower = if props.searchable {
+                                    query.to_ascii_lowercase()
+                                } else {
+                                    String::new()
+                                };
                                 let mut shown = 0usize;
-
-                                for (index, option) in props.options.iter().copied().enumerate() {
-                                    if !query_lower.is_empty()
-                                        && !option
-                                            .to_ascii_lowercase()
-                                            .contains(query_lower.as_str())
+                                let _ = layout::column().gap(2.0).show(ui, |ui| {
+                                    for (index, option) in props.options.iter().copied().enumerate()
                                     {
-                                        continue;
-                                    }
+                                        if props.searchable
+                                            && !query_lower.is_empty()
+                                            && !option
+                                                .to_ascii_lowercase()
+                                                .contains(query_lower.as_str())
+                                        {
+                                            continue;
+                                        }
 
-                                    shown += 1;
-                                    let selected = is_selected(selected_indices, index);
-                                    if draw_option_row(ui, option, selected, row_width, runtime)
-                                        .clicked()
-                                    {
-                                        let changed =
+                                        shown += 1;
+                                        let selected = is_selected(selected_indices, index);
+                                        if draw_option_row(ui, option, selected, row_width, runtime)
+                                            .clicked()
+                                        {
                                             toggle_selected_index(selected_indices, index);
-                                        if changed {
-                                            input_response.mark_changed();
+                                            trigger_response.mark_changed();
                                         }
                                     }
-                                }
 
-                                if shown == 0 {
-                                    let _ = muted_empty_state(ui, "No matches");
-                                }
+                                    if shown == 0 {
+                                        let _ = muted_empty_state(ui, "No matches");
+                                    }
+                                });
                             });
                     },
                 );
             });
 
-        input_response
+        store_combobox_open(self.ui_mut(), open_state_id, popup_open);
+
+        trigger_response
     }
+}
+
+fn draw_trigger(
+    ui: &mut Ui,
+    popup_id: Id,
+    width: f32,
+    summary_text: &str,
+    has_selection: bool,
+) -> Response {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let desired_size = egui::vec2(width, tokens::SPACING_INTERACT_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), popup_id);
+    let hovered = response.hovered();
+    let fill = tokens::input_bg(runtime, focused, hovered);
+    let stroke = tokens::input_stroke(runtime, focused, hovered);
+
+    control_frame(ui, rect, ControlFrame::new(fill, stroke));
+    let row = IconLabelRow::new(
+        summary_text,
+        typography::label_font(),
+        if has_selection {
+            tokens::text_primary(runtime)
+        } else {
+            tokens::text_muted(runtime)
+        },
+    )
+    .padding_x(10.0)
+    .trailing_icon("chevron-down")
+    .trailing_icon_size(12.0)
+    .trailing_icon_tint(tokens::text_secondary(runtime));
+    let _ = icon_label_row(ui, rect, &row);
+
+    response.on_hover_cursor(CursorIcon::PointingHand)
 }
 
 fn draw_option_row(
@@ -161,14 +240,14 @@ fn draw_option_row(
         },
     );
 
-    let checkbox_rect = egui::Rect::from_center_size(
+    let checkmark_rect = egui::Rect::from_center_size(
         egui::pos2(
-            rect.left() + ROW_PADDING_X + CHECKBOX_SIZE * 0.5,
+            rect.left() + ROW_PADDING_X + CHECKMARK_SLOT_WIDTH * 0.5,
             rect.center().y,
         ),
-        egui::vec2(CHECKBOX_SIZE, CHECKBOX_SIZE),
+        egui::vec2(CHECKMARK_SIZE, CHECKMARK_SIZE),
     );
-    draw_checkbox(ui, checkbox_rect, selected, runtime, &response);
+    draw_checkmark(ui, checkmark_rect, selected, runtime);
 
     let row = IconLabelRow::new(
         text,
@@ -179,70 +258,34 @@ fn draw_option_row(
             tokens::text_secondary(runtime)
         },
     )
-    .padding_x(ROW_PADDING_X + CHECKBOX_SIZE + CHECKBOX_LABEL_GAP);
+    .padding_x(ROW_PADDING_X + CHECKMARK_SLOT_WIDTH + CHECKMARK_LABEL_GAP);
     let _ = icon_label_row(ui, rect, &row);
 
     response
 }
 
-fn draw_checkbox(
+fn draw_checkmark(
     ui: &mut Ui,
     rect: egui::Rect,
     selected: bool,
     runtime: crate::theme::ThemeRuntime,
-    response: &Response,
 ) {
-    let hovered = response.hovered();
-    let pressed = response.is_pointer_button_down_on();
-
-    let (fill, stroke) = if selected {
-        let checked_fill = if pressed {
-            tokens::primary_active_bg(runtime)
-        } else if hovered {
-            tokens::primary_hover_bg(runtime)
-        } else {
-            tokens::primary_bg(runtime)
-        };
-        (checked_fill, Stroke::new(1.0, checked_fill))
-    } else if pressed {
-        (
-            tokens::input_focus_background(runtime),
-            Stroke::new(1.0, tokens::input_hover_border(runtime)),
-        )
-    } else if hovered {
-        (
-            tokens::input_hover_background(runtime),
-            Stroke::new(1.0, tokens::input_hover_border(runtime)),
-        )
-    } else {
-        (
-            tokens::input_background(runtime),
-            Stroke::new(1.0, tokens::input_border(runtime)),
-        )
-    };
-
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(CHECKBOX_CORNER_RADIUS),
-        fill,
-        stroke,
-        StrokeKind::Outside,
-    );
-
-    if selected {
-        let check_stroke = Stroke::new(1.8, tokens::primary_fg(runtime));
-        let start = egui::pos2(rect.left() + rect.width() * 0.24, rect.center().y + 0.2);
-        let middle = egui::pos2(
-            rect.left() + rect.width() * 0.44,
-            rect.bottom() - rect.height() * 0.28,
-        );
-        let end = egui::pos2(
-            rect.right() - rect.width() * 0.22,
-            rect.top() + rect.height() * 0.28,
-        );
-        ui.painter().line_segment([start, middle], check_stroke);
-        ui.painter().line_segment([middle, end], check_stroke);
+    if !selected {
+        return;
     }
+
+    let check_stroke = Stroke::new(1.8, tokens::row_selected_text(runtime));
+    let start = egui::pos2(rect.left() + rect.width() * 0.08, rect.center().y + 0.1);
+    let middle = egui::pos2(
+        rect.left() + rect.width() * 0.38,
+        rect.bottom() - rect.height() * 0.18,
+    );
+    let end = egui::pos2(
+        rect.right() - rect.width() * 0.04,
+        rect.top() + rect.height() * 0.12,
+    );
+    ui.painter().line_segment([start, middle], check_stroke);
+    ui.painter().line_segment([middle, end], check_stroke);
 }
 
 fn sanitize_selected_indices(selected_indices: &mut Vec<usize>, option_count: usize) {
@@ -266,4 +309,30 @@ fn toggle_selected_index(selected_indices: &mut Vec<usize>, index: usize) -> boo
             true
         }
     }
+}
+
+fn selection_summary(selected_indices: &[usize], options: &[&str], placeholder: &str) -> String {
+    match selected_indices.len() {
+        0 => placeholder.to_owned(),
+        1 => options
+            .get(selected_indices[0])
+            .copied()
+            .unwrap_or(placeholder)
+            .to_owned(),
+        count => format!("{count} selected"),
+    }
+}
+
+fn load_combobox_open(ui: &mut Ui, id: Id) -> bool {
+    ui.data(|data| data.get_temp::<bool>(id).unwrap_or(false))
+}
+
+fn store_combobox_open(ui: &mut Ui, id: Id, open: bool) {
+    ui.data_mut(|data| {
+        if open {
+            data.insert_temp(id, true);
+        } else {
+            data.remove::<bool>(id);
+        }
+    });
 }

@@ -6,8 +6,11 @@ use egui::{Align2, CornerRadius, CursorIcon, Id, Rect, RichText, Stroke, StrokeK
 const INLINE_TAB_GAP: f32 = 3.0;
 const INLINE_TAB_HEIGHT: f32 = 24.0;
 const INLINE_TAB_MIN_WIDTH: f32 = 48.0;
+const INLINE_TAB_ICON_ONLY_MIN_WIDTH: f32 = 34.0;
 const INLINE_TAB_PADDING_X: f32 = 11.0;
 const INLINE_TAB_GROUP_PADDING: f32 = 4.0;
+const INLINE_TAB_ICON_SIZE: f32 = 14.0;
+const INLINE_TAB_ICON_GAP: f32 = 6.0;
 const STACKED_TAB_SIZE: egui::Vec2 = egui::vec2(80.0, 68.0);
 const STACKED_TAB_GAP: f32 = 8.0;
 const STACKED_TAB_ICON_SIZE: f32 = 18.0;
@@ -26,6 +29,7 @@ pub struct TabOption<'a> {
     pub value: usize,
     pub label: &'a str,
     pub icon: Option<&'a str>,
+    pub icon_only: bool,
 }
 
 impl<'a> TabOption<'a> {
@@ -34,6 +38,7 @@ impl<'a> TabOption<'a> {
             value,
             label,
             icon: None,
+            icon_only: false,
         }
     }
 
@@ -42,6 +47,16 @@ impl<'a> TabOption<'a> {
             value,
             label,
             icon: Some(icon),
+            icon_only: false,
+        }
+    }
+
+    pub const fn icon_only(value: usize, label: &'a str, icon: &'a str) -> Self {
+        Self {
+            value,
+            label,
+            icon: Some(icon),
+            icon_only: true,
         }
     }
 }
@@ -163,17 +178,33 @@ fn draw_segmented_tabs(
         let tab_widths = options
             .iter()
             .map(|option| {
-                let label_width = ui.fonts_mut(|fonts| {
-                    fonts
-                        .layout_no_wrap(
-                            option.label.to_owned(),
-                            label_font.clone(),
-                            tokens::text_primary(runtime),
-                        )
-                        .size()
-                        .x
+                let label_width = if option.icon_only {
+                    0.0
+                } else {
+                    ui.fonts_mut(|fonts| {
+                        fonts
+                            .layout_no_wrap(
+                                option.label.to_owned(),
+                                label_font.clone(),
+                                tokens::text_primary(runtime),
+                            )
+                            .size()
+                            .x
+                    })
+                };
+                let icon_width = option.icon.map_or(0.0, |_| {
+                    if option.icon_only {
+                        INLINE_TAB_ICON_SIZE
+                    } else {
+                        INLINE_TAB_ICON_SIZE + INLINE_TAB_ICON_GAP
+                    }
                 });
-                (label_width + (INLINE_TAB_PADDING_X * 2.0)).max(INLINE_TAB_MIN_WIDTH)
+                let min_width = if option.icon_only {
+                    INLINE_TAB_ICON_ONLY_MIN_WIDTH
+                } else {
+                    INLINE_TAB_MIN_WIDTH
+                };
+                (label_width + icon_width + (INLINE_TAB_PADDING_X * 2.0)).max(min_width)
             })
             .collect::<Vec<_>>();
         let group_size = segmented_tabs_group_size(&tab_widths);
@@ -211,17 +242,65 @@ fn draw_segmented_tabs(
                 StrokeKind::Outside,
             );
 
-            ui.painter().text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                option.label,
-                label_font.clone(),
-                if selected {
-                    inline_tabs_selected_text(runtime)
-                } else {
-                    tokens::text_secondary(runtime)
-                },
-            );
+            let foreground = if selected {
+                inline_tabs_selected_text(runtime)
+            } else {
+                tokens::text_secondary(runtime)
+            };
+            let label_width = if option.icon_only {
+                0.0
+            } else {
+                ui.fonts_mut(|fonts| {
+                    fonts
+                        .layout_no_wrap(option.label.to_owned(), label_font.clone(), foreground)
+                        .size()
+                        .x
+                })
+            };
+
+            if let Some(icon) = option.icon {
+                if let Some(image) = icons::image(ui.ctx(), icon, INLINE_TAB_ICON_SIZE) {
+                    if option.icon_only {
+                        let icon_rect = Rect::from_center_size(
+                            rect.center(),
+                            egui::vec2(INLINE_TAB_ICON_SIZE, INLINE_TAB_ICON_SIZE),
+                        );
+                        image.tint(foreground).paint_at(ui, icon_rect);
+                    } else {
+                        let total_width = INLINE_TAB_ICON_SIZE + INLINE_TAB_ICON_GAP + label_width;
+                        let left = rect.center().x - (total_width * 0.5);
+                        let icon_rect = Rect::from_center_size(
+                            egui::pos2(left + (INLINE_TAB_ICON_SIZE * 0.5), rect.center().y),
+                            egui::vec2(INLINE_TAB_ICON_SIZE, INLINE_TAB_ICON_SIZE),
+                        );
+                        image.tint(foreground).paint_at(ui, icon_rect);
+                        ui.painter().text(
+                            egui::pos2(
+                                left + INLINE_TAB_ICON_SIZE + INLINE_TAB_ICON_GAP,
+                                rect.center().y,
+                            ),
+                            Align2::LEFT_CENTER,
+                            option.label,
+                            label_font.clone(),
+                            foreground,
+                        );
+                    }
+                }
+            } else {
+                ui.painter().text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    option.label,
+                    label_font.clone(),
+                    foreground,
+                );
+            }
+
+            let response = if option.icon_only {
+                response.on_hover_text(option.label)
+            } else {
+                response
+            };
 
             if response.clicked() && !selected {
                 *current = option.value;

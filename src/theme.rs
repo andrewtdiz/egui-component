@@ -9,8 +9,9 @@ const DESTRUCTIVE_FOREGROUND: OklchColor = OklchColor::new(0.985, 0.0, 0.0);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ThemeMode {
     Light,
-    #[default]
     Dark,
+    #[default]
+    System,
 }
 
 impl ThemeMode {
@@ -245,10 +246,9 @@ impl ThemeSpec {
     }
 
     pub const fn palette(self, mode: ThemeMode) -> ThemePalette {
-        if mode.is_dark() {
-            self.dark
-        } else {
-            self.light
+        match mode {
+            ThemeMode::Light => self.light,
+            ThemeMode::Dark | ThemeMode::System => self.dark,
         }
     }
 
@@ -418,6 +418,24 @@ impl Default for ThemeRuntime {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ThemeState {
+    pub spec: ThemeSpec,
+    pub mode: ThemeMode,
+}
+
+impl ThemeState {
+    pub const fn new(spec: ThemeSpec, mode: ThemeMode) -> Self {
+        Self { spec, mode }
+    }
+}
+
+impl Default for ThemeState {
+    fn default() -> Self {
+        Self::new(ThemeSpec::default(), ThemeMode::System)
+    }
+}
+
 pub const fn preset(base: BaseColor) -> ThemeSpec {
     ThemeSpec::preset(base)
 }
@@ -428,20 +446,21 @@ pub fn install_context_resources(context: &Context) {
 }
 
 pub fn install(context: &Context, theme: ThemeSpec, mode: ThemeMode) {
-    let runtime = ThemeRuntime::new(theme, mode);
-    store_context_runtime(context, runtime);
-    style::install(context, runtime);
+    let state = ThemeState::new(theme, mode);
+    store_context_theme_state(context, state);
+    style::install(context, state);
+    apply_viewport_theme(context, mode);
     icons::setup(context);
 }
 
 pub fn set_theme(context: &Context, theme: ThemeSpec) {
-    let runtime = ThemeRuntime::new(theme, load_context_runtime(context).mode);
-    apply_context_runtime(context, runtime);
+    let state = ThemeState::new(theme, load_context_theme_state(context).mode);
+    apply_context_theme_state(context, state);
 }
 
 pub fn set_mode(context: &Context, mode: ThemeMode) {
-    let runtime = ThemeRuntime::new(load_context_runtime(context).spec, mode);
-    apply_context_runtime(context, runtime);
+    let state = ThemeState::new(load_context_theme_state(context).spec, mode);
+    apply_context_theme_state(context, state);
 }
 
 pub fn with_theme<R>(
@@ -450,15 +469,16 @@ pub fn with_theme<R>(
     mode: ThemeMode,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let runtime = ThemeRuntime::new(theme, mode);
-    let previous = store_scoped_runtime(ui, runtime);
+    let state = ThemeState::new(theme, mode);
+    let runtime = resolve_theme_state(ui.ctx(), state);
+    let previous = store_scoped_theme_state(ui, state);
     let inner = ui
         .scope(|ui| {
             style::apply_to_ui(ui, runtime);
             add(ui)
         })
         .inner;
-    restore_scoped_runtime(ui, previous);
+    restore_scoped_theme_state(ui, previous);
     inner
 }
 
@@ -526,48 +546,77 @@ impl ThemeUiRef for crate::components::ComponentUi<'_> {
 }
 
 pub(crate) fn runtime_for_context(context: &Context) -> ThemeRuntime {
-    context
-        .data(|data| data.get_temp::<ThemeRuntime>(context_theme_runtime_id()))
-        .unwrap_or_default()
+    resolve_theme_state(
+        context,
+        context
+            .data(|data| data.get_temp::<ThemeState>(context_theme_runtime_id()))
+            .unwrap_or_default(),
+    )
 }
 
 pub(crate) fn runtime_for_ui(ui: &impl ThemeUiRef) -> ThemeRuntime {
     let ui = ui.theme_ui();
-    if let Some(runtime) = ui.data(|data| data.get_temp::<ThemeRuntime>(scoped_theme_runtime_id()))
-    {
-        runtime
+    if let Some(state) = ui.data(|data| data.get_temp::<ThemeState>(scoped_theme_runtime_id())) {
+        resolve_theme_state(ui.ctx(), state)
     } else {
         runtime_for_context(ui.ctx())
     }
 }
 
-pub(crate) fn apply_context_runtime(context: &Context, runtime: ThemeRuntime) {
-    store_context_runtime(context, runtime);
-    style::set_theme_runtime(context, runtime);
+pub(crate) fn apply_context_theme_state(context: &Context, state: ThemeState) {
+    store_context_theme_state(context, state);
+    style::set_theme_runtime(context, state);
+    apply_viewport_theme(context, state.mode);
 }
 
-fn load_context_runtime(context: &Context) -> ThemeRuntime {
-    runtime_for_context(context)
+fn load_context_theme_state(context: &Context) -> ThemeState {
+    context
+        .data(|data| data.get_temp::<ThemeState>(context_theme_runtime_id()))
+        .unwrap_or_default()
 }
 
-fn store_context_runtime(context: &Context, runtime: ThemeRuntime) {
-    context.data_mut(|data| data.insert_temp(context_theme_runtime_id(), runtime));
+fn store_context_theme_state(context: &Context, state: ThemeState) {
+    context.data_mut(|data| data.insert_temp(context_theme_runtime_id(), state));
 }
 
-fn store_scoped_runtime(ui: &mut Ui, runtime: ThemeRuntime) -> Option<ThemeRuntime> {
-    let previous = ui.data(|data| data.get_temp::<ThemeRuntime>(scoped_theme_runtime_id()));
-    ui.data_mut(|data| data.insert_temp(scoped_theme_runtime_id(), runtime));
+fn store_scoped_theme_state(ui: &mut Ui, state: ThemeState) -> Option<ThemeState> {
+    let previous = ui.data(|data| data.get_temp::<ThemeState>(scoped_theme_runtime_id()));
+    ui.data_mut(|data| data.insert_temp(scoped_theme_runtime_id(), state));
     previous
 }
 
-fn restore_scoped_runtime(ui: &mut Ui, previous: Option<ThemeRuntime>) {
+fn restore_scoped_theme_state(ui: &mut Ui, previous: Option<ThemeState>) {
     ui.data_mut(|data| {
         if let Some(previous) = previous {
             data.insert_temp(scoped_theme_runtime_id(), previous);
         } else {
-            data.remove::<ThemeRuntime>(scoped_theme_runtime_id());
+            data.remove::<ThemeState>(scoped_theme_runtime_id());
         }
     });
+}
+
+fn resolve_theme_state(context: &Context, state: ThemeState) -> ThemeRuntime {
+    ThemeRuntime::new(state.spec, resolve_theme_mode(context, state.mode))
+}
+
+fn resolve_theme_mode(context: &Context, mode: ThemeMode) -> ThemeMode {
+    match mode {
+        ThemeMode::Light => ThemeMode::Light,
+        ThemeMode::Dark => ThemeMode::Dark,
+        ThemeMode::System => match context.system_theme().unwrap_or(egui::Theme::Dark) {
+            egui::Theme::Dark => ThemeMode::Dark,
+            egui::Theme::Light => ThemeMode::Light,
+        },
+    }
+}
+
+fn apply_viewport_theme(context: &Context, mode: ThemeMode) {
+    let system_theme = match mode {
+        ThemeMode::Light => egui::SystemTheme::Light,
+        ThemeMode::Dark => egui::SystemTheme::Dark,
+        ThemeMode::System => egui::SystemTheme::SystemDefault,
+    };
+    context.send_viewport_cmd(egui::ViewportCommand::SetTheme(system_theme));
 }
 
 fn radius_for_spec(spec: ThemeSpec, role: RadiusRole) -> u8 {
@@ -645,7 +694,7 @@ mod tests {
         );
         set_theme(&context, ThemeSpec::preset(BaseColor::Stone));
 
-        assert_eq!(load_context_runtime(&context).mode, ThemeMode::Dark);
+        assert_eq!(load_context_theme_state(&context).mode, ThemeMode::Dark);
 
         let _ = context.run(RawInput::default(), |ctx| {
             CentralPanel::default().show(ctx, |ui| {
@@ -678,6 +727,49 @@ mod tests {
                 );
             });
         });
+    }
+
+    #[test]
+    fn system_mode_tracks_the_current_system_theme() {
+        let context = Context::default();
+        let spec = ThemeSpec::preset(BaseColor::Neutral);
+        install(&context, spec, ThemeMode::System);
+
+        assert_eq!(load_context_theme_state(&context).mode, ThemeMode::System);
+
+        let _ = context.run(
+            RawInput {
+                system_theme: Some(egui::Theme::Light),
+                ..Default::default()
+            },
+            |ctx| {
+                CentralPanel::default().show(ctx, |ui| {
+                    assert_eq!(runtime_for_context(ctx).mode, ThemeMode::Light);
+                    assert_eq!(
+                        color(ui, ColorRole::Background),
+                        spec.palette(ThemeMode::Light)
+                            .resolved(ColorRole::Background)
+                    );
+                });
+            },
+        );
+
+        let _ = context.run(
+            RawInput {
+                system_theme: Some(egui::Theme::Dark),
+                ..Default::default()
+            },
+            |ctx| {
+                CentralPanel::default().show(ctx, |ui| {
+                    assert_eq!(runtime_for_context(ctx).mode, ThemeMode::Dark);
+                    assert_eq!(
+                        color(ui, ColorRole::Background),
+                        spec.palette(ThemeMode::Dark)
+                            .resolved(ColorRole::Background)
+                    );
+                });
+            },
+        );
     }
 
     #[test]

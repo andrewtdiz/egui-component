@@ -248,10 +248,16 @@ fn render_snapshot_image(component: ComponentKind, theme_mode: ThemeMode) -> App
     let mut renderer = WgpuTestRenderer::default();
     let mut state = showcase::ShowcaseApp::default();
     let mut last_frame = None;
+    let mut previous_snapshot_rect = None;
+    let min_render_frames = if component == ComponentKind::EmojiSelector {
+        SNAPSHOT_MIN_RENDER_FRAMES.max(4)
+    } else {
+        SNAPSHOT_MIN_RENDER_FRAMES
+    };
 
     for frame_index in 0..SNAPSHOT_RENDER_FRAMES {
-        let raw_input = snapshot_raw_input(frame_index);
-        let (output, crop_rect) =
+        let raw_input = snapshot_raw_input(component, frame_index, previous_snapshot_rect);
+        let (output, crop_rect, snapshot_rect) =
             render_snapshot_frame(&context, &mut state, component, theme_mode, raw_input);
         renderer.handle_delta(&output.textures_delta);
         let image = renderer
@@ -261,7 +267,8 @@ fn render_snapshot_image(component: ComponentKind, theme_mode: ThemeMode) -> App
         let pending_images = context.has_pending_images();
 
         last_frame = Some(cropped);
-        if frame_index + 1 >= SNAPSHOT_MIN_RENDER_FRAMES && !pending_images {
+        previous_snapshot_rect = Some(snapshot_rect);
+        if frame_index + 1 >= min_render_frames && !pending_images {
             break;
         }
     }
@@ -275,7 +282,7 @@ fn render_snapshot_frame(
     component: ComponentKind,
     theme_mode: ThemeMode,
     raw_input: RawInput,
-) -> (egui::FullOutput, Rect) {
+) -> (egui::FullOutput, Rect, Rect) {
     let mut snapshot_rect = Rect::NOTHING;
     let output = context.run(raw_input, |ctx| {
         showcase::configure_snapshot(state, component, theme_mode);
@@ -288,10 +295,14 @@ fn render_snapshot_frame(
     });
 
     let crop_rect = snapshot_crop_rect(context, snapshot_rect).unwrap_or(snapshot_rect);
-    (output, crop_rect)
+    (output, crop_rect, snapshot_rect)
 }
 
-fn snapshot_raw_input(frame_index: usize) -> RawInput {
+fn snapshot_raw_input(
+    component: ComponentKind,
+    frame_index: usize,
+    previous_snapshot_rect: Option<Rect>,
+) -> RawInput {
     let mut input = RawInput {
         screen_rect: Some(Rect::from_min_size(
             Pos2::ZERO,
@@ -306,6 +317,20 @@ fn snapshot_raw_input(frame_index: usize) -> RawInput {
         .get_mut(&ViewportId::ROOT)
         .expect("root viewport")
         .native_pixels_per_point = Some(SNAPSHOT_PIXELS_PER_POINT);
+
+    if component == ComponentKind::EmojiSelector && matches!(frame_index, 1 | 2) {
+        if let Some(snapshot_rect) = previous_snapshot_rect {
+            let trigger_pos = egui::pos2(snapshot_rect.center().x, snapshot_rect.top() + 20.0);
+            input.events.push(egui::Event::PointerMoved(trigger_pos));
+            input.events.push(egui::Event::PointerButton {
+                pos: trigger_pos,
+                button: egui::PointerButton::Primary,
+                pressed: frame_index == 1,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+    }
+
     input
 }
 
@@ -388,6 +413,7 @@ fn theme_suffix(theme_mode: ThemeMode) -> &'static str {
     match theme_mode {
         ThemeMode::Light => "light",
         ThemeMode::Dark => "dark",
+        ThemeMode::System => "system",
     }
 }
 

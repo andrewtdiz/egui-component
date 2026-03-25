@@ -51,7 +51,7 @@ fn main() -> eframe::Result {
             egui_component::theme::install(
                 &cc.egui_ctx,
                 ThemeSpec::preset(BaseColor::Neutral),
-                ThemeMode::Dark,
+                ThemeMode::System,
             );
             Ok(Box::<MyApp>::default())
         }),
@@ -114,7 +114,7 @@ use egui_component::{BaseColor, ThemeMode, ThemeSpec};
 egui_component::theme::install(
     &cc.egui_ctx,
     ThemeSpec::preset(BaseColor::Neutral),
-    ThemeMode::Dark,
+    ThemeMode::System,
 );
 ```
 

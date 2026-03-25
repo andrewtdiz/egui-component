@@ -168,10 +168,15 @@ const CANVA_POSITION_TAB_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Arrange"), TabOption::new(1, "Layers")];
 const CANVA_LAYER_FILTER_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "All"), TabOption::new(1, "Overlapping")];
+const HIERARCHY_STYLE_OPTIONS: [TabOption<'static>; 2] =
+    [TabOption::new(0, "Normal"), TabOption::new(1, "Component")];
 const HIERARCHY_ICON_STYLE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Emoji"), TabOption::new(1, "Icons")];
-const THEME_MODE_OPTIONS: [TabOption<'static>; 2] =
-    [TabOption::new(0, "Light"), TabOption::new(1, "Dark")];
+const THEME_MODE_OPTIONS: [TabOption<'static>; 3] = [
+    TabOption::icon_only(0, "Light", "sun-medium"),
+    TabOption::icon_only(1, "Dark", "moon-star"),
+    TabOption::icon_only(2, "System", "monitor"),
+];
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::with_icon(0, "Home", "house"),
@@ -257,6 +262,21 @@ const DROPDOWN_ACTION_LABELS: [&str; 13] = [
     "Log out",
     "Delete",
 ];
+const CONTEXT_MENU_ENTRIES: [DropdownMenuEntry<'static>; 6] = [
+    DropdownMenuEntry::action_with_icon(0, "Rename", "pen-line"),
+    DropdownMenuEntry::action_with_icon(1, "Duplicate", "copy"),
+    DropdownMenuEntry::action_with_icon(2, "Create Prefab", "package-plus"),
+    DropdownMenuEntry::separator(),
+    DropdownMenuEntry::action_with_icon(3, "Focus Selection", "focus"),
+    DropdownMenuEntry::action_with_icon(4, "Delete", "trash-2"),
+];
+const CONTEXT_MENU_ACTION_LABELS: [&str; 5] = [
+    "Rename",
+    "Duplicate",
+    "Create Prefab",
+    "Focus Selection",
+    "Delete",
+];
 const MENU_BAR_RECENT_ENTRIES: [DropdownMenuEntry<'static>; 3] = [
     DropdownMenuEntry::action(3, "Design Tokens.fig"),
     DropdownMenuEntry::action(4, "Toolbar Draft.rs"),
@@ -331,6 +351,8 @@ const SIDEBAR_WIDTH: f32 = 238.0;
 const TOOLBAR_PREVIEW_WIDTH: f32 = 820.0;
 const MENU_BAR_PREVIEW_WIDTH: f32 = 420.0;
 const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
+const COLLAB_CURSOR_DEFAULT_COLOR: Color32 = Color32::from_rgb(255, 122, 36);
+const COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION: egui::Vec2 = egui::vec2(0.5, 0.5);
 const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const NUMBER_INPUT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
 const NUMBER_INPUT_RED: Color32 = Color32::from_rgb(239, 68, 68);
@@ -427,7 +449,7 @@ pub fn install_context(context: &egui::Context) {
     theme::install(
         context,
         ThemeSpec::preset(BaseColor::Neutral),
-        ThemeMode::Dark,
+        ThemeMode::System,
     );
 }
 
@@ -463,11 +485,15 @@ pub struct ShowcaseApp {
     drag_board_regions: [DragBoardRegion; 3],
     hierarchy_nodes: Vec<HierarchyNode<'static>>,
     hierarchy_selected_id: Option<usize>,
+    hierarchy_style_index: usize,
     hierarchy_icon_style_index: usize,
     input_value: String,
     field_value: String,
     emoji_selector_value: String,
     checkbox_value: bool,
+    collab_cursor_name: String,
+    collab_cursor_color: Color32,
+    collab_cursor_preview_position: egui::Vec2,
     switch_value: bool,
     small_switch_value: bool,
     toolbar_color_index: usize,
@@ -501,6 +527,7 @@ pub struct ShowcaseApp {
     pagination_page: usize,
     collapsible_open: bool,
     dropdown_action: Option<usize>,
+    context_menu_action: Option<usize>,
     combobox_query: String,
     combobox_indices: Vec<usize>,
     command_query: String,
@@ -521,7 +548,7 @@ impl Default for ShowcaseApp {
     fn default() -> Self {
         Self {
             selected_component: ComponentKind::Button,
-            theme_mode: ThemeMode::Dark,
+            theme_mode: ThemeMode::System,
             canva_background_query: String::new(),
             canva_background_color_index: 2,
             canva_brand_query: String::new(),
@@ -532,11 +559,15 @@ impl Default for ShowcaseApp {
             drag_board_regions: DRAG_BOARD_DEFAULT_REGIONS,
             hierarchy_nodes: default_hierarchy_nodes(),
             hierarchy_selected_id: Some(HIERARCHY_DEFAULT_SELECTED_ID),
+            hierarchy_style_index: 0,
             hierarchy_icon_style_index: 0,
             input_value: "Player_Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             emoji_selector_value: "🙂".to_owned(),
             checkbox_value: true,
+            collab_cursor_name: "Lisa Chen".to_owned(),
+            collab_cursor_color: COLLAB_CURSOR_DEFAULT_COLOR,
+            collab_cursor_preview_position: COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION,
             switch_value: true,
             small_switch_value: false,
             toolbar_color_index: 0,
@@ -570,6 +601,7 @@ impl Default for ShowcaseApp {
             pagination_page: 2,
             collapsible_open: true,
             dropdown_action: None,
+            context_menu_action: None,
             combobox_query: "mat".to_owned(),
             combobox_indices: vec![0, 2],
             command_query: String::new(),
@@ -611,6 +643,14 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Command => {
             app.command_query = "view".to_owned();
         }
+        ComponentKind::CollabCursor => {
+            app.collab_cursor_name = "Lisa Chen".to_owned();
+            app.collab_cursor_color = COLLAB_CURSOR_DEFAULT_COLOR;
+            app.collab_cursor_preview_position = COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION;
+        }
+        ComponentKind::ContextMenu => {
+            app.context_menu_action = None;
+        }
         ComponentKind::EmojiSelector => {
             app.emoji_selector_value = "🍕".to_owned();
         }
@@ -623,6 +663,7 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Hierarchy => {
             app.hierarchy_nodes = default_hierarchy_nodes();
             app.hierarchy_selected_id = Some(HIERARCHY_DEFAULT_SELECTED_ID);
+            app.hierarchy_style_index = 0;
             app.hierarchy_icon_style_index = 0;
         }
         ComponentKind::Popover => {
@@ -788,6 +829,7 @@ impl ShowcaseApp {
             ComponentKind::CanvaEditImage => self.render_canva_edit_image_preview(ui),
             ComponentKind::CanvaPosition => self.render_canva_position_preview(ui),
             ComponentKind::Checkbox => self.render_checkbox_preview(ui),
+            ComponentKind::CollabCursor => self.render_collab_cursor_preview(ui),
             ComponentKind::Switch => self.render_switch_preview(ui),
             ComponentKind::Slider => self.render_slider_preview(ui),
             ComponentKind::NumberInput => self.render_number_input_preview(ui),
@@ -804,6 +846,7 @@ impl ShowcaseApp {
             ComponentKind::Collapsible => self.render_collapsible_preview(ui),
             ComponentKind::AudioPlayback => self.render_audio_playback_preview(ui),
             ComponentKind::Combobox => self.render_combobox_preview(ui),
+            ComponentKind::ContextMenu => self.render_context_menu_preview(ui),
             ComponentKind::Command => self.render_command_preview(ui),
             ComponentKind::Dialogue => self.render_dialogue_preview(ui),
             ComponentKind::DragBoard => self.render_drag_board_preview(ui),
@@ -993,9 +1036,10 @@ fn show_preview_host(
     size: egui::Vec2,
     fill: Color32,
     stroke: Stroke,
-    add: impl FnOnce(&mut Ui, Rect),
-) {
-    let (host_rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    sense: Sense,
+    add: impl FnOnce(&mut Ui, Rect, &Response),
+) -> Response {
+    let (host_rect, response) = ui.allocate_exact_size(size, sense);
     ui.painter().rect(
         host_rect,
         egui::CornerRadius::ZERO,
@@ -1004,8 +1048,58 @@ fn show_preview_host(
         egui::StrokeKind::Outside,
     );
     let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
-        add(ui, host_rect);
+        add(ui, host_rect, &response);
     });
+    response
+}
+
+fn draw_collab_cursor_preview_guides(ui: &Ui, host_rect: Rect) {
+    let runtime = theme::runtime_for_ui(ui);
+    let guide = tokens::text_muted(runtime).linear_multiply(if runtime.mode.is_dark() {
+        0.26
+    } else {
+        0.18
+    });
+    let center = host_rect.center();
+    let inset = 14.0;
+    let stroke = Stroke::new(1.0, guide);
+
+    ui.painter().line_segment(
+        [
+            egui::pos2(host_rect.left() + inset, center.y),
+            egui::pos2(host_rect.right() - inset, center.y),
+        ],
+        stroke,
+    );
+    ui.painter().line_segment(
+        [
+            egui::pos2(center.x, host_rect.top() + inset),
+            egui::pos2(center.x, host_rect.bottom() - inset),
+        ],
+        stroke,
+    );
+    ui.painter()
+        .circle_filled(center, 3.0, guide.linear_multiply(1.25));
+}
+
+fn collab_cursor_preview_position(host_rect: Rect, normalized: egui::Vec2) -> egui::Pos2 {
+    let normalized_x = normalized.x.clamp(0.0, 1.0);
+    let normalized_y = normalized.y.clamp(0.0, 1.0);
+
+    egui::pos2(
+        host_rect.left() + (host_rect.width() * normalized_x),
+        host_rect.top() + (host_rect.height() * normalized_y),
+    )
+}
+
+fn collab_cursor_preview_anchor(host_rect: Rect, pointer_position: egui::Pos2) -> egui::Vec2 {
+    let width = host_rect.width().max(1.0);
+    let height = host_rect.height().max(1.0);
+
+    vec2(
+        ((pointer_position.x - host_rect.left()) / width).clamp(0.0, 1.0),
+        ((pointer_position.y - host_rect.top()) / height).clamp(0.0, 1.0),
+    )
 }
 
 fn sidebar_preview_toggle_rect(
@@ -1661,6 +1755,66 @@ impl ShowcaseApp {
         });
     }
 
+    fn render_collab_cursor_preview(&mut self, ui: &mut Ui) {
+        let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let mut components = ui.components();
+            let _ = components.label(Label::new("Color").tone(LabelTone::Muted).size(SMALL_TEXT));
+            let _ = components.color_input(
+                &mut self.collab_cursor_color,
+                ColorInput::new().id(Id::new("component_showcase_collab_cursor_color")),
+            );
+            let _ = components.label(Label::new("Name").tone(LabelTone::Muted).size(SMALL_TEXT));
+            let _ = components.text_input(
+                &mut self.collab_cursor_name,
+                TextInput::new().width(180.0).placeholder("Lisa Chen"),
+            );
+        });
+
+        ui.add_space(14.0);
+
+        let preview_name = self.collab_cursor_name.clone();
+        let preview_color = self.collab_cursor_color;
+        let host_fill = input_background(ui);
+        let host_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let host_size = vec2(ui.available_width().clamp(320.0, 460.0), 240.0);
+            let _ = show_preview_host(
+                ui,
+                host_size,
+                host_fill,
+                host_stroke,
+                Sense::click(),
+                |ui, host_rect, host_response| {
+                    if host_response.hovered() {
+                        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+                    }
+
+                    if host_response.clicked() {
+                        if let Some(pointer_position) = host_response.interact_pointer_pos() {
+                            self.collab_cursor_preview_position =
+                                collab_cursor_preview_anchor(host_rect, pointer_position);
+                        }
+                    }
+
+                    draw_collab_cursor_preview_guides(ui, host_rect);
+                    let _ = ui.components().collab_cursor(
+                        CollabCursor::new(
+                            Id::new("component_showcase_collab_cursor"),
+                            preview_name.as_str(),
+                            collab_cursor_preview_position(
+                                host_rect,
+                                self.collab_cursor_preview_position,
+                            ),
+                        )
+                        .color(preview_color)
+                        .size(34.0),
+                    );
+                },
+            );
+        });
+    }
+
     fn render_switch_preview(&mut self, ui: &mut Ui) {
         let _ = ui
             .components()
@@ -2152,6 +2306,52 @@ impl ShowcaseApp {
         );
     }
 
+    fn render_context_menu_preview(&mut self, ui: &mut Ui) {
+        let preview_width = 420.0f32.min(ui.available_width());
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let (_, state) = ui.components().context_menu(
+                ContextMenu::new(
+                    Id::new("component_showcase_context_menu"),
+                    &CONTEXT_MENU_ENTRIES,
+                )
+                .width(220.0)
+                .size(vec2(preview_width, 176.0)),
+                |ui| {
+                    let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                        ui.add_space(18.0);
+                        let _ = ui.components().label(
+                            Label::new("Scene View")
+                                .tone(LabelTone::Muted)
+                                .size(SMALL_TEXT),
+                        );
+                        ui.add_space(8.0);
+                        let _ = ui.components().label(
+                            Label::new("Right-click anywhere in this region")
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Semibold)
+                                .size(18.0),
+                        );
+                        ui.add_space(6.0);
+                        let _ = ui.components().label(
+                            Label::new("Open a context menu with scene actions like rename, duplicate, or delete.")
+                                .tone(LabelTone::Secondary),
+                        );
+                    });
+                },
+            );
+            if let Some(action) = state.action {
+                self.context_menu_action = Some(action);
+            }
+        });
+
+        ui.add_space(8.0);
+        let _ = ui.components().label(
+            Label::new(context_menu_action_label(self.context_menu_action))
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+    }
+
     fn render_collapsible_preview(&mut self, ui: &mut Ui) {
         let collapsible_open = self.collapsible_open;
         let _ = ui.components().collapsible(
@@ -2379,7 +2579,7 @@ impl ShowcaseApp {
         }
 
         ui.add_space(10.0);
-        let canvas_fill = if self.theme_mode.is_dark() {
+        let canvas_fill = if theme::runtime_for_ui(ui).mode.is_dark() {
             app_background(ui)
         } else {
             TOOLBAR_CANVAS_LIGHT_FILL
@@ -2387,12 +2587,13 @@ impl ShowcaseApp {
         let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
             let width = 700.0f32.min(ui.available_width());
             let host_size = vec2(width, 360.0);
-            show_preview_host(
+            let _ = show_preview_host(
                 ui,
                 host_size,
                 canvas_fill,
                 Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
-                |ui, host_rect| {
+                Sense::hover(),
+                |ui, host_rect, _| {
                     let preview_animation = ui.ctx().animate_bool_responsive(
                         Id::new("component_showcase_sidebar_preview"),
                         self.sidebar_preview_open,
@@ -2534,7 +2735,7 @@ impl ShowcaseApp {
             });
 
         ui.add_space(10.0);
-        let canvas_fill = if self.theme_mode.is_dark() {
+        let canvas_fill = if theme::runtime_for_ui(ui).mode.is_dark() {
             app_background(ui)
         } else {
             TOOLBAR_CANVAS_LIGHT_FILL
@@ -2601,15 +2802,27 @@ impl ShowcaseApp {
         );
         ui.add_space(10.0);
         ui.components().segmented_tabs(
+            Id::new("component_showcase_hierarchy_style"),
+            &mut self.hierarchy_style_index,
+            &HIERARCHY_STYLE_OPTIONS,
+        );
+        ui.add_space(10.0);
+        ui.components().segmented_tabs(
             Id::new("component_showcase_hierarchy_icon_style"),
             &mut self.hierarchy_icon_style_index,
             &HIERARCHY_ICON_STYLE_OPTIONS,
         );
         ui.add_space(10.0);
+
         let icon_style = if self.hierarchy_icon_style_index == 1 {
             HierarchyIconStyle::Icons
         } else {
             HierarchyIconStyle::Emoji
+        };
+        let hierarchy_style = if self.hierarchy_style_index == 1 {
+            HierarchyStyle::Component
+        } else {
+            HierarchyStyle::Normal
         };
         let _ = ui.components().hierarchy(
             &mut self.hierarchy_selected_id,
@@ -2618,12 +2831,13 @@ impl ShowcaseApp {
                 &mut self.hierarchy_nodes,
             )
             .width(360.0)
-            .icon_style(icon_style),
+            .icon_style(icon_style)
+            .style(hierarchy_style),
         );
     }
 
     fn render_toolbar_preview(&mut self, ui: &mut Ui) {
-        let canvas_fill = if self.theme_mode.is_dark() {
+        let canvas_fill = if theme::runtime_for_ui(ui).mode.is_dark() {
             app_background(ui)
         } else {
             TOOLBAR_CANVAS_LIGHT_FILL
@@ -4095,6 +4309,13 @@ fn dropdown_action_label(action: Option<usize>) -> &'static str {
     }
 }
 
+fn context_menu_action_label(action: Option<usize>) -> &'static str {
+    match action.and_then(|id| CONTEXT_MENU_ACTION_LABELS.get(id).copied()) {
+        Some(label) => label,
+        None => "No context menu action triggered",
+    }
+}
+
 fn menu_bar_action_label(action: Option<usize>) -> &'static str {
     match action.and_then(|id| MENU_BAR_ACTION_LABELS.get(id).copied()) {
         Some(label) => label,
@@ -4131,7 +4352,8 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         ComponentKind::CanvaBrandKit => ShowcaseSection::Canva,
         ComponentKind::CanvaEditImage => ShowcaseSection::Canva,
         ComponentKind::CanvaPosition => ShowcaseSection::Canva,
-        ComponentKind::MenuBar
+        ComponentKind::CollabCursor
+        | ComponentKind::MenuBar
         | ComponentKind::Toolbar
         | ComponentKind::ImageTile
         | ComponentKind::DragBoard
@@ -4151,6 +4373,8 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::CanvaBrandKit => available_width.min(640.0),
         ComponentKind::CanvaEditImage => available_width.min(420.0),
         ComponentKind::CanvaPosition => available_width.min(440.0),
+        ComponentKind::CollabCursor => available_width.min(560.0),
+        ComponentKind::ContextMenu => available_width.min(520.0),
         ComponentKind::DragBoard => available_width.min(560.0),
         ComponentKind::Hierarchy => available_width.min(440.0),
         ComponentKind::Toolbar => available_width.min(920.0),
@@ -4189,6 +4413,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
             "Canva-style position inspector with arrange, align, and transform controls."
         }
         ComponentKind::Checkbox => "Boolean control with label.",
+        ComponentKind::CollabCursor => {
+            "Presence cursor with a saturated SVG pointer and attached collaborator name badge."
+        }
         ComponentKind::Switch => "Toggle control.",
         ComponentKind::Slider => "Range input.",
         ComponentKind::NumberInput => "Numeric entry with drag axis support.",
@@ -4202,6 +4429,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Popover => "Click-triggered interactive popup surface.",
         ComponentKind::Tooltip => "Hover-triggered helper content.",
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
+        ComponentKind::ContextMenu => {
+            "Right-click menu surface built on egui's built-in context popup behavior."
+        }
         ComponentKind::Collapsible => "Expandable content section.",
         ComponentKind::AudioPlayback => "Playback row with optional trailing actions.",
         ComponentKind::Combobox => "Filterable multi-select picker with checkbox menu rows.",
@@ -4281,13 +4511,15 @@ fn theme_mode_index(mode: ThemeMode) -> usize {
     match mode {
         ThemeMode::Light => 0,
         ThemeMode::Dark => 1,
+        ThemeMode::System => 2,
     }
 }
 
 fn theme_mode_from_index(index: usize) -> ThemeMode {
     match index {
         0 => ThemeMode::Light,
-        _ => ThemeMode::Dark,
+        1 => ThemeMode::Dark,
+        _ => ThemeMode::System,
     }
 }
 
@@ -4307,12 +4539,17 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.toolbar_color_index = state
         .toolbar_color_index
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
+    state.collab_cursor_preview_position.x = state.collab_cursor_preview_position.x.clamp(0.0, 1.0);
+    state.collab_cursor_preview_position.y = state.collab_cursor_preview_position.y.clamp(0.0, 1.0);
     state.canva_position_tab_index = state
         .canva_position_tab_index
         .min(CANVA_POSITION_TAB_OPTIONS.len().saturating_sub(1));
     state.canva_layer_filter_index = state
         .canva_layer_filter_index
         .min(CANVA_LAYER_FILTER_OPTIONS.len().saturating_sub(1));
+    state.hierarchy_style_index = state
+        .hierarchy_style_index
+        .min(HIERARCHY_STYLE_OPTIONS.len().saturating_sub(1));
     state.hierarchy_icon_style_index = state
         .hierarchy_icon_style_index
         .min(HIERARCHY_ICON_STYLE_OPTIONS.len().saturating_sub(1));
@@ -4377,6 +4614,12 @@ fn clamp_state(state: &mut ShowcaseApp) {
         state.dropdown_action = None;
     }
     if state
+        .context_menu_action
+        .is_some_and(|id| id >= CONTEXT_MENU_ACTION_LABELS.len())
+    {
+        state.context_menu_action = None;
+    }
+    if state
         .menu_bar_action
         .is_some_and(|id| id >= MENU_BAR_ACTION_LABELS.len())
     {
@@ -4392,8 +4635,8 @@ fn clamp_state(state: &mut ShowcaseApp) {
 #[cfg(test)]
 mod tests {
     use super::{
-        configure_snapshot, install_context, render_snapshot_surface, sidebar_preview_toggle_rect,
-        update, ShowcaseApp,
+        collab_cursor_preview_anchor, collab_cursor_preview_position, configure_snapshot,
+        install_context, render_snapshot_surface, sidebar_preview_toggle_rect, update, ShowcaseApp,
     };
     use crate::{ComponentKind, ThemeMode};
     use egui::{pos2, vec2, CentralPanel, Context, RawInput, Rect};
@@ -4408,6 +4651,7 @@ mod tests {
             ComponentKind::CanvaBrandKit,
             ComponentKind::CanvaEditImage,
             ComponentKind::CanvaPosition,
+            ComponentKind::CollabCursor,
             ComponentKind::DragBoard,
             ComponentKind::EmojiSelector,
             ComponentKind::Sidebar,
@@ -4456,5 +4700,19 @@ mod tests {
         assert_eq!(right_open.right(), host_rect.right() - sidebar_width + 36.0);
         assert_eq!(left_closed.top(), host_rect.top() + 8.0);
         assert_eq!(right_closed.top(), host_rect.top() + 8.0);
+    }
+
+    #[test]
+    fn collab_cursor_preview_click_mapping_stays_within_host() {
+        let host_rect = Rect::from_min_size(pos2(40.0, 24.0), vec2(300.0, 200.0));
+
+        assert_eq!(
+            collab_cursor_preview_anchor(host_rect, pos2(400.0, -10.0)),
+            vec2(1.0, 0.0)
+        );
+        assert_eq!(
+            collab_cursor_preview_position(host_rect, vec2(0.5, 0.25)),
+            pos2(190.0, 74.0)
+        );
     }
 }

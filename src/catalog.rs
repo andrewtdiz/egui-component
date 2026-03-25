@@ -10,10 +10,12 @@ pub enum ComponentKind {
     CanvaPosition,
     Card,
     Checkbox,
+    CollabCursor,
     Color,
     Collapsible,
     Combobox,
     Command,
+    ContextMenu,
     Dialogue,
     DragBoard,
     DropdownMenu,
@@ -169,6 +171,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::CollabCursor,
+        id: "collab-cursor",
+        label: "Collab Cursor",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::Switch,
         id: "switch",
         label: "Switch",
@@ -274,6 +282,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Combobox,
         id: "combobox",
         label: "Combobox",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::ContextMenu,
+        id: "context-menu",
+        label: "Context Menu",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -395,6 +409,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(ids.len() >= 26);
         assert!(ids.contains(&"button"));
+        assert!(ids.contains(&"collab-cursor"));
         assert!(ids.contains(&"color"));
         assert!(ids.contains(&"icon"));
         assert!(ids.contains(&"image"));
@@ -402,6 +417,7 @@ mod tests {
         assert!(ids.contains(&"number-input"));
         assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
+        assert!(ids.contains(&"context-menu"));
         assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"emoji-selector"));
         assert!(ids.contains(&"radio"));
@@ -421,6 +437,10 @@ mod tests {
         assert_eq!(
             parse_component_kind("button_group"),
             Some(ComponentKind::ButtonGroup)
+        );
+        assert_eq!(
+            parse_component_kind("collab_cursor"),
+            Some(ComponentKind::CollabCursor)
         );
         assert_eq!(
             parse_component_kind("dialogue"),
@@ -447,13 +467,16 @@ mod tests {
             parse_component_kind("toolbar"),
             Some(ComponentKind::Toolbar)
         );
+        assert_eq!(
+            parse_component_kind("contextmenu"),
+            Some(ComponentKind::ContextMenu)
+        );
         assert_eq!(parse_component_kind("image"), Some(ComponentKind::Image));
         assert_eq!(
             parse_component_kind("menu_bar"),
             Some(ComponentKind::MenuBar)
         );
         assert_eq!(parse_component_kind("alertdialogue"), None);
-        assert_eq!(parse_component_kind("contextmenu"), None);
         assert_eq!(parse_component_kind("agentchat"), None);
     }
 
