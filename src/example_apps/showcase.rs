@@ -177,6 +177,7 @@ const THEME_MODE_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::icon_only(1, "Dark", "moon-star"),
     TabOption::icon_only(2, "System", "monitor"),
 ];
+const SHOWCASE_BASE_COLOR: BaseColor = BaseColor::Slate;
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::with_icon(0, "Home", "house"),
@@ -448,7 +449,7 @@ impl<'a> CanvaEditRailItem<'a> {
 pub fn install_context(context: &egui::Context) {
     theme::install(
         context,
-        ThemeSpec::preset(BaseColor::Neutral),
+        ThemeSpec::preset(SHOWCASE_BASE_COLOR),
         ThemeMode::System,
     );
 }
@@ -622,7 +623,7 @@ impl Default for ShowcaseApp {
 
 pub fn prepare_frame(app: &mut ShowcaseApp, ctx: &egui::Context) {
     clamp_state(app);
-    theme::set_theme(ctx, ThemeSpec::preset(BaseColor::Neutral));
+    theme::set_theme(ctx, ThemeSpec::preset(SHOWCASE_BASE_COLOR));
     theme::set_mode(ctx, app.theme_mode);
 }
 

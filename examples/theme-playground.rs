@@ -337,8 +337,8 @@ fn theme_mode_from_index(index: usize) -> ThemeMode {
     }
 }
 
-const BASE_COLOR_OPTIONS: [&str; 7] = [
-    "Neutral", "Stone", "Zinc", "Mauve", "Olive", "Mist", "Taupe",
+const BASE_COLOR_OPTIONS: [&str; 8] = [
+    "Neutral", "Stone", "Zinc", "Mauve", "Olive", "Mist", "Slate", "Taupe",
 ];
 const THEME_MODE_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::icon_only(0, "Light", "sun-medium"),

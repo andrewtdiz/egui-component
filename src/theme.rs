@@ -29,17 +29,19 @@ pub enum BaseColor {
     Mauve,
     Olive,
     Mist,
+    Slate,
     Taupe,
 }
 
 impl BaseColor {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Neutral,
         Self::Stone,
         Self::Zinc,
         Self::Mauve,
         Self::Olive,
         Self::Mist,
+        Self::Slate,
         Self::Taupe,
     ];
 
@@ -51,6 +53,7 @@ impl BaseColor {
             Self::Mauve => "Mauve",
             Self::Olive => "Olive",
             Self::Mist => "Mist",
+            Self::Slate => "Slate",
             Self::Taupe => "Taupe",
         }
     }
@@ -63,6 +66,7 @@ impl BaseColor {
             Self::Mauve => presets::mauve_theme(),
             Self::Olive => presets::olive_theme(),
             Self::Mist => presets::mist_theme(),
+            Self::Slate => presets::slate_theme(),
             Self::Taupe => presets::taupe_theme(),
         }
     }
@@ -673,6 +677,11 @@ mod tests {
         let taupe = ThemeSpec::preset(BaseColor::Taupe);
         assert_eq!(taupe.light.primary, OklchColor::new(0.214, 0.009, 43.1));
         assert_eq!(taupe.dark.sidebar_ring, OklchColor::new(0.547, 0.021, 43.1));
+
+        let slate = ThemeSpec::preset(BaseColor::Slate);
+        assert_eq!(slate.radius, 8.0);
+        assert_eq!(slate.light.primary, OklchColor::new(0.3211, 0.0, 0.0));
+        assert_eq!(slate.dark.accent, OklchColor::new(0.329, 0.0, 0.0));
     }
 
     #[test]

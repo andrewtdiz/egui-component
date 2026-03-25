@@ -1,4 +1,6 @@
-use super::{default_shadows, OklchColor, ThemePalette, ThemeSpec, DESTRUCTIVE_FOREGROUND};
+use super::{
+    default_shadows, OklchColor, ThemePalette, ThemeShadows, ThemeSpec, DESTRUCTIVE_FOREGROUND,
+};
 
 pub(crate) const fn neutral_theme() -> ThemeSpec {
     ThemeSpec {
@@ -522,5 +524,99 @@ pub(crate) const fn taupe_theme() -> ThemeSpec {
             sidebar_ring: OklchColor::new(0.547, 0.021, 43.1),
         },
         shadows: default_shadows(),
+    }
+}
+
+pub(crate) const fn slate_theme() -> ThemeSpec {
+    ThemeSpec {
+        radius: 8.0,
+        light: ThemePalette {
+            background: OklchColor::new(0.9383, 0.0042, 236.4993),
+            foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            card: OklchColor::new(1.0, 0.0, 0.0),
+            card_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            popover: OklchColor::new(1.0, 0.0, 0.0),
+            popover_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            primary: OklchColor::new(0.3211, 0.0, 0.0),
+            primary_foreground: OklchColor::new(1.0, 0.0, 0.0),
+            secondary: OklchColor::new(0.96, 0.0, 0.0),
+            secondary_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            muted: OklchColor::new(0.9846, 0.0017, 247.8389),
+            muted_foreground: OklchColor::new(0.551, 0.0234, 264.3637),
+            accent: OklchColor::new(0.944, 0.0, 0.0),
+            accent_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            destructive: OklchColor::new(0.6368, 0.2078, 25.3313),
+            destructive_foreground: DESTRUCTIVE_FOREGROUND,
+            border: OklchColor::new(0.8452, 0.0, 0.0),
+            input: OklchColor::new(0.97, 0.0029, 264.542),
+            ring: OklchColor::new(0.3211, 0.0, 0.0),
+            chart_1: OklchColor::new(0.6693, 0.0706, 248.923),
+            chart_2: OklchColor::new(0.6678, 0.1546, 41.62),
+            chart_3: OklchColor::new(0.5957, 0.1807, 19.9763),
+            chart_4: OklchColor::new(0.7859, 0.1342, 83.6986),
+            chart_5: OklchColor::new(0.4227, 0.0732, 267.3899),
+            sidebar: OklchColor::new(0.903, 0.0046, 258.3257),
+            sidebar_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            sidebar_primary: OklchColor::new(0.3211, 0.0, 0.0),
+            sidebar_primary_foreground: OklchColor::new(1.0, 0.0, 0.0),
+            sidebar_accent: OklchColor::new(0.944, 0.0, 0.0),
+            sidebar_accent_foreground: OklchColor::new(0.3211, 0.0, 0.0),
+            sidebar_border: OklchColor::new(0.9276, 0.0058, 264.5313),
+            sidebar_ring: OklchColor::new(0.3211, 0.0, 0.0),
+        },
+        dark: ThemePalette {
+            background: OklchColor::new(0.2178, 0.0, 0.0),
+            foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            card: OklchColor::new(0.2435, 0.0, 0.0),
+            card_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            popover: OklchColor::new(0.2435, 0.0, 0.0),
+            popover_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            primary: OklchColor::new(0.9219, 0.0, 0.0),
+            primary_foreground: OklchColor::new(0.2178, 0.0, 0.0),
+            secondary: OklchColor::new(0.3092, 0.0, 0.0),
+            secondary_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            muted: OklchColor::new(0.285, 0.0, 0.0),
+            muted_foreground: OklchColor::new(0.5999, 0.0, 0.0),
+            accent: OklchColor::new(0.329, 0.0, 0.0),
+            accent_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            destructive: OklchColor::new(0.6368, 0.2078, 25.3313),
+            destructive_foreground: DESTRUCTIVE_FOREGROUND,
+            border: OklchColor::new(0.329, 0.0, 0.0),
+            input: OklchColor::new(0.3092, 0.0, 0.0),
+            ring: OklchColor::new(0.9219, 0.0, 0.0),
+            chart_1: OklchColor::new(0.7124, 0.0606, 248.6896),
+            chart_2: OklchColor::new(0.6678, 0.1546, 41.62),
+            chart_3: OklchColor::new(0.5957, 0.1807, 19.9763),
+            chart_4: OklchColor::new(0.7859, 0.1342, 83.6986),
+            chart_5: OklchColor::new(0.4227, 0.0732, 267.3899),
+            sidebar: OklchColor::new(0.2393, 0.0, 0.0),
+            sidebar_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            sidebar_primary: OklchColor::new(0.9219, 0.0, 0.0),
+            sidebar_primary_foreground: OklchColor::new(0.2178, 0.0, 0.0),
+            sidebar_accent: OklchColor::new(0.329, 0.0, 0.0),
+            sidebar_accent_foreground: OklchColor::new(0.9219, 0.0, 0.0),
+            sidebar_border: OklchColor::new(0.329, 0.0, 0.0),
+            sidebar_ring: OklchColor::new(0.9219, 0.0, 0.0),
+        },
+        shadows: ThemeShadows::new(
+            egui::Shadow {
+                offset: [0, 1],
+                blur: 3,
+                spread: 0,
+                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 13),
+            },
+            egui::Shadow {
+                offset: [0, 2],
+                blur: 4,
+                spread: 0,
+                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 26),
+            },
+            egui::Shadow {
+                offset: [0, 4],
+                blur: 6,
+                spread: 0,
+                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 26),
+            },
+        ),
     }
 }
