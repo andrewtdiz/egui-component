@@ -1143,8 +1143,7 @@ fn collect_selection_subtree_ids(node: &HierarchyNode, ids: &mut Vec<usize>) {
 mod tests {
     use super::{
         apply_hierarchy_move, draw_hierarchy, Hierarchy, HierarchyDropPlacement,
-        HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest, HierarchyNode,
-        HierarchyStyle,
+        HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest, HierarchyNode, HierarchyStyle,
     };
     use crate::ui::tokens;
     use egui::{CentralPanel, Context, Id, RawInput};
@@ -1374,14 +1373,12 @@ mod tests {
     fn renders_hierarchy_tree_with_explicit_emoji_nodes() {
         let context = Context::default();
         let mut selected_id = Some(1usize);
-        let mut nodes = vec![
-            HierarchyNode::new(1, "Root", HierarchyItemKind::Folder)
-                .emoji("📱")
-                .children(vec![
-                    HierarchyNode::new(2, "Title", HierarchyItemKind::Frame).emoji("🔤"),
-                    HierarchyNode::new(3, "Portrait", HierarchyItemKind::Frame).emoji("🖼️"),
-                ]),
-        ];
+        let mut nodes = vec![HierarchyNode::new(1, "Root", HierarchyItemKind::Folder)
+            .emoji("📱")
+            .children(vec![
+                HierarchyNode::new(2, "Title", HierarchyItemKind::Frame).emoji("🔤"),
+                HierarchyNode::new(3, "Portrait", HierarchyItemKind::Frame).emoji("🖼️"),
+            ])];
 
         let _ = context.run(RawInput::default(), |context| {
             CentralPanel::default().show(context, |ui| {
