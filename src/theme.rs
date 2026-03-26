@@ -511,26 +511,7 @@ pub(crate) fn resolved_radius(runtime: ThemeRuntime, role: RadiusRole) -> u8 {
 }
 
 pub(crate) const fn default_shadows() -> ThemeShadows {
-    ThemeShadows::new(
-        Shadow {
-            offset: [0, 1],
-            blur: 2,
-            spread: 0,
-            color: Color32::from_rgba_premultiplied(0, 0, 0, 10),
-        },
-        Shadow {
-            offset: [0, 2],
-            blur: 4,
-            spread: 0,
-            color: Color32::from_rgba_premultiplied(0, 0, 0, 18),
-        },
-        Shadow {
-            offset: [0, 6],
-            blur: 10,
-            spread: 0,
-            color: Color32::from_rgba_premultiplied(0, 0, 0, 22),
-        },
-    )
+    ThemeShadows::new(Shadow::NONE, Shadow::NONE, Shadow::NONE)
 }
 
 pub(crate) trait ThemeUiRef {

@@ -599,24 +599,9 @@ pub(crate) const fn slate_theme() -> ThemeSpec {
             sidebar_ring: OklchColor::new(0.9219, 0.0, 0.0),
         },
         shadows: ThemeShadows::new(
-            egui::Shadow {
-                offset: [0, 1],
-                blur: 3,
-                spread: 0,
-                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 13),
-            },
-            egui::Shadow {
-                offset: [0, 2],
-                blur: 4,
-                spread: 0,
-                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 26),
-            },
-            egui::Shadow {
-                offset: [0, 4],
-                blur: 6,
-                spread: 0,
-                color: egui::Color32::from_rgba_premultiplied(26, 26, 26, 26),
-            },
+            egui::Shadow::NONE,
+            egui::Shadow::NONE,
+            egui::Shadow::NONE,
         ),
     }
 }

@@ -1,7 +1,8 @@
 use crate::theme::{self, RadiusRole, ThemeMode, ThemeRuntime, ThemeState};
 use crate::ui::{tokens, typography};
 use egui::{
-    CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Style, TextStyle, Ui, Visuals,
+    CornerRadius, FontData, FontDefinitions, FontFamily, Shadow, Stroke, Style, TextStyle, Ui,
+    Visuals,
 };
 
 pub(crate) fn install_context_resources(context: &egui::Context) {
@@ -133,6 +134,7 @@ fn apply_component_style_profile(style: &mut Style, runtime: ThemeRuntime) {
     style.visuals.selection.bg_fill = tokens::row_selected_bg(runtime);
     style.visuals.selection.stroke = Stroke::NONE;
     style.visuals.popup_shadow = tokens::tailwind_shadow_md(runtime);
+    style.visuals.window_shadow = Shadow::NONE;
     style.visuals.widgets.noninteractive.corner_radius = corner_radius;
     style.visuals.widgets.inactive.corner_radius = corner_radius;
     style.visuals.widgets.hovered.corner_radius = corner_radius;
@@ -166,6 +168,7 @@ fn mode_visuals(runtime: ThemeRuntime) -> Visuals {
     visuals.selection.bg_fill = tokens::row_selected_bg(runtime);
     visuals.selection.stroke = Stroke::NONE;
     visuals.popup_shadow = tokens::tailwind_shadow_md(runtime);
+    visuals.window_shadow = Shadow::NONE;
     visuals.widgets.noninteractive.bg_fill = tokens::card_background(runtime);
     visuals.widgets.noninteractive.weak_bg_fill = tokens::card_background(runtime);
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tokens::separator(runtime));
