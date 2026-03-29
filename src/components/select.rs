@@ -12,7 +12,7 @@ const MENU_INNER_PADDING_X: i8 = 3;
 const MENU_INNER_PADDING_Y: i8 = 3;
 const MENU_ROW_HEIGHT: f32 = 32.0;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum SelectVariant {
     Default,
     Secondary,

@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod components;
+pub mod contract;
 #[doc(hidden)]
 pub mod example_apps;
 pub mod layout;

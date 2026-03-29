@@ -6,7 +6,7 @@ use crate::primitives::surface::{surface_frame_builder, SurfaceFrame};
 use crate::ui::tokens;
 use egui::{Align, Id, Layout, Response, Sense, Stroke, Ui, UiBuilder};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum DialogueIntent {
     Default,
     Alert,

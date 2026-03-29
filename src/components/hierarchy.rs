@@ -19,7 +19,7 @@ const HIERARCHY_DROP_ZONE_HEIGHT: f32 = 6.0;
 const HIERARCHY_DROP_EDGE_HEIGHT: f32 = 8.0;
 const HIERARCHY_SELECTION_LINE: Color32 = Color32::from_rgb(138, 182, 255);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum HierarchyItemKind {
     Folder,
     Frame,
@@ -31,14 +31,14 @@ pub enum HierarchyItemKind {
     Vector,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum HierarchyIconStyle {
     #[default]
     Emoji,
     Icons,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum HierarchyStyle {
     #[default]
     Normal,

@@ -30,6 +30,12 @@ Available examples:
 
 - `showcase`
   Broad component catalog and API preview surface.
+- `contract-showcase`
+  Host-driven declarative demo rendered entirely through `egui_component::contract::*`.
+- `contract-schema`
+  Prints the machine-readable contract schema JSON for Luau/codegen consumers.
+- `contract-reference`
+  Prints the generated human-readable contract reference from the same Rust registry.
 - `content-composition`
   Reusable composition patterns with `layout::*`, `Card`, `Label`, `Button`, `Kbd`, and scoped overrides.
 - `popup-patterns`
@@ -41,6 +47,9 @@ Example commands:
 
 ```bash
 cargo run --example showcase
+cargo run --example contract-showcase
+cargo run --example contract-schema
+cargo run --example contract-reference
 cargo run --example content-composition
 cargo run --example popup-patterns
 cargo run --example theme-playground

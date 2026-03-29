@@ -15,6 +15,8 @@ Read these files in order:
 1. `architecture-overview.md`
 2. `authoring-rules.md`
 3. `components-reference.md`
+4. `contract-architecture.md`
+5. `contract-reference.md`
 
 ## What This Library Is
 
@@ -26,6 +28,7 @@ The public runtime surface is built around three ideas:
 - `theme::set_theme`, `theme::set_mode`, and `theme::with_theme` are the only supported theme mutation paths.
 - `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
 - `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
+- `contract::*` exposes the declarative scripting boundary, semantic event model, and schema export.
 - Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
 ## Non-Negotiable Design Contract
@@ -69,10 +72,16 @@ Use these files as the source of truth:
   Global component-theme defaults.
 - `src/catalog.rs`
   Public component registry used by the showcase and parser helpers.
-- `src/dev/showcase/component_showcase.rs`
-  Canonical live examples.
+- `src/contract/*.rs`
+  Declarative contract model, registry, renderer, and schema export.
+- `src/example_apps/showcase.rs`
+  Canonical typed-component examples.
+- `src/example_apps/contract_demo.rs`
+  Canonical declarative contract example that renders every registered family.
 - `docs/llm/components/*.md`
   Per-component authoring stubs used to build the generated reference.
+- `docs/llm/contract-*.md`
+  Declarative contract architecture and generated supported-family reference.
 - `docs/llm/templates/*.md`
   Family guides and the component stub template used by `cargo xtask new-component`.
 
@@ -174,3 +183,4 @@ Do all of this in the same change:
 
 - `authoring-rules.md` for implementation constraints.
 - `components-reference.md` for the exact API and defaults of every existing component.
+- `contract-reference.md` for the supported declarative families, events, and schema surface.

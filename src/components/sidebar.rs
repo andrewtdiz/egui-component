@@ -7,7 +7,7 @@ use crate::theme::ColorRole;
 use crate::ui::tokens;
 use egui::{Color32, CornerRadius, Id, Key, Margin, Order, Stroke, StrokeKind, Ui};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub enum SidebarSide {
     #[default]
     Left,

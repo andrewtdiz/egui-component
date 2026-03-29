@@ -300,7 +300,7 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
     })
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum NumberInputAxis {
     Horizontal,
     Vertical,

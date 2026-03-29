@@ -10,8 +10,7 @@ categories = ["gui"]
 include = [
     "Cargo.toml",
     "README.md",
-    "examples/README.md",
-    "examples/showcase.rs",
+    "examples/**",
     "src/**",
     "assets/fonts/Segoe-UI.TTF",
     "assets/fonts/Segoe-UI-Semibold.TTF",
@@ -32,6 +31,7 @@ crate-type = ["rlib", "dylib"]
 egui = "0.33.3"
 egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg"] }
 
 [dev-dependencies]

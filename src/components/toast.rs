@@ -14,7 +14,8 @@ const TOAST_FRAME_PADDING_X: i8 = 10;
 const TOAST_FRAME_PADDING_Y: i8 = 10;
 const TOAST_CLOSE_BUTTON_SIZE: f32 = 22.0;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToastIntent {
     #[default]
     Neutral,
@@ -22,7 +23,8 @@ pub enum ToastIntent {
     Destructive,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToastPlacement {
     TopLeft,
     TopCenter,

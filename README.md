@@ -8,6 +8,10 @@ The crate is organized around three public layers:
 - `egui_component::layout::*` for explicit row, column, inset, and spacer composition
 - `egui_component::theme::*` for theme installation and scoped theme changes
 
+The crate also ships a host-owned declarative layer for editor scripting:
+
+- `egui_component::contract::*` for serializable UI trees, semantic events, renderer entry points, and schema export
+
 ## Install
 
 ```toml
@@ -103,6 +107,30 @@ From there, use:
 - `egui_component::theme::*` to install or scope themes
 - `egui_component::layout::*` for rows, columns, inset, and alignment
 - `egui_component::prelude::*` for the typed component builders
+- `egui_component::contract::*` when the host needs to render a curated declarative surface from serialized data
+
+## Declarative Contract
+
+The `contract` module is the stable scripting boundary for Clay-style host integration.
+
+It provides:
+
+- serde-serializable `ContractTree` and `ContractNode` models
+- `render_tree(&mut egui::Ui, &ContractTree) -> Vec<ContractEvent>`
+- registry and schema export helpers via `contract::registry()`, `contract::schema()`, and `contract::schema_json_pretty()`
+- `contract::reference_markdown()` for a generated human-readable family reference
+
+Export the schema as JSON with:
+
+```bash
+cargo run --example contract-schema
+```
+
+Export the generated reference with:
+
+```bash
+cargo run --example contract-reference
+```
 
 ## Basic Usage
 
@@ -162,6 +190,9 @@ let _ = ui.components().twemoji(Twemoji::new("🧑🏽‍🚀").size(28.0));
 The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
+- `contract-showcase`: declarative editor surface driven entirely through `egui_component::contract::*`
+- `contract-schema`: prints the machine-readable contract schema JSON
+- `contract-reference`: prints the generated human-readable contract reference
 - `content-composition`: reusable `layout::*` composition with cards, labels, buttons, kbd, and scoped overrides
 - `popup-patterns`: focused popup interactions with `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
@@ -197,7 +228,7 @@ Run any focused example:
 cargo run --example theme-playground
 ```
 
-Replace `theme-playground` with `content-composition` or `popup-patterns`.
+Replace `theme-playground` with `content-composition`, `popup-patterns`, or `contract-showcase`.
 
 In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
 The window is restarted on each rebuild rather than patched in place.

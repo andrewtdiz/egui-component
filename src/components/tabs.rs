@@ -61,7 +61,7 @@ impl<'a> TabOption<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum TabsVariant {
     #[default]
     Underline,

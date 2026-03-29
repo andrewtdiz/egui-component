@@ -2,7 +2,7 @@ use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
 use crate::ui::{tokens, typography};
 use egui::{Color32, RichText, Ui};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum LabelTone {
     Primary,
     Secondary,
@@ -10,7 +10,7 @@ pub enum LabelTone {
     Destructive,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum LabelWeight {
     Regular,
     Semibold,

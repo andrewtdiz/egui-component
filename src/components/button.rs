@@ -6,7 +6,7 @@ use super::{
 use crate::ui::{icons, tokens, typography};
 use egui::{pos2, Color32, CursorIcon, FontId, Rect, RichText, Stroke, Ui, Vec2};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum ButtonVariant {
     Primary,
     Secondary,
@@ -14,7 +14,7 @@ pub enum ButtonVariant {
     Link,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum ButtonLabelWeight {
     Regular,
     Medium,
