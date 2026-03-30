@@ -344,20 +344,10 @@ impl ContractDemoApp {
                                             width: 240.0,
                                             height: 10.0,
                                         }),
-                                        row_node(
-                                            "contract-demo.status-row",
-                                            8.0,
-                                            vec![
-                                                ContractNode::Spinner(ContractSpinner {
-                                                    common: common("contract-demo.spinner"),
-                                                    size: 18.0,
-                                                }),
-                                                muted_node(
-                                                    "contract-demo.status-copy",
-                                                    "Schema export and semantic events are generated from Rust source of truth."
-                                                        .to_owned(),
-                                                ),
-                                            ],
+                                        muted_node(
+                                            "contract-demo.status-copy",
+                                            "Schema export and semantic events are generated from Rust source of truth."
+                                                .to_owned(),
                                         ),
                                     ],
                                 ),
@@ -452,6 +442,21 @@ impl ContractDemoApp {
                     confirm_action_id: Some(action("modal.confirm")),
                     cancel_action_id: Some(action("modal.cancel")),
                     children: vec![
+                        row_node(
+                            "contract-demo.dialogue.status-row",
+                            8.0,
+                            vec![
+                                ContractNode::Spinner(ContractSpinner {
+                                    common: common("contract-demo.spinner"),
+                                    size: 18.0,
+                                }),
+                                muted_node(
+                                    "contract-demo.dialogue.status-copy",
+                                    "Reviewing the contract payload before dispatch."
+                                        .to_owned(),
+                                ),
+                            ],
+                        ),
                         muted_node(
                             "contract-demo.dialogue.body",
                             "Clay can rebuild this tree from Luau every frame while Rust keeps the authoritative state and event handling."

@@ -549,6 +549,9 @@ pub(crate) fn runtime_for_ui(ui: &impl ThemeUiRef) -> ThemeRuntime {
 }
 
 pub(crate) fn apply_context_theme_state(context: &Context, state: ThemeState) {
+    if load_context_theme_state(context) == state {
+        return;
+    }
     store_context_theme_state(context, state);
     style::set_theme_runtime(context, state);
     apply_viewport_theme(context, state.mode);
