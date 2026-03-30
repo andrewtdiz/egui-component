@@ -195,6 +195,7 @@ const DRAG_BOARD_DEFAULT_REGIONS: [DragBoardRegion; 3] = [
     DragBoardRegion::Left,
     DragBoardRegion::Right,
 ];
+const FILE_TREE_DEFAULT_SELECTED_ID: usize = 5;
 const HIERARCHY_DEFAULT_SELECTED_ID: usize = 1;
 const CANVA_LAYER_DEFAULT_ORDER: [usize; 3] = [0, 1, 2];
 const RADIO_GROUP_OPTIONS: [RadioOption<'static>; 3] = [
@@ -370,6 +371,36 @@ fn default_hierarchy_nodes() -> Vec<HierarchyNode<'static>> {
     ]
 }
 
+fn default_file_tree_nodes() -> Vec<FileTreeNode<'static>> {
+    vec![FileTreeNode::new(1, "SpaceShooter", FileTreeItemKind::Folder).children(vec![
+        FileTreeNode::new(2, "builtins", FileTreeItemKind::Folder)
+            .expanded(false)
+            .children(vec![FileTreeNode::new(
+                9,
+                "render.pipeline",
+                FileTreeItemKind::File,
+            )]),
+        FileTreeNode::new(3, "assets", FileTreeItemKind::Folder)
+            .expanded(false)
+            .children(vec![FileTreeNode::new(
+                10,
+                "ship.sprite",
+                FileTreeItemKind::File,
+            )]),
+        FileTreeNode::new(4, "input", FileTreeItemKind::Folder)
+            .expanded(false)
+            .children(vec![FileTreeNode::new(
+                11,
+                "bindings.inputmap",
+                FileTreeItemKind::File,
+            )]),
+        FileTreeNode::new(5, "main.collection", FileTreeItemKind::Collection),
+        FileTreeNode::new(6, "player.script", FileTreeItemKind::Script),
+        FileTreeNode::new(7, "game.project", FileTreeItemKind::Project),
+        FileTreeNode::new(8, "README.md", FileTreeItemKind::Markdown),
+    ])]
+}
+
 #[derive(Clone, Copy)]
 struct CanvaEditChip<'a> {
     label: &'a str,
@@ -474,6 +505,8 @@ pub struct ShowcaseApp {
     canva_edit_tool_index: usize,
     canva_edit_filter_index: usize,
     drag_board_regions: [DragBoardRegion; 3],
+    file_tree_nodes: Vec<FileTreeNode<'static>>,
+    file_tree_selected_id: Option<usize>,
     hierarchy_nodes: Vec<HierarchyNode<'static>>,
     hierarchy_selected_id: Option<usize>,
     hierarchy_style_index: usize,
@@ -548,6 +581,8 @@ impl Default for ShowcaseApp {
             canva_edit_tool_index: 0,
             canva_edit_filter_index: 0,
             drag_board_regions: DRAG_BOARD_DEFAULT_REGIONS,
+            file_tree_nodes: default_file_tree_nodes(),
+            file_tree_selected_id: Some(FILE_TREE_DEFAULT_SELECTED_ID),
             hierarchy_nodes: default_hierarchy_nodes(),
             hierarchy_selected_id: Some(HIERARCHY_DEFAULT_SELECTED_ID),
             hierarchy_style_index: 0,

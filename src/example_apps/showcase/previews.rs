@@ -1676,6 +1676,34 @@ impl ShowcaseApp {
         );
     }
 
+    fn render_file_tree_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().label(
+            Label::new("Compact file explorer tree with tighter rows, bootstrap caret disclosure icons, and full-width row states.")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(10.0);
+
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let width = 240.0f32.min(ui.available_width());
+            let frame = egui::Frame::new()
+                .fill(Color32::from_rgb(43, 46, 52))
+                .stroke(Stroke::NONE)
+                .inner_margin(0);
+            let _ = frame.show(ui, |ui| {
+                ui.set_width(width);
+                let _ = ui.components().file_tree(
+                    &mut self.file_tree_selected_id,
+                    FileTree::new(
+                        Id::new("component_showcase_file_tree"),
+                        &mut self.file_tree_nodes,
+                    )
+                    .width(width),
+                );
+            });
+        });
+    }
+
     fn render_hierarchy_preview(&mut self, ui: &mut Ui) {
         let _ = ui.components().label(
             Label::new("Select a node to highlight its subtree. Drag row edges to reorder, or drop on a row body to move into that parent.")

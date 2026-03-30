@@ -21,6 +21,7 @@ pub enum ComponentKind {
     DropdownMenu,
     EmojiSelector,
     Field,
+    FileTree,
     Hierarchy,
     Icon,
     Image,
@@ -126,6 +127,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Hierarchy,
         id: "hierarchy",
         label: "Hierarchy",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::FileTree,
+        id: "file-tree",
+        label: "FileTree",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -420,6 +427,7 @@ mod tests {
         assert!(ids.contains(&"context-menu"));
         assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"emoji-selector"));
+        assert!(ids.contains(&"file-tree"));
         assert!(ids.contains(&"radio"));
         assert!(ids.contains(&"radio-group"));
         assert!(ids.contains(&"sidebar"));
@@ -449,6 +457,10 @@ mod tests {
         assert_eq!(
             parse_component_kind("emoji_selector"),
             Some(ComponentKind::EmojiSelector)
+        );
+        assert_eq!(
+            parse_component_kind("file_tree"),
+            Some(ComponentKind::FileTree)
         );
         assert_eq!(
             parse_component_kind("number_input"),

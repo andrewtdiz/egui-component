@@ -18,6 +18,7 @@ mod drag_board;
 mod dropdown_menu;
 mod emoji_selector;
 mod field;
+mod file_tree;
 mod hierarchy;
 mod icon;
 mod image;
@@ -67,6 +68,7 @@ pub use dropdown_menu::{
 };
 pub use emoji_selector::EmojiSelector;
 pub use field::Field;
+pub use file_tree::{FileTree, FileTreeItemKind, FileTreeNode};
 pub use hierarchy::{
     Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle,
 };

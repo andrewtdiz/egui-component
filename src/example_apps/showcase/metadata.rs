@@ -76,6 +76,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         | ComponentKind::Toolbar
         | ComponentKind::ImageTile
         | ComponentKind::DragBoard
+        | ComponentKind::FileTree
         | ComponentKind::Hierarchy
         | ComponentKind::Sidebar
         | ComponentKind::Toast => ShowcaseSection::Examples,
@@ -95,6 +96,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::CollabCursor => available_width.min(560.0),
         ComponentKind::ContextMenu => available_width.min(520.0),
         ComponentKind::DragBoard => available_width.min(560.0),
+        ComponentKind::FileTree => available_width.min(360.0),
         ComponentKind::Hierarchy => available_width.min(440.0),
         ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
@@ -158,6 +160,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Dialogue => "Modal confirmation flow.",
         ComponentKind::DragBoard => {
             "Single-card drag and drop between two board regions using egui's built-in DnD."
+        }
+        ComponentKind::FileTree => {
+            "Compact file explorer tree with condensed rows, bootstrap caret disclosure icons, and edge-to-edge selection fills."
         }
         ComponentKind::Hierarchy => {
             "Game-style hierarchy tree with selection, subtree highlighting, and cross-parent drag reparenting."

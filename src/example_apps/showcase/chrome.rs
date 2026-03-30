@@ -38,6 +38,10 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::DragBoard => {
             app.drag_board_regions = DRAG_BOARD_DEFAULT_REGIONS;
         }
+        ComponentKind::FileTree => {
+            app.file_tree_nodes = default_file_tree_nodes();
+            app.file_tree_selected_id = Some(FILE_TREE_DEFAULT_SELECTED_ID);
+        }
         ComponentKind::Hierarchy => {
             app.hierarchy_nodes = default_hierarchy_nodes();
             app.hierarchy_selected_id = Some(HIERARCHY_DEFAULT_SELECTED_ID);
@@ -228,6 +232,7 @@ impl ShowcaseApp {
             ComponentKind::Command => self.render_command_preview(ui),
             ComponentKind::Dialogue => self.render_dialogue_preview(ui),
             ComponentKind::DragBoard => self.render_drag_board_preview(ui),
+            ComponentKind::FileTree => self.render_file_tree_preview(ui),
             ComponentKind::Hierarchy => self.render_hierarchy_preview(ui),
             ComponentKind::ImageTile => self.render_image_tile_preview(ui),
             ComponentKind::MenuBar => self.render_menu_bar_preview(ui),

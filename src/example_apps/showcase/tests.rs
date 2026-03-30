@@ -18,6 +18,7 @@ fn snapshot_surface_renders_representative_components_without_panic() {
         ComponentKind::CollabCursor,
         ComponentKind::DragBoard,
         ComponentKind::EmojiSelector,
+        ComponentKind::FileTree,
         ComponentKind::Sidebar,
         ComponentKind::Toast,
     ] {
