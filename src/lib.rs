@@ -30,7 +30,6 @@ pub mod prelude {
     pub use crate::components::{
         AudioPlayback, AudioPlaybackResult, AudioPlaybackState, Button, ButtonGroup,
         ButtonLabelWeight, ButtonOverride, ButtonVariant, Card, CardOverride, Checkbox,
-<<<<<<< HEAD
         CollabCursor, Collapsible, Color, ColorInput, Combobox, Command, CommandItem,
         ComponentUiExt, ContextMenu, ContextMenuState, ControlSize, Dialogue, DialogueHeader,
         DialogueIntent, DialogueModal, DragBoard, DragBoardItem, DragBoardRegion, DropdownMenu,
@@ -44,22 +43,24 @@ pub mod prelude {
         SelectVariant, Sidebar, SidebarSide, Skeleton, Slider, Spinner, Switch, TabOption,
         TabsVariant, TextInput, TextInputOverride, Toast, ToastIntent, ToastPlacement, ToastStack,
         ToastViewport, ToggleGroup, Toolbar, Tooltip, TooltipPlacement, Twemoji,
-=======
-        CollabCursor, Collapsible, Color, ColorInput, ColorStrip, ColorStripKind, Combobox,
-        Command, CommandItem, ComponentUi, ComponentUiExt, ContextMenu, ContextMenuState,
-        ControlSize, Dialogue, DialogueHeader, DialogueIntent, DialogueModal, DragBoard,
-        DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction, DropdownMenuEntry,
-        DropdownMenuState, DropdownMenuSubmenu, EmojiSelector, Field, Hierarchy,
+        ButtonLabelWeight, ButtonOverride, ButtonVariant, CanvaAxisField, CanvaColorStop,
+        CanvaInspectorCard, CanvaInspectorHeader, CanvaNinePoint, CanvaTimelineAction, Card,
+        CardOverride, Checkbox, CollabCursor, Collapsible, Color, ColorInput, ColorStrip,
+        ColorStripKind, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt, ContextMenu,
+        ContextMenuState, ControlSize, Dialogue, DialogueHeader, DialogueIntent, DialogueModal,
+        DragBoard, DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction,
+        DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu, EmojiSelector, Field, Hierarchy,
         HierarchyDropPlacement, HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest,
-        HierarchyNode, HierarchyResponse, HierarchyRowState, HierarchyStyle, Icon, Image,
-        ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState, Kbd, KbdGroup, Label,
-        LabelOverride, LabelTone, LabelWeight, MenuBar, MenuBarItem, MenuBarState, NumberInput,
-        NumberInputAxis, Pagination, PalettePreview, Popover, PopoverAlign, PopoverResponse,
-        PopoverSide, Progress, Radio, RadioGroup, RadioOption, Select, SelectVariant, Sidebar,
-        SidebarSide, Skeleton, Slider, Spinner, Switch, TabOption, TabsVariant, TextInput,
-        TextInputOverride, Toast, ToastIntent, ToastPlacement, ToastStack, ToastViewport,
-        ToggleGroup, Toolbar, Tooltip, TooltipPlacement, Twemoji,
->>>>>>> 70230a4 (updates)
+        HierarchyNode, HierarchyResponse, HierarchyRowState, HierarchySelectionAction,
+        HierarchyStyle, Icon, Image, ImageTile, ImageTilePlaybackState, ImageTileSize,
+        ImageTileState, Kbd, KbdGroup, Label, LabelOverride, LabelTone, LabelWeight, MenuBar,
+        MenuBarItem, MenuBarState, NumberInput, NumberInputAxis, Pagination, PalettePreview,
+        Popover, PopoverAlign, PopoverResponse, PopoverSide, Progress, Radio, RadioGroup,
+        RadioOption, Select, SelectVariant, Sidebar, SidebarSide, Skeleton, Slider, Spinner,
+        Switch, TabOption, TabsVariant, TextInput, TextInputOverride, Toast, ToastIntent,
+        ToastPlacement, ToastStack, ToastViewport, ToggleGroup, Toolbar, Tooltip, TooltipPlacement,
+        Twemoji,
+>>>>>>> 362bd99 (fix)
     };
     pub use crate::theme::{
         BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,

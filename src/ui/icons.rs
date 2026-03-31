@@ -1,16 +1,16 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
-const ICON_DIRECTORY: &str = "assets/icons";
-const LUCIDE_ICON_SUBDIRECTORY: &str = "lucide";
-const BOOTSTRAP_ICON_SUBDIRECTORY: &str = "bootstrap";
 const LUCIDE_ICON_URI_PREFIX: &str = "bytes://egui-component/lucide/";
 const BOOTSTRAP_ICON_URI_PREFIX: &str = "bytes://egui-component/bootstrap/";
 const ICON_STROKE_WIDTH_FROM: &str = "stroke-width=\"2\"";
 const ICON_STROKE_WIDTH_TO: &str = "stroke-width=\"1.75\"";
 
 static CACHED_ICON_ASSETS: OnceLock<Mutex<HashMap<String, Arc<CachedIconAsset>>>> = OnceLock::new();
+
+mod embedded_icons {
+    include!(concat!(env!("OUT_DIR"), "/embedded_icons.rs"));
+}
 
 #[derive(Debug)]
 struct CachedIconAsset {
@@ -60,10 +60,10 @@ fn load_icon_asset(family: IconFamily, name: &str) -> Option<Arc<CachedIconAsset
         return Some(Arc::clone(asset));
     }
 
-    let source = std::fs::read_to_string(icon_path(family, name)).ok()?;
+    let source = embedded_icons::svg_source(family, name)?;
     let asset = Arc::new(CachedIconAsset {
-        raster_bytes: Arc::<[u8]>::from(normalize_icon_svg_source(family, source.as_str())),
-        source: Arc::<str>::from(source.into_boxed_str()),
+        raster_bytes: Arc::<[u8]>::from(normalize_icon_svg_source(family, source)),
+        source: Arc::<str>::from(source),
     });
     guard.insert(cache_key, Arc::clone(&asset));
     Some(asset)
@@ -138,13 +138,6 @@ fn normalize_icon_name(name: &str) -> Option<String> {
     }
 }
 
-fn icon_path(family: IconFamily, name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(ICON_DIRECTORY)
-        .join(family.subdirectory())
-        .join(format!("{name}.svg"))
-}
-
 fn normalize_icon_svg_source(family: IconFamily, source: &str) -> Vec<u8> {
     let normalized = source.replace("currentColor", "#FFFFFF");
     match family {
@@ -163,13 +156,6 @@ impl IconFamily {
         }
     }
 
-    fn subdirectory(self) -> &'static str {
-        match self {
-            Self::Lucide => LUCIDE_ICON_SUBDIRECTORY,
-            Self::Bootstrap => BOOTSTRAP_ICON_SUBDIRECTORY,
-        }
-    }
-
     fn uri_prefix(self) -> &'static str {
         match self {
             Self::Lucide => LUCIDE_ICON_URI_PREFIX,
@@ -181,7 +167,7 @@ impl IconFamily {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_icon_uri, icon_path, normalize_icon_name, normalize_icon_svg_source,
+        embedded_icons, ensure_icon_uri, normalize_icon_name, normalize_icon_svg_source,
         parse_icon_name, setup, svg_source, IconFamily, ICON_STROKE_WIDTH_FROM,
         ICON_STROKE_WIDTH_TO, LUCIDE_ICON_URI_PREFIX,
     };
@@ -234,7 +220,7 @@ mod tests {
 
     #[test]
     fn resolves_play_fill_icon_asset() {
-        assert!(icon_path(IconFamily::Lucide, "play-fill").is_file());
+        assert!(embedded_icons::svg_source(IconFamily::Lucide, "play-fill").is_some());
 
         let context = egui::Context::default();
         setup(&context);
@@ -246,7 +232,7 @@ mod tests {
 
     #[test]
     fn resolves_fire_icon_asset() {
-        assert!(icon_path(IconFamily::Lucide, "fire").is_file());
+        assert!(embedded_icons::svg_source(IconFamily::Lucide, "fire").is_some());
 
         let context = egui::Context::default();
         setup(&context);
@@ -273,8 +259,8 @@ mod tests {
             ("image", IconFamily::Lucide, "image"),
         ] {
             assert!(
-                icon_path(family, icon).is_file(),
-                "missing icon file for {icon}"
+                embedded_icons::svg_source(family, icon).is_some(),
+                "missing embedded icon for {icon}"
             );
 
             let context = egui::Context::default();

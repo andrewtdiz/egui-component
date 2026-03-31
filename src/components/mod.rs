@@ -3,6 +3,7 @@ mod api;
 mod audio_playback;
 mod button;
 mod button_group;
+mod canva;
 mod card;
 mod checkbox;
 mod collab_cursor;
@@ -54,6 +55,10 @@ pub use api::{ComponentUi, ComponentUiExt};
 pub use audio_playback::{AudioPlayback, AudioPlaybackResult, AudioPlaybackState};
 pub use button::{Button, ButtonLabelWeight, ButtonOverride, ButtonVariant};
 pub use button_group::ButtonGroup;
+pub use canva::{
+    CanvaAxisField, CanvaColorStop, CanvaInspectorCard, CanvaInspectorHeader, CanvaNinePoint,
+    CanvaTimelineAction,
+};
 pub use card::{Card, CardOverride};
 pub use checkbox::Checkbox;
 pub use collab_cursor::CollabCursor;
@@ -75,7 +80,7 @@ pub use field::Field;
 pub use file_tree::{FileTree, FileTreeItemKind, FileTreeNode};
 pub use hierarchy::{
     Hierarchy, HierarchyDropPlacement, HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest,
-    HierarchyNode, HierarchyResponse, HierarchyRowState, HierarchyStyle,
+    HierarchyNode, HierarchyResponse, HierarchyRowState, HierarchySelectionAction, HierarchyStyle,
 };
 pub use icon::Icon;
 pub use icon_toolbar::{IconToolbar, IconToolbarItem};

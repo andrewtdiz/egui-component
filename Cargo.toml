@@ -9,6 +9,7 @@ documentation = "https://docs.rs/egui-component"
 keywords = ["egui", "ui", "widgets", "components"]
 categories = ["gui"]
 include = [
+    "build.rs",
     "Cargo.toml",
     "README.md",
     "THIRD_PARTY_NOTICES.md",

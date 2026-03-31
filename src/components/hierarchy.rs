@@ -137,6 +137,7 @@ impl HierarchyNode {
 pub struct Hierarchy<'nodes> {
     pub id: Id,
     pub nodes: &'nodes mut Vec<HierarchyNode>,
+    pub selected_ids: Option<&'nodes [usize]>,
     pub width: f32,
     pub row_height: f32,
     pub indent_width: f32,
@@ -151,6 +152,7 @@ impl<'nodes> Hierarchy<'nodes> {
         Self {
             id,
             nodes,
+            selected_ids: None,
             width: HIERARCHY_DEFAULT_WIDTH,
             row_height: HIERARCHY_ROW_HEIGHT,
             indent_width: HIERARCHY_INDENT_WIDTH,
@@ -159,6 +161,11 @@ impl<'nodes> Hierarchy<'nodes> {
             allow_drag_and_drop: true,
             show_lock_action: true,
         }
+    }
+
+    pub fn selected_ids(mut self, selected_ids: &'nodes [usize]) -> Self {
+        self.selected_ids = Some(selected_ids);
+        self
     }
 
     pub fn width(mut self, width: f32) -> Self {
@@ -210,9 +217,21 @@ impl ComponentUi<'_> {
 #[derive(Debug)]
 pub struct HierarchyResponse {
     pub response: Response,
+    pub selection_action: Option<HierarchySelectionAction>,
     pub selection_change: Option<Option<usize>>,
     pub move_request: Option<HierarchyMoveRequest>,
     pub rows: Vec<HierarchyRowState>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum HierarchySelectionAction {
+    Set {
+        row_id: usize,
+        modifiers: egui::Modifiers,
+    },
+    Clear {
+        modifiers: egui::Modifiers,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -274,10 +293,19 @@ fn draw_hierarchy(
     let runtime = crate::theme::runtime_for_ui(ui);
     let mut pending_move = None;
     let mut changed = false;
+    let mut selection_action = None;
     let mut selection_change = None;
     let mut pointer_over_interaction = false;
     let mut rows = Vec::new();
-    let selection_range = selection_range(props.nodes, *selected_id);
+    let selected_ids = props.selected_ids.unwrap_or(&[]);
+    let selection_range = if selected_ids.len() > 1 {
+        None
+    } else {
+        selection_range(
+            props.nodes,
+            (*selected_id).or_else(|| selected_ids.first().copied()),
+        )
+    };
     let frame = egui::Frame::new()
         .fill(tokens::muted_surface(runtime))
         .stroke(Stroke::new(1.0, tokens::separator(runtime)))
@@ -296,6 +324,7 @@ fn draw_hierarchy(
                     None,
                     0,
                     selected_id,
+                    selected_ids,
                     selection_range.as_ref(),
                     runtime,
                     props.row_height,
@@ -306,6 +335,7 @@ fn draw_hierarchy(
                     props.show_lock_action,
                     &mut pending_move,
                     &mut changed,
+                    &mut selection_action,
                     &mut selection_change,
                     &mut pointer_over_interaction,
                     &mut rows,
@@ -319,10 +349,13 @@ fn draw_hierarchy(
     if pointer_clicked_background
         && !pointer_over_interaction
         && pointer_pos.is_some_and(|pointer| response.rect.contains(pointer))
-        && selected_id.take().is_some()
     {
-        changed = true;
-        selection_change = Some(None);
+        let modifiers = pointer_click_modifiers(ui, response.rect);
+        if !modifiers.shift && (selected_id.take().is_some() || !selected_ids.is_empty()) {
+            changed = true;
+            selection_action = Some(HierarchySelectionAction::Clear { modifiers });
+            selection_change = Some(None);
+        }
     }
 
     if changed {
@@ -330,6 +363,7 @@ fn draw_hierarchy(
     }
     HierarchyResponse {
         response,
+        selection_action,
         selection_change,
         move_request: pending_move.map(|move_request| HierarchyMoveRequest {
             node_id: move_request.node_id,
@@ -351,6 +385,7 @@ fn draw_hierarchy_list(
     parent_id: Option<usize>,
     depth: usize,
     selected_id: &mut Option<usize>,
+    selected_ids: &[usize],
     selection_range: Option<&SelectionRange>,
     runtime: crate::theme::ThemeRuntime,
     row_height: f32,
@@ -361,6 +396,7 @@ fn draw_hierarchy_list(
     show_lock_action: bool,
     pending_move: &mut Option<PendingMove>,
     changed: &mut bool,
+    selection_action: &mut Option<HierarchySelectionAction>,
     selection_change: &mut Option<Option<usize>>,
     pointer_over_interaction: &mut bool,
     rows: &mut Vec<HierarchyRowState>,
@@ -376,6 +412,7 @@ fn draw_hierarchy_list(
                 depth,
                 node,
                 selected_id,
+                selected_ids,
                 selection_range,
                 runtime,
                 row_height,
@@ -385,6 +422,7 @@ fn draw_hierarchy_list(
                 allow_drag_and_drop,
                 show_lock_action,
                 changed,
+                selection_action,
                 selection_change,
                 pointer_over_interaction,
                 rows,
@@ -414,6 +452,7 @@ fn draw_hierarchy_list(
                 Some(node.id),
                 depth + 1,
                 selected_id,
+                selected_ids,
                 selection_range,
                 runtime,
                 row_height,
@@ -424,6 +463,7 @@ fn draw_hierarchy_list(
                 show_lock_action,
                 pending_move,
                 changed,
+                selection_action,
                 selection_change,
                 pointer_over_interaction,
                 rows,
@@ -466,6 +506,7 @@ fn draw_hierarchy_row(
     depth: usize,
     node: &mut HierarchyNode,
     selected_id: &mut Option<usize>,
+    selected_ids: &[usize],
     selection_range: Option<&SelectionRange>,
     runtime: crate::theme::ThemeRuntime,
     row_height: f32,
@@ -475,6 +516,7 @@ fn draw_hierarchy_row(
     allow_drag_and_drop: bool,
     show_lock_action: bool,
     changed: &mut bool,
+    selection_action: &mut Option<HierarchySelectionAction>,
     selection_change: &mut Option<Option<usize>>,
     pointer_over_interaction: &mut bool,
     rows: &mut Vec<HierarchyRowState>,
@@ -482,7 +524,11 @@ fn draw_hierarchy_row(
     let row_width = ui.available_width();
     let (rect, response) =
         ui.allocate_exact_size(vec2(row_width, row_height), Sense::click_and_drag());
-    let selected_exact = *selected_id == Some(node.id);
+    let selected_exact = if selected_ids.is_empty() {
+        *selected_id == Some(node.id)
+    } else {
+        selected_ids.contains(&node.id)
+    };
     let selected_subtree = selection_range
         .as_ref()
         .is_some_and(|range| range.ids.contains(&node.id));
@@ -595,11 +641,16 @@ fn draw_hierarchy_row(
         node.locked = !node.locked;
         *changed = true;
     } else if response.clicked() {
+        let modifiers = pointer_click_modifiers(ui, rect);
         if *selected_id != Some(node.id) {
             *selected_id = Some(node.id);
             *changed = true;
-            *selection_change = Some(Some(node.id));
         }
+        *selection_action = Some(HierarchySelectionAction::Set {
+            row_id: node.id,
+            modifiers,
+        });
+        *selection_change = Some(Some(node.id));
     }
 
     RowOutcome {
@@ -1139,14 +1190,34 @@ fn collect_selection_subtree_ids(node: &HierarchyNode, ids: &mut Vec<usize>) {
     }
 }
 
+fn pointer_click_modifiers(ui: &Ui, rect: Rect) -> egui::Modifiers {
+    ui.input(|input| {
+        input
+            .events
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    modifiers,
+                    ..
+                } if rect.contains(*pos) => Some(*modifiers),
+                _ => None,
+            })
+            .unwrap_or(input.modifiers)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         apply_hierarchy_move, draw_hierarchy, Hierarchy, HierarchyDropPlacement,
-        HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest, HierarchyNode, HierarchyStyle,
+        HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest, HierarchyNode,
+        HierarchySelectionAction, HierarchyStyle,
     };
     use crate::ui::tokens;
-    use egui::{CentralPanel, Context, Id, RawInput};
+    use egui::{CentralPanel, Context, Event, Id, Modifiers, PointerButton, Pos2, RawInput};
 
     #[test]
     fn hovered_hierarchy_rows_use_uniform_corner_radius() {
@@ -1390,5 +1461,122 @@ mod tests {
                 );
             });
         });
+    }
+
+    #[test]
+    fn renders_multiple_selected_rows() {
+        let context = Context::default();
+        let mut selected_id = Some(2usize);
+        let selected_ids = vec![1usize, 2usize];
+        let mut rows = Vec::new();
+        let mut nodes = vec![
+            HierarchyNode::new(1, "First", HierarchyItemKind::Entity),
+            HierarchyNode::new(2, "Second", HierarchyItemKind::Entity),
+        ];
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                rows = draw_hierarchy(
+                    ui,
+                    &mut selected_id,
+                    Hierarchy::new(Id::new("hierarchy_multi_select_test"), &mut nodes)
+                        .selected_ids(selected_ids.as_slice()),
+                )
+                .rows;
+            });
+        });
+
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.selected)
+                .map(|row| row.id)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+    }
+
+    #[test]
+    fn hierarchy_row_click_reports_modifiers() {
+        let context = Context::default();
+        let (row_center, _) =
+            render_hierarchy_frame(&context, RawInput::default(), Some(1usize), None);
+
+        let _ = render_hierarchy_frame(
+            &context,
+            pointer_input(
+                row_center,
+                true,
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::NONE
+                },
+            ),
+            Some(1usize),
+            None,
+        );
+        let (_, selection_action) = render_hierarchy_frame(
+            &context,
+            pointer_input(
+                row_center,
+                false,
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::NONE
+                },
+            ),
+            Some(1usize),
+            None,
+        );
+
+        assert_eq!(
+            selection_action,
+            Some(HierarchySelectionAction::Set {
+                row_id: 1,
+                modifiers: Modifiers {
+                    shift: true,
+                    ..Modifiers::NONE
+                },
+            })
+        );
+    }
+
+    fn render_hierarchy_frame(
+        context: &Context,
+        input: RawInput,
+        mut selected_id: Option<usize>,
+        selected_ids: Option<&[usize]>,
+    ) -> (Pos2, Option<HierarchySelectionAction>) {
+        let mut row_center = Pos2::ZERO;
+        let mut selection_action = None;
+        let mut nodes = vec![HierarchyNode::new(1, "Player", HierarchyItemKind::Entity)];
+
+        let _ = context.run(input, |context| {
+            CentralPanel::default().show(context, |ui| {
+                let mut hierarchy = Hierarchy::new(Id::new("hierarchy_click_test"), &mut nodes);
+                if let Some(selected_ids) = selected_ids {
+                    hierarchy = hierarchy.selected_ids(selected_ids);
+                }
+                let response = draw_hierarchy(ui, &mut selected_id, hierarchy);
+                row_center = response.rows[0].rect.center();
+                selection_action = response.selection_action;
+            });
+        });
+
+        (row_center, selection_action)
+    }
+
+    fn pointer_input(position: Pos2, pressed: bool, modifiers: Modifiers) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed,
+                    modifiers,
+                },
+            ],
+            ..RawInput::default()
+        }
     }
 }

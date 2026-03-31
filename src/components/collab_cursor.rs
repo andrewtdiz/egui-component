@@ -12,8 +12,7 @@ const CURSOR_SVG_HEIGHT: f32 = 18.0;
 const CURSOR_TIP_X: f32 = 2.9;
 const CURSOR_TIP_Y: f32 = 3.2;
 const DEFAULT_CURSOR_HEIGHT: f32 = 30.0;
-const CURSOR_FILL_PATH: &str =
-    "M14.082 2.182a.5.5 0 0 1 .103.557L8.528 15.467a.5.5 0 0 1-.917-.007L5.57 10.694.803 8.652a.5.5 0 0 1-.006-.916l12.728-5.657a.5.5 0 0 1 .556.103z";
+const CURSOR_FILL_PATH: &str = "M14.082 2.182a.5.5 0 0 1 .103.557L8.528 15.467a.5.5 0 0 1-.917-.007L5.57 10.694.803 8.652a.5.5 0 0 1-.006-.916l12.728-5.657a.5.5 0 0 1 .556.103z";
 const CURSOR_TRANSFORM: &str = "translate(16 0) scale(-1 1)";
 
 static CURSOR_SVG_CACHE: OnceLock<Mutex<HashMap<u32, Arc<[u8]>>>> = OnceLock::new();
