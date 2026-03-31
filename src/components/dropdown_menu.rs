@@ -1,5 +1,4 @@
 use super::{api::ComponentUi, Button, ButtonVariant};
-use crate::layout;
 use crate::primitives::{
     popup::{popup_panel, PopupPanel},
     row::{icon_label_row, row_chrome, IconLabelRow, RowChrome},
@@ -238,9 +237,12 @@ pub(crate) fn show_menu_entries_surface(
             let inner_width = inner_row_width(row_width);
             ui.set_min_width(inner_width);
             ui.set_max_width(inner_width);
-            let _ = layout::column().gap(0.0).show(ui, |ui| {
-                let mut ui = ComponentUi::new(ui);
-                draw_entries(&mut ui, entries, action, row_width);
+            let _ = ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.vertical(|ui| {
+                    let mut ui = ComponentUi::new(ui);
+                    draw_entries(&mut ui, entries, action, row_width);
+                })
             });
         },
     );
@@ -283,14 +285,17 @@ fn draw_entries(
                                 let inner_width = inner_row_width(row_width);
                                 ui.set_min_width(inner_width);
                                 ui.set_max_width(inner_width);
-                                let _ = layout::column().gap(0.0).show(ui, |ui| {
-                                    let mut ui = ComponentUi::new(ui);
-                                    draw_entries(
-                                        &mut ui,
-                                        submenu.entries,
-                                        selected_action,
-                                        row_width,
-                                    );
+                                let _ = ui.scope(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    ui.vertical(|ui| {
+                                        let mut ui = ComponentUi::new(ui);
+                                        draw_entries(
+                                            &mut ui,
+                                            submenu.entries,
+                                            selected_action,
+                                            row_width,
+                                        );
+                                    })
                                 });
                             },
                         );

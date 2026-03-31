@@ -1,6 +1,29 @@
 use egui::{CentralPanel, Context, Id, ScrollArea, ViewportBuilder};
-use egui_component::layout;
 use egui_component::prelude::*;
+
+fn row<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = gap.max(0.0);
+        ui.horizontal(add)
+    })
+    .inner
+}
+
+fn column<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = gap.max(0.0);
+        ui.vertical(add)
+    })
+    .inner
+}
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -54,15 +77,16 @@ impl Default for ThemePlaygroundApp {
 }
 
 impl eframe::App for ThemePlaygroundApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        self.sync_theme(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.sync_theme(ui.ctx());
 
-        CentralPanel::default().show(ctx, |ui| {
+        CentralPanel::default().show_inside(ui, |ui| {
+            let ctx = ui.ctx().clone();
             ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_min_width(1180.0);
                 ui.add_space(12.0);
 
-                let _ = layout::column().gap(8.0).show(ui, |ui| {
+                let _ = column(ui, 8.0, |ui| {
                     let mut components = ui.components();
                     let _ = components.label(
                         Label::new("Theme Playground").weight(LabelWeight::Bold).size(22.0),
@@ -76,8 +100,8 @@ impl eframe::App for ThemePlaygroundApp {
 
                 ui.add_space(16.0);
 
-                let _ = layout::row().gap(16.0).show(ui, |ui| {
-                    self.render_controls(ui, ctx);
+                let _ = row(ui, 16.0, |ui| {
+                    self.render_controls(ui, &ctx);
                     self.render_previews(ui);
                 });
             });
@@ -106,7 +130,7 @@ impl ThemePlaygroundApp {
 
     fn render_controls(&mut self, ui: &mut egui::Ui, ctx: &Context) {
         let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
-            let _ = layout::column().gap(18.0).show(ui, |ui| {
+            let _ = column(ui, 18.0, |ui| {
                 {
                     let mut components = ui.components();
                     let _ = components
@@ -121,7 +145,7 @@ impl ThemePlaygroundApp {
                 self.mode_picker(ui, ctx);
                 self.radius_control(ui, ctx);
 
-                let _ = layout::row().gap(8.0).show(ui, |ui| {
+                let _ = row(ui, 8.0, |ui| {
                     let mut components = ui.components();
                     if components
                         .button(
@@ -162,7 +186,7 @@ impl ThemePlaygroundApp {
     }
 
     fn base_color_picker(&mut self, ui: &mut egui::Ui, ctx: &Context) {
-        let _ = layout::column().gap(6.0).show(ui, |ui| {
+        let _ = column(ui, 6.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("ThemeSpec / base color")
@@ -192,7 +216,7 @@ impl ThemePlaygroundApp {
     }
 
     fn mode_picker(&mut self, ui: &mut egui::Ui, ctx: &Context) {
-        let _ = layout::column().gap(6.0).show(ui, |ui| {
+        let _ = column(ui, 6.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("ThemeMode")
@@ -216,7 +240,7 @@ impl ThemePlaygroundApp {
     }
 
     fn radius_control(&mut self, ui: &mut egui::Ui, ctx: &Context) {
-        let _ = layout::column().gap(6.0).show(ui, |ui| {
+        let _ = column(ui, 6.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Corner radius")
@@ -238,17 +262,22 @@ impl ThemePlaygroundApp {
     }
 
     fn render_previews(&self, ui: &mut egui::Ui) {
-        let _ = layout::column().gap(16.0).show(ui, |ui| {
+        let _ = column(ui, 16.0, |ui| {
             let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
-                let _ = layout::column().gap(14.0).show(ui, |ui| {
+                let _ = column(ui, 14.0, |ui| {
                     let mut components = ui.components();
-                    let _ = components
-                        .label(Label::new("Runtime preview").weight(LabelWeight::Bold).size(16.0));
                     let _ = components.label(
-                        Label::new("This section uses the active global theme that was applied above.")
-                            .tone(LabelTone::Muted),
+                        Label::new("Runtime preview")
+                            .weight(LabelWeight::Bold)
+                            .size(16.0),
                     );
-                    let _ = layout::row().gap(10.0).show(ui, |ui| {
+                    let _ = components.label(
+                        Label::new(
+                            "This section uses the active global theme that was applied above.",
+                        )
+                        .tone(LabelTone::Muted),
+                    );
+                    let _ = row(ui, 10.0, |ui| {
                         let mut components = ui.components();
                         let _ = components.button(
                             Button::new("Primary action")
@@ -267,7 +296,7 @@ impl ThemePlaygroundApp {
             let scoped_spec = ThemeSpec::preset(self.scoped_base).with_radius(self.scoped_radius);
             let _ = egui_component::theme::with_theme(ui, scoped_spec, self.scoped_mode, |ui| {
                 let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
-                    let _ = layout::column().gap(14.0).show(ui, |ui| {
+                    let _ = column(ui, 14.0, |ui| {
                         let mut components = ui.components();
                         let _ = components.label(
                             Label::new("Scoped preview")
@@ -278,7 +307,7 @@ impl ThemePlaygroundApp {
                             Label::new("This card is rendered through theme::with_theme with its own ThemeSpec and ThemeMode.")
                                 .tone(LabelTone::Muted),
                         );
-                        let _ = layout::row().gap(8.0).show(ui, |ui| {
+                        let _ = row(ui, 8.0, |ui| {
                             let mut components = ui.components();
                             let _ = components.button(
                                 Button::new("Scoped callout")

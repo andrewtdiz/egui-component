@@ -450,6 +450,13 @@ pub fn install_context_resources(context: &Context) {
 }
 
 pub fn install(context: &Context, theme: ThemeSpec, mode: ThemeMode) {
+    context.options_mut(|options| {
+        let desired = std::num::NonZeroUsize::new(3).unwrap();
+        if options.max_passes < desired {
+            options.max_passes = desired;
+        }
+    });
+
     let state = ThemeState::new(theme, mode);
     store_context_theme_state(context, state);
     style::install(context, state);
@@ -511,7 +518,26 @@ pub(crate) fn resolved_radius(runtime: ThemeRuntime, role: RadiusRole) -> u8 {
 }
 
 pub(crate) const fn default_shadows() -> ThemeShadows {
-    ThemeShadows::new(Shadow::NONE, Shadow::NONE, Shadow::NONE)
+    ThemeShadows::new(
+        Shadow {
+            offset: [0, 1],
+            blur: 3,
+            spread: 0,
+            color: Color32::from_black_alpha(26),
+        },
+        Shadow {
+            offset: [0, 4],
+            blur: 6,
+            spread: 0,
+            color: Color32::from_black_alpha(26),
+        },
+        Shadow {
+            offset: [0, 10],
+            blur: 15,
+            spread: 0,
+            color: Color32::from_black_alpha(26),
+        },
+    )
 }
 
 pub(crate) trait ThemeUiRef {
@@ -666,6 +692,41 @@ mod tests {
         assert_eq!(slate.radius, 8.0);
         assert_eq!(slate.light.primary, OklchColor::new(0.3211, 0.0, 0.0));
         assert_eq!(slate.dark.accent, OklchColor::new(0.329, 0.0, 0.0));
+    }
+
+    #[test]
+    fn default_shadows_match_tailwind_approximations() {
+        assert_eq!(
+            default_shadows(),
+            ThemeShadows::new(
+                Shadow {
+                    offset: [0, 1],
+                    blur: 3,
+                    spread: 0,
+                    color: Color32::from_black_alpha(26),
+                },
+                Shadow {
+                    offset: [0, 4],
+                    blur: 6,
+                    spread: 0,
+                    color: Color32::from_black_alpha(26),
+                },
+                Shadow {
+                    offset: [0, 10],
+                    blur: 15,
+                    spread: 0,
+                    color: Color32::from_black_alpha(26),
+                },
+            )
+        );
+    }
+
+    #[test]
+    fn slate_preset_uses_shared_default_shadows() {
+        assert_eq!(
+            ThemeSpec::preset(BaseColor::Slate).shadows,
+            default_shadows()
+        );
     }
 
     #[test]

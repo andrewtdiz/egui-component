@@ -1,6 +1,4 @@
-use super::{
-    default_shadows, OklchColor, ThemePalette, ThemeShadows, ThemeSpec, DESTRUCTIVE_FOREGROUND,
-};
+use super::{default_shadows, OklchColor, ThemePalette, ThemeSpec, DESTRUCTIVE_FOREGROUND};
 
 pub(crate) const fn neutral_theme() -> ThemeSpec {
     ThemeSpec {
@@ -598,10 +596,6 @@ pub(crate) const fn slate_theme() -> ThemeSpec {
             sidebar_border: OklchColor::new(0.329, 0.0, 0.0),
             sidebar_ring: OklchColor::new(0.9219, 0.0, 0.0),
         },
-        shadows: ThemeShadows::new(
-            egui::Shadow::NONE,
-            egui::Shadow::NONE,
-            egui::Shadow::NONE,
-        ),
+        shadows: default_shadows(),
     }
 }

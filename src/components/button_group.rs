@@ -1,5 +1,4 @@
 use super::api::ComponentUi;
-use crate::layout;
 use crate::ui::{tokens, typography};
 use egui::{Align2, CornerRadius, CursorIcon, FontId, Id, Sense, Stroke, StrokeKind, Ui};
 
@@ -29,99 +28,104 @@ fn draw_button_group(ui: &mut Ui, props: ButtonGroup<'_>) -> Option<usize> {
     let runtime = crate::theme::runtime_for_ui(ui);
     let mut clicked_index = None;
 
+    let button_padding_x = tokens::SPACING_BUTTON_PADDING_X;
+    let text_font: FontId = typography::label_font();
+    let height = (tokens::SPACING_INTERACT_HEIGHT - 4.0).max(24.0);
+    let segment_widths = props
+        .options
+        .iter()
+        .copied()
+        .map(|label| {
+            let galley_width = ui.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(
+                        label.to_owned(),
+                        text_font.clone(),
+                        tokens::text_primary(runtime),
+                    )
+                    .size()
+                    .x
+            });
+            (galley_width + (button_padding_x * 2.0)).max(58.0)
+        })
+        .collect::<Vec<_>>();
+    let total_width = segment_widths.iter().sum::<f32>();
+
     ui.push_id(props.id, |ui| {
-        layout::row().gap(0.0).show(ui, |ui| {
-            let button_padding_x = tokens::SPACING_BUTTON_PADDING_X;
-            let text_font: FontId = typography::label_font();
-            let height = (tokens::SPACING_INTERACT_HEIGHT - 4.0).max(24.0);
-            let mut segment_rects = Vec::with_capacity(props.options.len());
+        let (group_rect, _) =
+            ui.allocate_exact_size(egui::vec2(total_width, height), Sense::hover());
+        let border = Stroke::new(1.0, tokens::button_secondary_border(runtime));
+        let mut segment_left = group_rect.left();
 
-            for (index, label) in props.options.iter().copied().enumerate() {
-                let galley_width = ui.fonts_mut(|fonts| {
-                    fonts
-                        .layout_no_wrap(
-                            label.to_owned(),
-                            text_font.clone(),
-                            tokens::text_primary(runtime),
-                        )
-                        .size()
-                        .x
-                });
-                let width = (galley_width + (button_padding_x * 2.0)).max(58.0);
-                let (rect, response) =
-                    ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
-                segment_rects.push(rect);
-
-                let fill = if response.is_pointer_button_down_on() {
-                    tokens::button_secondary_active_bg(runtime)
-                } else if response.hovered() {
-                    tokens::button_secondary_hover_bg(runtime)
-                } else {
-                    tokens::button_secondary_bg(runtime)
-                };
-                let corner = if props.options.len() == 1 {
-                    CornerRadius::same(tokens::radius_md(runtime))
-                } else if index == 0 {
-                    CornerRadius {
-                        nw: tokens::radius_md(runtime),
-                        ne: 0,
-                        sw: tokens::radius_md(runtime),
-                        se: 0,
-                    }
-                } else if index == props.options.len() - 1 {
-                    CornerRadius {
-                        nw: 0,
-                        ne: tokens::radius_md(runtime),
-                        sw: 0,
-                        se: tokens::radius_md(runtime),
-                    }
-                } else {
-                    CornerRadius::ZERO
-                };
-                let fill_rect = rect;
-                ui.painter()
-                    .rect(fill_rect, corner, fill, Stroke::NONE, StrokeKind::Outside);
-                ui.painter().text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    label,
-                    text_font.clone(),
-                    tokens::text_primary(runtime),
-                );
-
-                if response.clicked() {
-                    clicked_index = Some(index);
+        for (index, label) in props.options.iter().copied().enumerate() {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(segment_left, group_rect.top()),
+                egui::vec2(segment_widths[index], height),
+            );
+            let response = ui.interact(rect, ui.id().with(index), Sense::click());
+            let fill = if response.is_pointer_button_down_on() {
+                tokens::button_secondary_active_bg(runtime)
+            } else if response.hovered() {
+                tokens::button_secondary_hover_bg(runtime)
+            } else {
+                tokens::button_secondary_bg(runtime)
+            };
+            let corner = if props.options.len() == 1 {
+                CornerRadius::same(tokens::radius_md(runtime))
+            } else if index == 0 {
+                CornerRadius {
+                    nw: tokens::radius_md(runtime),
+                    ne: 0,
+                    sw: tokens::radius_md(runtime),
+                    se: 0,
                 }
+            } else if index == props.options.len() - 1 {
+                CornerRadius {
+                    nw: 0,
+                    ne: tokens::radius_md(runtime),
+                    sw: 0,
+                    se: tokens::radius_md(runtime),
+                }
+            } else {
+                CornerRadius::ZERO
+            };
 
-                let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+            ui.painter()
+                .rect(rect, corner, fill, Stroke::NONE, StrokeKind::Outside);
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                label,
+                text_font.clone(),
+                tokens::text_primary(runtime),
+            );
+
+            if response.clicked() {
+                clicked_index = Some(index);
             }
 
-            if let (Some(first), Some(last)) = (segment_rects.first(), segment_rects.last()) {
-                let group_rect = first.union(*last);
-                let border = Stroke::new(1.0, tokens::button_secondary_border(runtime));
-                ui.painter().rect(
-                    group_rect,
-                    CornerRadius::same(tokens::radius_md(runtime)),
-                    tokens::TRANSPARENT,
+            if index + 1 < props.options.len() {
+                let x = rect.right();
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(x, group_rect.top() + 1.0),
+                        egui::pos2(x, group_rect.bottom() - 1.0),
+                    ],
                     border,
-                    StrokeKind::Outside,
                 );
-
-                for rect in segment_rects
-                    .iter()
-                    .take(segment_rects.len().saturating_sub(1))
-                {
-                    let x = rect.right();
-                    ui.painter().line_segment(
-                        [
-                            egui::pos2(x, group_rect.top() + 1.0),
-                            egui::pos2(x, group_rect.bottom() - 1.0),
-                        ],
-                        border,
-                    );
-                }
             }
-        });
+
+            let _ = response.on_hover_cursor(CursorIcon::PointingHand);
+            segment_left = rect.right();
+        }
+
+        ui.painter().rect(
+            group_rect,
+            CornerRadius::same(tokens::radius_md(runtime)),
+            tokens::TRANSPARENT,
+            border,
+            StrokeKind::Outside,
+        );
     });
 
     clicked_index
@@ -164,6 +168,27 @@ mod tests {
             render_button_group(&context, pointer_input(second_button_center, false));
 
         assert_eq!(clicked, Some(1));
+    }
+
+    #[test]
+    fn button_group_advances_layout_as_a_single_row() {
+        let context = Context::default();
+        let mut before = Pos2::ZERO;
+        let mut after = Pos2::ZERO;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                before = ui.next_widget_position();
+                let _ = ui.components().button_group(ButtonGroup::new(
+                    Id::new("button_group_row_layout"),
+                    TEST_OPTIONS,
+                ));
+                after = ui.next_widget_position();
+            });
+        });
+
+        let height = (tokens::SPACING_INTERACT_HEIGHT - 4.0).max(24.0);
+        assert!(after.y - before.y < height * 2.0);
     }
 
     fn render_button_group(context: &Context, input: RawInput) -> (Pos2, Pos2, Option<usize>) {

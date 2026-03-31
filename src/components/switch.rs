@@ -1,7 +1,6 @@
 use super::{api::ComponentUi, common::ControlSize};
-use crate::layout;
 use crate::ui::tokens;
-use egui::{CornerRadius, Response, Stroke, StrokeKind, Ui};
+use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
 
 const SWITCH_LABEL_GAP: f32 = 10.0;
 
@@ -65,29 +64,36 @@ fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
             let control_slot_width = switch_metrics(props.size).width;
             let label_slot_width =
                 (ui.available_width() - control_slot_width - SWITCH_LABEL_GAP).max(0.0);
-            layout::row()
-                .gap(SWITCH_LABEL_GAP)
-                .show(ui, |ui| {
-                    let label_response =
-                        layout::sized_box()
-                            .width(label_slot_width)
-                            .show(ui, |ui| {
-                                ui.add(
-                                    egui::Label::new(egui::RichText::new(label).size(12.0).color(
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = SWITCH_LABEL_GAP;
+                ui.horizontal(|ui| {
+                    let label_response = ui
+                        .scope(|ui| {
+                            ui.set_min_width(label_slot_width);
+                            ui.set_max_width(label_slot_width);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(label).size(12.0).color(
                                         tokens::text_primary(crate::theme::runtime_for_ui(ui)),
-                                    ))
-                                    .selectable(false)
-                                    .wrap(),
+                                    ),
                                 )
-                            })
-                            .inner;
-                    let switch_response = layout::sized_box()
-                        .width(control_slot_width)
-                        .show(ui, |ui| draw_switch_control(ui, value, props.size))
+                                .selectable(false)
+                                .wrap(),
+                            )
+                        })
+                        .inner;
+                    let switch_response = ui
+                        .allocate_ui_with_layout(
+                            egui::vec2(control_slot_width, 0.0),
+                            Layout::top_down(Align::Min),
+                            |ui| draw_switch_control(ui, value, props.size),
+                        )
                         .inner;
                     label_response.union(switch_response)
                 })
                 .inner
+            })
+            .inner
         }
         None => draw_switch_control(ui, value, props.size),
     }
@@ -159,11 +165,8 @@ fn switch_metrics(size: ControlSize) -> SwitchMetrics {
 #[cfg(test)]
 mod tests {
     use super::Switch;
-    use crate::{
-        components::{ComponentUiExt, ControlSize},
-        layout,
-    };
-    use egui::{CentralPanel, Context, Pos2, RawInput, Response};
+    use crate::components::{ComponentUiExt, ControlSize};
+    use egui::{Align, CentralPanel, Context, Layout, Pos2, RawInput, Response};
 
     #[test]
     fn compact_labeled_switch_stays_within_preview_width() {
@@ -177,9 +180,10 @@ mod tests {
                 let origin: Pos2 = ui.next_widget_position();
                 slot_right = origin.x + 280.0;
                 row_response = Some(
-                    layout::sized_box()
-                        .width(280.0)
-                        .show(ui, |ui| {
+                    ui.scope(|ui| {
+                        ui.set_min_width(280.0);
+                        ui.set_max_width(280.0);
+                        ui.with_layout(Layout::top_down(Align::Min), |ui| {
                             ui.components().switch(
                                 &mut value,
                                 Switch::new()
@@ -187,7 +191,9 @@ mod tests {
                                     .size(ControlSize::Sm),
                             )
                         })
-                        .inner,
+                        .inner
+                    })
+                    .inner,
                 );
             });
         });

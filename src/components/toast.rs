@@ -2,7 +2,6 @@ use super::{
     api::{with_component_overrides, ComponentUi, ComponentUiExt},
     Button, ButtonVariant, Label, LabelTone, LabelWeight,
 };
-use crate::layout;
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
 use crate::ui::tokens;
@@ -367,38 +366,44 @@ fn draw_toast(
                 ui.set_max_width(inner_width);
                 with_component_overrides(ui, overrides, |ui| {
                     let _ = ui.with_layout(Layout::top_down(Align::Min), |ui| {
-                        let _ = layout::leading_trailing()
-                            .gap(8.0)
-                            .min_height(TOAST_CLOSE_BUTTON_SIZE)
-                            .show(
-                                ui,
-                                |ui| {
-                                    let _ = ui.components().label(
-                                        Label::new(toast.title.as_str())
-                                            .tone(LabelTone::Primary)
-                                            .weight(LabelWeight::Semibold),
-                                    );
-                                },
-                                |ui| {
-                                    if ui
-                                        .components()
-                                        .button(
-                                            Button::icon_only("x")
-                                                .variant(ButtonVariant::Ghost)
-                                                .size(super::ControlSize::Sm)
-                                                .icon_size(12.0)
-                                                .icon_tint(tokens::text_muted(runtime))
-                                                .min_size(egui::vec2(
-                                                    TOAST_CLOSE_BUTTON_SIZE,
-                                                    TOAST_CLOSE_BUTTON_SIZE,
-                                                )),
-                                        )
-                                        .clicked()
-                                    {
-                                        result.dismissed = true;
-                                    }
-                                },
-                            );
+                        let width = ui.available_width();
+                        let _ = ui.allocate_ui_with_layout(
+                            egui::vec2(width, TOAST_CLOSE_BUTTON_SIZE),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                let _ = ui.components().label(
+                                    Label::new(toast.title.as_str())
+                                        .tone(LabelTone::Primary)
+                                        .weight(LabelWeight::Semibold),
+                                );
+
+                                let trailing_width = ui.available_width().max(0.0);
+                                let _ = ui.allocate_ui_with_layout(
+                                    egui::vec2(trailing_width, TOAST_CLOSE_BUTTON_SIZE),
+                                    Layout::right_to_left(Align::Center),
+                                    |ui| {
+                                        if ui
+                                            .components()
+                                            .button(
+                                                Button::icon_only("x")
+                                                    .variant(ButtonVariant::Ghost)
+                                                    .size(super::ControlSize::Sm)
+                                                    .icon_size(12.0)
+                                                    .icon_tint(tokens::text_muted(runtime))
+                                                    .min_size(egui::vec2(
+                                                        TOAST_CLOSE_BUTTON_SIZE,
+                                                        TOAST_CLOSE_BUTTON_SIZE,
+                                                    )),
+                                            )
+                                            .clicked()
+                                        {
+                                            result.dismissed = true;
+                                        }
+                                    },
+                                );
+                            },
+                        );
 
                         if let Some(description) = toast.description.as_deref() {
                             ui.add_space(4.0);
@@ -478,11 +483,12 @@ fn toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> egui::Shad
 #[cfg(test)]
 mod tests {
     use super::{
-        draw_toast, draw_toast_viewport, Toast, ToastIntent, ToastPlacement, ToastStack,
-        ToastViewport,
+        draw_toast, draw_toast_viewport, toast_shadow, Toast, ToastIntent, ToastPlacement,
+        ToastStack, ToastViewport,
     };
     use crate::components::api::ComponentOverrides;
     use crate::components::ComponentUiExt;
+    use crate::ui::tokens;
     use egui::{Align, CentralPanel, Context, Id, Layout, RawInput, Rect, UiBuilder};
 
     #[test]
@@ -609,5 +615,25 @@ mod tests {
 
         assert!(viewport_rect.right() <= host_rect.right());
         assert!(viewport_rect.left() >= host_rect.left());
+    }
+
+    #[test]
+    fn toast_shadow_keeps_md_offset_and_fades_with_depth() {
+        let context = Context::default();
+        crate::theme::install(
+            &context,
+            crate::theme::ThemeSpec::default(),
+            crate::theme::ThemeMode::Dark,
+        );
+
+        let runtime = crate::theme::runtime_for_context(&context);
+        let base = tokens::tailwind_shadow_md(runtime);
+
+        assert_eq!(toast_shadow(runtime, 0), base);
+
+        let stacked = toast_shadow(runtime, 2);
+        assert_eq!(stacked.offset, base.offset);
+        assert!(stacked.blur < base.blur);
+        assert!(stacked.color.a() < base.color.a());
     }
 }

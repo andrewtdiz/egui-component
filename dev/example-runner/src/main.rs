@@ -6,15 +6,17 @@ use egui_component::{
 };
 use egui_kittest::{wgpu::WgpuTestRenderer, TestRenderer};
 use image::RgbaImage;
-use notify_debouncer_mini::notify::RecursiveMode;
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+use notify_debouncer_mini::notify::{
+    event::ModifyKind, Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode,
+    Watcher,
+};
 use std::env;
 use std::error::Error;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ExitStatus};
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 type AppResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -284,12 +286,12 @@ fn render_snapshot_frame(
     raw_input: RawInput,
 ) -> (egui::FullOutput, Rect, Rect) {
     let mut snapshot_rect = Rect::NOTHING;
-    let output = context.run(raw_input, |ctx| {
+    let output = context.run_ui(raw_input, |ui| {
         showcase::configure_snapshot(state, component, theme_mode);
-        showcase::prepare_frame(state, ctx);
+        showcase::prepare_frame(state, ui.ctx());
         snapshot_rect = CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| showcase::render_snapshot_component(state, ui))
+            .show_inside(ui, |ui| showcase::render_snapshot_component(state, ui))
             .inner
             .rect;
     });
@@ -426,7 +428,7 @@ fn component_id(kind: ComponentKind) -> &'static str {
 
 fn run_hot(example: &str) -> AppResult {
     let repo_root = repo_root();
-    let (watch_tx, watch_rx) = mpsc::channel::<DebounceEventResult>();
+    let (watch_tx, watch_rx) = mpsc::channel::<notify_debouncer_mini::notify::Result<Event>>();
     let (signal_tx, signal_rx) = mpsc::channel::<()>();
     let child = Arc::new(Mutex::new(Some(spawn_example(example)?)));
     let signal_child = Arc::clone(&child);
@@ -436,9 +438,9 @@ fn run_hot(example: &str) -> AppResult {
         let _ = signal_tx.send(());
     })?;
 
-    let mut debouncer = new_debouncer(WATCH_DEBOUNCE, watch_tx)?;
+    let mut watcher = RecommendedWatcher::new(watch_tx, NotifyConfig::default())?;
     for (path, mode) in watch_targets(&repo_root) {
-        debouncer.watcher().watch(path.as_path(), mode)?;
+        watcher.watch(path.as_path(), mode)?;
     }
 
     loop {
@@ -446,19 +448,13 @@ fn run_hot(example: &str) -> AppResult {
             return Ok(());
         }
 
-        match watch_rx.recv_timeout(WATCH_POLL) {
-            Ok(Ok(events)) => {
-                if events.is_empty() {
-                    continue;
-                }
+        match poll_for_rebuild(&watch_rx) {
+            WatchPoll::Triggered => {
                 eprintln!("[example-hot] change detected; restarting `{example}`");
                 restart_child(&child, example)?;
             }
-            Ok(Err(error)) => {
-                eprintln!("[example-hot] watcher error: {error}");
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            WatchPoll::Idle => {}
+            WatchPoll::Disconnected => break,
         }
 
         match try_wait_child(&child)? {
@@ -473,6 +469,73 @@ fn run_hot(example: &str) -> AppResult {
     }
 
     Ok(())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WatchPoll {
+    Triggered,
+    Idle,
+    Disconnected,
+}
+
+fn poll_for_rebuild(
+    watch_rx: &mpsc::Receiver<notify_debouncer_mini::notify::Result<Event>>,
+) -> WatchPoll {
+    let event = match watch_rx.recv_timeout(WATCH_POLL) {
+        Ok(Ok(event)) => event,
+        Ok(Err(error)) => {
+            eprintln!("[example-hot] watcher error: {error}");
+            return WatchPoll::Idle;
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => return WatchPoll::Idle,
+        Err(mpsc::RecvTimeoutError::Disconnected) => return WatchPoll::Disconnected,
+    };
+
+    if !event_requires_restart(&event) {
+        return WatchPoll::Idle;
+    }
+
+    let mut deadline = Instant::now() + WATCH_DEBOUNCE;
+    loop {
+        let Some(wait_time) = deadline.checked_duration_since(Instant::now()) else {
+            return WatchPoll::Triggered;
+        };
+
+        match watch_rx.recv_timeout(wait_time) {
+            Ok(Ok(event)) => {
+                if event_requires_restart(&event) {
+                    deadline = Instant::now() + WATCH_DEBOUNCE;
+                }
+            }
+            Ok(Err(error)) => {
+                eprintln!("[example-hot] watcher error: {error}");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => return WatchPoll::Triggered,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return WatchPoll::Triggered,
+        }
+    }
+}
+
+fn event_requires_restart(event: &Event) -> bool {
+    if event.need_rescan() {
+        return true;
+    }
+
+    if event.paths.is_empty() {
+        return false;
+    }
+
+    match event.kind {
+        EventKind::Any => true,
+        EventKind::Create(_) | EventKind::Remove(_) => true,
+        EventKind::Modify(ModifyKind::Data(_))
+        | EventKind::Modify(ModifyKind::Name(_))
+        | EventKind::Modify(ModifyKind::Any)
+        | EventKind::Modify(ModifyKind::Other) => true,
+        EventKind::Access(_) | EventKind::Modify(ModifyKind::Metadata(_)) | EventKind::Other => {
+            false
+        }
+    }
 }
 
 fn repo_root() -> PathBuf {
@@ -553,7 +616,15 @@ fn exit_for_status(status: ExitStatus) -> AppResult {
 #[cfg(test)]
 mod tests {
     use super::{Args, CommandKind, SnapshotComponents, SnapshotTheme};
+    use notify_debouncer_mini::notify::{
+        event::{
+            AccessKind, AccessMode, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
+            RenameMode,
+        },
+        Event, EventKind,
+    };
     use std::ffi::OsString;
+    use std::path::PathBuf;
 
     #[test]
     fn parses_showcase_hot_mode() {
@@ -594,5 +665,33 @@ mod tests {
         assert!(matches!(snapshot.components, SnapshotComponents::All));
         assert_eq!(snapshot.theme, SnapshotTheme::Dark);
         assert_eq!(snapshot.output_dir, std::path::PathBuf::from("tmp/snaps"));
+    }
+
+    #[test]
+    fn hot_restart_ignores_access_and_metadata_noise() {
+        let access = Event::new(EventKind::Access(AccessKind::Open(AccessMode::Read)))
+            .add_path(PathBuf::from("src/lib.rs"));
+        let metadata = Event::new(EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)))
+            .add_path(PathBuf::from("src/lib.rs"));
+
+        assert!(!super::event_requires_restart(&access));
+        assert!(!super::event_requires_restart(&metadata));
+    }
+
+    #[test]
+    fn hot_restart_triggers_for_content_path_and_lifecycle_changes() {
+        let data = Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Any)))
+            .add_path(PathBuf::from("src/lib.rs"));
+        let rename = Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any)))
+            .add_path(PathBuf::from("src/lib.rs"));
+        let create =
+            Event::new(EventKind::Create(CreateKind::File)).add_path(PathBuf::from("src/lib.rs"));
+        let remove =
+            Event::new(EventKind::Remove(RemoveKind::File)).add_path(PathBuf::from("src/lib.rs"));
+
+        assert!(super::event_requires_restart(&data));
+        assert!(super::event_requires_restart(&rename));
+        assert!(super::event_requires_restart(&create));
+        assert!(super::event_requires_restart(&remove));
     }
 }

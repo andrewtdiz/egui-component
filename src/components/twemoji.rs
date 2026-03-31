@@ -1,4 +1,4 @@
-use super::api::ComponentUi;
+use super::{api::ComponentUi, tooltip::attach_text_tooltip};
 use crate::ui::twemoji;
 use egui::{vec2, Response, Sense, Ui};
 
@@ -46,7 +46,8 @@ fn draw_twemoji(ui: &mut Ui, props: Twemoji<'_>) -> Response {
         ui.add(image.sense(props.sense))
     } else {
         let (_rect, response) = ui.allocate_exact_size(vec2(props.size, props.size), props.sense);
-        response.on_hover_text("Unsupported Twemoji asset")
+        attach_text_tooltip(ui, &response, "Unsupported Twemoji asset");
+        response
     }
 }
 

@@ -1,5 +1,4 @@
 use super::api::ComponentUi;
-use crate::layout;
 use crate::primitives::{
     control::{control_frame, ControlFrame},
     popup::{popup_panel, PopupPanel},
@@ -172,20 +171,23 @@ fn draw_select(
                 |ui| {
                     ui.set_min_width(row_width);
                     ui.set_max_width(row_width);
-                    let _ = layout::column().gap(2.0).show(ui, |ui| {
-                        for (index, label) in props.options.iter().copied().enumerate() {
-                            let option_response = draw_option_row(
-                                ui,
-                                label,
-                                current_selection == Some(index),
-                                row_width,
-                                runtime,
-                            );
-                            if option_response.clicked() {
-                                next_selection = Some(index);
-                                ui.close();
+                    let _ = ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = 2.0;
+                        ui.vertical(|ui| {
+                            for (index, label) in props.options.iter().copied().enumerate() {
+                                let option_response = draw_option_row(
+                                    ui,
+                                    label,
+                                    current_selection == Some(index),
+                                    row_width,
+                                    runtime,
+                                );
+                                if option_response.clicked() {
+                                    next_selection = Some(index);
+                                    ui.close();
+                                }
                             }
-                        }
+                        })
                     });
                 },
             );

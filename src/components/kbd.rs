@@ -1,5 +1,4 @@
 use super::api::{with_component_overrides, ComponentUi};
-use crate::layout;
 use crate::ui::tokens;
 use egui::{Align2, Color32, CornerRadius, FontFamily, FontId, Sense, Stroke, StrokeKind, Ui};
 
@@ -170,7 +169,10 @@ fn draw_kbd_group<R>(
     props: KbdGroup,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    layout::row().gap(props.gap).show(ui, add_contents)
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = props.gap;
+        ui.horizontal(add_contents).inner
+    })
 }
 
 #[cfg(test)]

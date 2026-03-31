@@ -3,6 +3,7 @@ pub mod components;
 pub mod contract;
 #[doc(hidden)]
 pub mod example_apps;
+mod internal_taffy;
 pub mod layout;
 pub mod icons {
     pub use crate::ui::icons::{image, setup, svg_source};
@@ -10,6 +11,11 @@ pub mod icons {
 pub mod primitives;
 pub mod theme;
 pub mod ui;
+
+pub(crate) use internal_taffy::{
+    setup_tui_visuals, tid, AsTuiBuilder, TaffyContainerUi, Tui, TuiBuilder, TuiBuilderLogic,
+    TuiBuilderParamsAccess, TuiContainerResponse, TuiId, TuiInnerResponse, TuiWidget,
+};
 
 pub use catalog::{
     component_definitions, component_definitions_by_group, parse_component_kind,
@@ -29,14 +35,14 @@ pub mod prelude {
         DialogueIntent, DialogueModal, DragBoard, DragBoardItem, DragBoardRegion, DropdownMenu,
         DropdownMenuAction, DropdownMenuEntry, DropdownMenuState, DropdownMenuSubmenu,
         EmojiSelector, Field, FileTree, FileTreeItemKind, FileTreeNode, Hierarchy,
-        HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle, Icon, Image,
-        ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState, Kbd, KbdGroup, Label,
-        LabelOverride, LabelTone, LabelWeight, MenuBar, MenuBarItem, MenuBarState, NumberInput,
-        NumberInputAxis, Pagination, Popover, PopoverAlign, PopoverResponse, PopoverSide, Progress,
-        Radio, RadioGroup, RadioOption, Select, SelectVariant, Sidebar, SidebarSide, Skeleton,
-        Slider, Spinner, Switch, TabOption, TabsVariant, TextInput, TextInputOverride, Toast,
-        ToastIntent, ToastPlacement, ToastStack, ToastViewport, ToggleGroup, Toolbar, Tooltip,
-        TooltipPlacement, Twemoji,
+        HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle, Icon, IconToolbar,
+        IconToolbarItem, Image, ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState,
+        Kbd, KbdGroup, Label, LabelOverride, LabelTone, LabelWeight, MenuBar, MenuBarItem,
+        MenuBarState, NumberInput, NumberInputAxis, Pagination, Popover, PopoverAlign,
+        PopoverResponse, PopoverSide, Progress, Radio, RadioGroup, RadioOption, Select,
+        SelectVariant, Sidebar, SidebarSide, Skeleton, Slider, Spinner, Switch, TabOption,
+        TabsVariant, TextInput, TextInputOverride, Toast, ToastIntent, ToastPlacement, ToastStack,
+        ToastViewport, ToggleGroup, Toolbar, Tooltip, TooltipPlacement, Twemoji,
     };
     pub use crate::theme::{
         BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,

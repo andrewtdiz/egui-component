@@ -1,5 +1,4 @@
 use super::api::ComponentUi;
-use crate::layout;
 use crate::ui::tokens;
 use egui::{CursorIcon, Id, Response, Sense, Stroke, Ui};
 
@@ -135,25 +134,29 @@ fn draw_radio_group(ui: &mut Ui, current: &mut Option<usize>, props: RadioGroup<
     let mut combined_response: Option<Response> = None;
 
     ui.push_id(props.id, |ui| {
-        let _ = layout::column().gap(props.gap).show(ui, |ui| {
-            for option in props.options {
-                let mut response = draw_radio(
-                    ui,
-                    *current == Some(option.value),
-                    Radio::new()
-                        .label(option.label)
-                        .description(option.description.unwrap_or("")),
-                );
-                if response.clicked() && *current != Some(option.value) {
-                    *current = Some(option.value);
-                    response.mark_changed();
-                }
+        let _ = ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y = props.gap;
+            ui.vertical(|ui| {
+                for option in props.options {
+                    let mut response = draw_radio(
+                        ui,
+                        *current == Some(option.value),
+                        Radio::new()
+                            .label(option.label)
+                            .description(option.description.unwrap_or("")),
+                    );
+                    if response.clicked() && *current != Some(option.value) {
+                        *current = Some(option.value);
+                        response.mark_changed();
+                    }
 
-                combined_response = Some(match combined_response.take() {
-                    Some(previous) => previous.union(response),
-                    None => response,
-                });
-            }
+                    combined_response = Some(match combined_response.take() {
+                        Some(previous) => previous.union(response),
+                        None => response,
+                    });
+                }
+            })
+            .inner;
         });
     });
 
@@ -167,41 +170,51 @@ fn draw_radio(ui: &mut Ui, selected: bool, props: Radio<'_>) -> Response {
     }
 
     let click_id = ui.next_auto_id();
-    let content = layout::row().gap(10.0).show(ui, |ui| {
-        let control = draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
-        let label = ui
-            .scope(|ui| {
-                ui.style_mut().interaction.selectable_labels = false;
-                let _ = layout::column().gap(RADIO_TEXT_GAP).show(ui, |ui| {
-                    let runtime = crate::theme::runtime_for_ui(ui);
-                    if let Some(label_text) = props.label {
-                        let _ = ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(label_text)
-                                    .color(tokens::text_primary(runtime)),
-                            )
-                            .selectable(false),
-                        );
-                    }
-                    if let Some(description) = props.description.filter(|text| !text.is_empty()) {
-                        let _ = ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(description)
-                                    .color(tokens::text_muted(runtime))
-                                    .size(12.0),
-                            )
-                            .selectable(false),
-                        );
-                    }
-                });
-            })
-            .response
-            .on_hover_cursor(CursorIcon::PointingHand);
+    let content = ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.horizontal(|ui| {
+            let control =
+                draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
+            let label = ui
+                .scope(|ui| {
+                    ui.style_mut().interaction.selectable_labels = false;
+                    let _ = ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = RADIO_TEXT_GAP;
+                        ui.vertical(|ui| {
+                            let runtime = crate::theme::runtime_for_ui(ui);
+                            if let Some(label_text) = props.label {
+                                let _ = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(label_text)
+                                            .color(tokens::text_primary(runtime)),
+                                    )
+                                    .selectable(false),
+                                );
+                            }
+                            if let Some(description) =
+                                props.description.filter(|text| !text.is_empty())
+                            {
+                                let _ = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(description)
+                                            .color(tokens::text_muted(runtime))
+                                            .size(12.0),
+                                    )
+                                    .selectable(false),
+                                );
+                            }
+                        })
+                    });
+                })
+                .response
+                .on_hover_cursor(CursorIcon::PointingHand);
 
-        control.union(label)
+            control.union(label)
+        })
     });
 
     content
+        .inner
         .inner
         .union(ui.interact(content.response.rect, click_id, Sense::click()))
         .on_hover_cursor(CursorIcon::PointingHand)
@@ -230,7 +243,7 @@ fn draw_radio_control(ui: &mut Ui, selected: bool) -> Response {
         (selected_fill, Stroke::new(1.0, selected_fill))
     } else if pressed {
         (
-            tokens::input_focus_background(runtime),
+            tokens::input_hover_background(runtime),
             Stroke::new(1.0, tokens::input_hover_border(runtime)),
         )
     } else if hovered {

@@ -181,10 +181,10 @@ fn mode_visuals(runtime: ThemeRuntime) -> Visuals {
     visuals.widgets.hovered.weak_bg_fill = tokens::input_hover_background(runtime);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, tokens::input_hover_border(runtime));
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
-    visuals.widgets.active.bg_fill = tokens::input_focus_background(runtime);
-    visuals.widgets.active.weak_bg_fill = tokens::input_focus_background(runtime);
-    visuals.widgets.active.bg_stroke = tokens::input_focus_stroke(runtime);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, tokens::text_primary(runtime));
+    visuals.widgets.active.bg_fill = visuals.widgets.hovered.bg_fill;
+    visuals.widgets.active.weak_bg_fill = visuals.widgets.hovered.weak_bg_fill;
+    visuals.widgets.active.bg_stroke = visuals.widgets.hovered.bg_stroke;
+    visuals.widgets.active.fg_stroke = visuals.widgets.hovered.fg_stroke;
     visuals.widgets.open.bg_fill = tokens::input_focus_background(runtime);
     visuals.widgets.open.weak_bg_fill = tokens::input_focus_background(runtime);
     visuals.widgets.open.bg_stroke = tokens::input_focus_stroke(runtime);
@@ -201,7 +201,7 @@ mod tests {
     use super::{component_font_definitions, install, set_theme_runtime};
     use crate::theme::{BaseColor, ThemeMode, ThemeRuntime, ThemeSpec, ThemeState};
     use crate::ui::{tokens, typography};
-    use egui::{Context, TextStyle};
+    use egui::{Context, Shadow, TextStyle};
 
     #[test]
     fn component_fonts_only_register_segoe_proportional_families() {
@@ -269,5 +269,34 @@ mod tests {
                 ThemeMode::Dark,
             ))
         );
+    }
+
+    #[test]
+    fn active_widget_visuals_match_hovered_visuals() {
+        let context = Context::default();
+        install(
+            &context,
+            ThemeState::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Light),
+        );
+
+        let visuals = &context.style().visuals.widgets;
+        assert_eq!(visuals.active.bg_fill, visuals.hovered.bg_fill);
+        assert_eq!(visuals.active.weak_bg_fill, visuals.hovered.weak_bg_fill);
+        assert_eq!(visuals.active.bg_stroke, visuals.hovered.bg_stroke);
+        assert_eq!(visuals.active.fg_stroke, visuals.hovered.fg_stroke);
+    }
+
+    #[test]
+    fn installed_visuals_use_theme_popup_shadow_and_no_window_shadow() {
+        let context = Context::default();
+        install(
+            &context,
+            ThemeState::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark),
+        );
+
+        let runtime = ThemeRuntime::new(ThemeSpec::preset(BaseColor::Neutral), ThemeMode::Dark);
+        let visuals = &context.style().visuals;
+        assert_eq!(visuals.popup_shadow, tokens::tailwind_shadow_md(runtime));
+        assert_eq!(visuals.window_shadow, Shadow::NONE);
     }
 }

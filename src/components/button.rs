@@ -6,6 +6,9 @@ use super::{
 use crate::ui::{icons, tokens, typography};
 use egui::{pos2, Color32, CursorIcon, FontId, Rect, RichText, Stroke, Ui, Vec2};
 
+const BUTTON_ICON_LABEL_GAP: f32 = 6.0;
+const BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION: i8 = 2;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum ButtonVariant {
     Primary,
@@ -402,16 +405,105 @@ fn resolve_button_style(
         if variant == ButtonVariant::Primary {
             let fill = color.fill;
             let hover_fill = fill.gamma_multiply(1.08);
-            let active_fill = fill.gamma_multiply(0.92);
             resolved.inactive_fill = fill;
             resolved.hovered_fill = hover_fill;
-            resolved.active_fill = active_fill;
+            resolved.active_fill = hover_fill;
             resolved.label_color = Some(tokens::button_primary_fill_fg(runtime));
             resolved.icon_tint = tokens::button_primary_fill_fg(runtime);
         }
     }
 
     resolved
+}
+
+fn button_content_margin(button_padding: Vec2, tighten_left_padding: bool) -> egui::Margin {
+    let mut margin = egui::Margin::from(button_padding);
+    if tighten_left_padding {
+        margin.left = (margin.left - BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION).max(0);
+    }
+    margin
+}
+
+fn draw_icon_label_button(
+    ui: &mut Ui,
+    props: &Button<'_>,
+    resolved: &ResolvedButtonStyle,
+    runtime: crate::theme::ThemeRuntime,
+    button_label: RichText,
+    button_label_font: &FontId,
+) -> Option<egui::Response> {
+    let icon_name = props.leading_icon?;
+    if props.label.is_empty() {
+        return None;
+    }
+
+    let leading_image =
+        icons::image(ui.ctx(), icon_name, props.icon_size)?.tint(resolved.icon_tint);
+    let trailing_image = props.trailing_icon.and_then(|trailing_icon| {
+        icons::image(ui.ctx(), trailing_icon, props.icon_size).map(|image| {
+            image.tint(if !ui.is_enabled() {
+                tokens::text_muted(runtime)
+            } else {
+                resolved.icon_tint
+            })
+        })
+    });
+
+    let mut atoms = egui::Atoms::default();
+    atoms.push_right(leading_image);
+    atoms.push_right(button_label);
+
+    if props.trailing_text.is_some() || trailing_image.is_some() {
+        atoms.push_right(egui::Atom::grow());
+    }
+
+    if let Some(trailing_text) = props.trailing_text {
+        let trailing_text = if props.trailing_hint {
+            RichText::new(trailing_text)
+                .font(button_label_font.clone())
+                .weak()
+        } else {
+            RichText::new(trailing_text).font(button_label_font.clone())
+        };
+        atoms.push_right(trailing_text);
+    }
+
+    if let Some(trailing_image) = trailing_image {
+        atoms.push_right(trailing_image);
+    }
+
+    let has_frame_margin = resolved.frame;
+    let button_margin = if has_frame_margin {
+        button_content_margin(resolved.button_padding, true)
+    } else {
+        egui::Margin::ZERO
+    };
+    let min_size = props.min_size.unwrap_or(resolved.min_size);
+    let mut prepared = egui::AtomLayout::new(atoms)
+        .gap(BUTTON_ICON_LABEL_GAP)
+        .frame(egui::Frame::new().inner_margin(button_margin))
+        .min_size(min_size)
+        .sense(egui::Sense::click())
+        .allocate(ui);
+    let visuals = ui
+        .style()
+        .interact_selectable(&prepared.response, props.selected);
+    prepared.fallback_text_color = visuals.text_color();
+
+    if has_frame_margin {
+        let stroke = visuals.bg_stroke;
+        let expansion_margin = egui::Margin::same(visuals.expansion.round() as i8);
+        let stroke_margin = egui::Margin::same(stroke.width.round() as i8);
+        prepared.frame = prepared
+            .frame
+            .inner_margin(button_margin + expansion_margin - stroke_margin)
+            .outer_margin(egui::Margin::same(-(visuals.expansion.round() as i8)))
+            .fill(visuals.weak_bg_fill)
+            .stroke(stroke)
+            .corner_radius(visuals.corner_radius);
+    }
+
+    Some(prepared.paint(ui).response)
 }
 
 fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
@@ -462,6 +554,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         };
         let has_label = !props.label.is_empty();
         let swatch_only = props.color.is_some() && !has_label && props.leading_icon.is_none();
+        let used_custom_icon_label_layout = props.leading_icon.is_some() && has_label;
 
         let mut widget = if swatch_only {
             egui::Button::new("")
@@ -475,10 +568,10 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
                     if props.icon_only || !has_label {
                         egui::Button::image(image)
                     } else {
-                        egui::Button::image_and_text(image, button_label)
+                        egui::Button::image_and_text(image, button_label.clone())
                     }
                 }
-                None => egui::Button::new(button_label),
+                None => egui::Button::new(button_label.clone()),
             }
         };
 
@@ -534,11 +627,27 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
             ));
         }
 
-        let response = ui.add(widget).on_hover_cursor(CursorIcon::PointingHand);
+        let response = if used_custom_icon_label_layout {
+            draw_icon_label_button(
+                ui,
+                &props,
+                &resolved,
+                runtime,
+                button_label.clone(),
+                &button_label_font,
+            )
+            .unwrap_or_else(|| ui.add(widget))
+        } else {
+            ui.add(widget)
+        }
+        .on_hover_cursor(CursorIcon::PointingHand);
         if let Some(color) = props.color.filter(|_| swatch_only) {
             paint_color(ui.painter(), response.rect, color);
         }
-        if let Some(icon_name) = props.trailing_icon {
+        if let Some(icon_name) = props
+            .trailing_icon
+            .filter(|_| !used_custom_icon_label_layout)
+        {
             paint_trailing_icon(
                 ui,
                 &response,
@@ -610,11 +719,12 @@ fn resolve_button_label_font(weight: ButtonLabelWeight) -> FontId {
 #[cfg(test)]
 mod tests {
     use super::{
-        active_button_stroke, resolve_button_label_font, Button, ButtonLabelWeight, ButtonVariant,
-        ResolvedButtonStyle,
+        active_button_stroke, button_content_margin, resolve_button_label_font, Button,
+        ButtonLabelWeight, ButtonVariant, ResolvedButtonStyle,
+        BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION,
     };
     use crate::components::{Color, ComponentUiExt, ControlSize};
-    use crate::ui::typography;
+    use crate::ui::{tokens, typography};
     use egui::{vec2, CentralPanel, Color32, Context, RawInput, Rect, Stroke};
 
     #[test]
@@ -676,5 +786,28 @@ mod tests {
 
         assert_eq!(active_button_stroke(&style, false), style.active_stroke);
         assert_eq!(active_button_stroke(&style, true), style.hovered_stroke);
+    }
+
+    #[test]
+    fn icon_label_buttons_use_tighter_left_padding() {
+        let margin = button_content_margin(
+            vec2(
+                tokens::SPACING_BUTTON_PADDING_X,
+                tokens::SPACING_BUTTON_PADDING_Y,
+            ),
+            true,
+        );
+
+        assert_eq!(
+            margin.left,
+            tokens::SPACING_BUTTON_PADDING_X.round() as i8
+                - BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION
+        );
+        assert_eq!(margin.right, tokens::SPACING_BUTTON_PADDING_X.round() as i8);
+        assert_eq!(margin.top, tokens::SPACING_BUTTON_PADDING_Y.round() as i8);
+        assert_eq!(
+            margin.bottom,
+            tokens::SPACING_BUTTON_PADDING_Y.round() as i8
+        );
     }
 }

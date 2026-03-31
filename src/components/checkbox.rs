@@ -1,5 +1,4 @@
 use super::api::ComponentUi;
-use crate::layout;
 use crate::ui::tokens;
 use egui::{CornerRadius, CursorIcon, Response, RichText, Sense, Stroke, StrokeKind, Ui};
 
@@ -50,9 +49,9 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
     let runtime = crate::theme::runtime_for_ui(ui);
     match props.label {
         Some(label_text) => {
-            layout::row()
-                .gap(10.0)
-                .show(ui, |ui| {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.horizontal(|ui| {
                     let mut control =
                         draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand);
                     let label = ui
@@ -75,6 +74,8 @@ fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response
                     control.union(label)
                 })
                 .inner
+            })
+            .inner
         }
         None => draw_checkbox_control(ui, value).on_hover_cursor(CursorIcon::PointingHand),
     }
@@ -107,7 +108,7 @@ fn draw_checkbox_control(ui: &mut Ui, value: &mut bool) -> Response {
         (checked_fill, Stroke::new(1.0, checked_fill))
     } else if pressed {
         (
-            tokens::input_focus_background(runtime),
+            tokens::input_hover_background(runtime),
             Stroke::new(1.0, tokens::input_hover_border(runtime)),
         )
     } else if hovered {

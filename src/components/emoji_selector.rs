@@ -2,13 +2,15 @@ use super::{
     api::{ComponentUi, ComponentUiExt},
     Button, ButtonVariant, Popover, PopoverAlign, PopoverSide, TextInput, Tooltip,
 };
-use crate::layout;
 use crate::primitives::{
     content::muted_empty_state,
     control::{control_frame, ControlFrame},
 };
 use crate::ui::{tokens, twemoji, typography};
 use egui::{Align2, CursorIcon, Id, Response, Sense, Stroke, StrokeKind, Ui};
+
+#[path = "emoji_selector_data.rs"]
+mod emoji_selector_data;
 
 const EMOJI_TRIGGER_SIZE: f32 = 38.0;
 const EMOJI_TRIGGER_EMOJI_SIZE: f32 = 20.0;
@@ -17,6 +19,7 @@ const EMOJI_POPUP_MAX_HEIGHT: f32 = 360.0;
 const EMOJI_CELL_SIZE: f32 = 32.0;
 const EMOJI_CELL_EMOJI_SIZE: f32 = 20.0;
 const EMOJI_CELL_GAP: f32 = 6.0;
+const EMOJI_VISIBLE_ROWS: usize = 5;
 const EMOJI_SECTION_GAP: f32 = 10.0;
 const CATEGORY_BUTTON_SIZE: f32 = 30.0;
 const CATEGORY_ICON_SIZE: f32 = 14.0;
@@ -141,6 +144,7 @@ struct EmojiEntry {
     category: EmojiCategory,
 }
 
+#[allow(dead_code)]
 const EMOJI_ENTRIES: &[EmojiEntry] = &[
     EmojiEntry {
         emoji: "😀",
@@ -838,41 +842,36 @@ fn draw_emoji_panel(
     ui.add_space(EMOJI_SECTION_GAP);
 
     let entries = filtered_entries(state.query.as_str(), state.category);
-    let _ = egui::ScrollArea::vertical()
-        .id_salt(props.id.with("emoji_scroll"))
-        .max_height((props.popup_max_height - 104.0).max(96.0))
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            let body_width = ui.available_width();
+    let body_width = content_width.max(EMOJI_CELL_SIZE);
+    let columns = emoji_grid_columns(body_width);
+    let visible_entries = emoji_visible_entries(&entries, columns);
+    let visible_rows = emoji_grid_row_count(visible_entries.len(), columns);
+    if entries.is_empty() {
+        let _ = muted_empty_state(ui, "No emoji found");
+    } else {
+        let previous_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing = egui::vec2(EMOJI_CELL_GAP, EMOJI_CELL_GAP);
+
+        let _ = ui.scope(|ui| {
             ui.set_min_width(body_width);
             ui.set_max_width(body_width);
 
-            if entries.is_empty() {
-                let _ = muted_empty_state(ui, "No emoji found");
-                return;
+            for row in 0..visible_rows {
+                draw_emoji_row(
+                    ui,
+                    visible_entries,
+                    row,
+                    columns,
+                    value,
+                    state,
+                    open,
+                    value_changed,
+                );
             }
-
-            let previous_spacing = ui.spacing().item_spacing;
-            ui.spacing_mut().item_spacing = egui::vec2(EMOJI_CELL_GAP, EMOJI_CELL_GAP);
-
-            let _ = ui.horizontal_wrapped(|ui| {
-                ui.set_min_width(body_width);
-                ui.set_max_width(body_width);
-                for entry in entries {
-                    let selected = value == entry.emoji;
-                    let response = draw_emoji_cell(ui, entry, selected);
-                    if response.clicked() {
-                        value.clear();
-                        value.push_str(entry.emoji);
-                        state.query.clear();
-                        *open = false;
-                        *value_changed = true;
-                    }
-                }
-            });
-
-            ui.spacing_mut().item_spacing = previous_spacing;
         });
+
+        ui.spacing_mut().item_spacing = previous_spacing;
+    }
 
     ui.add_space(EMOJI_SECTION_GAP);
     draw_panel_separator(ui, content_width);
@@ -885,8 +884,11 @@ fn draw_category_bar(ui: &mut Ui, state: &mut EmojiSelectorState, content_width:
         - CATEGORY_BUTTON_GAP * (CATEGORY_TABS.len().saturating_sub(1) as f32))
         / CATEGORY_TABS.len() as f32)
         .max(1.0);
-    let _ = layout::sized_box().width(content_width).show(ui, |ui| {
-        let _ = layout::row().gap(CATEGORY_BUTTON_GAP).show(ui, |ui| {
+    let _ = ui.scope(|ui| {
+        ui.set_min_width(content_width);
+        ui.set_max_width(content_width);
+        ui.spacing_mut().item_spacing.x = CATEGORY_BUTTON_GAP;
+        ui.horizontal(|ui| {
             for tab in CATEGORY_TABS {
                 let selected = state.category == tab.category;
                 let response = ui.components().button(
@@ -904,6 +906,50 @@ fn draw_category_bar(ui: &mut Ui, state: &mut EmojiSelectorState, content_width:
                 }
             }
         });
+    });
+}
+
+fn emoji_grid_columns(body_width: f32) -> usize {
+    ((body_width + EMOJI_CELL_GAP) / (EMOJI_CELL_SIZE + EMOJI_CELL_GAP))
+        .floor()
+        .max(1.0) as usize
+}
+
+fn emoji_grid_row_count(entry_count: usize, columns: usize) -> usize {
+    entry_count.div_ceil(columns.max(1))
+}
+
+fn emoji_visible_entries(entries: &[EmojiEntry], columns: usize) -> &[EmojiEntry] {
+    let limit = columns.saturating_mul(EMOJI_VISIBLE_ROWS).max(columns);
+    &entries[..entries.len().min(limit)]
+}
+
+fn draw_emoji_row(
+    ui: &mut Ui,
+    entries: &[EmojiEntry],
+    row: usize,
+    columns: usize,
+    value: &mut String,
+    state: &mut EmojiSelectorState,
+    open: &mut bool,
+    value_changed: &mut bool,
+) {
+    let start = row.saturating_mul(columns);
+    let end = (start + columns).min(entries.len());
+    let row_entries = &entries[start..end];
+
+    let _ = ui.horizontal(|ui| {
+        for entry in row_entries {
+            let selected = value == entry.emoji;
+            let response = draw_emoji_cell(ui, entry, selected);
+            if response.clicked() {
+                value.clear();
+                value.push_str(entry.emoji);
+                state.query.clear();
+                *open = false;
+                *value_changed = true;
+            }
+        }
     });
 }
 
@@ -978,17 +1024,37 @@ fn paint_emoji_or_text(
     }
 }
 
-fn filtered_entries(query: &str, category: EmojiCategory) -> Vec<&'static EmojiEntry> {
+fn filtered_entries(query: &str, category: EmojiCategory) -> Vec<EmojiEntry> {
     let query = query.trim().to_ascii_lowercase();
-    EMOJI_ENTRIES
+    emoji_selector_data::EMOJI_DATA
         .iter()
-        .filter(|entry| category == EmojiCategory::All || entry.category == category)
-        .filter(|entry| query.is_empty() || emoji_entry_matches(entry, query.as_str()))
+        .filter_map(|(emoji, label)| {
+            let entry = EmojiEntry {
+                emoji,
+                label,
+                aliases: &[],
+                category: classify_emoji(*label),
+            };
+            if category != EmojiCategory::All && entry.category != category {
+                return None;
+            }
+            if !query.is_empty() && !emoji_entry_matches(&entry, query.as_str()) {
+                return None;
+            }
+            Some(entry)
+        })
         .collect()
 }
 
 fn emoji_entry_matches(entry: &EmojiEntry, query: &str) -> bool {
     if entry.emoji == query {
+        return true;
+    }
+
+    if matches!(
+        (query, entry.emoji),
+        ("laugh" | "joy", "😂" | "🤣") | ("notification", "🔔")
+    ) {
         return true;
     }
 
@@ -1000,6 +1066,514 @@ fn emoji_entry_matches(entry: &EmojiEntry, query: &str) -> bool {
         .aliases
         .iter()
         .any(|alias| alias.to_ascii_lowercase().contains(query))
+        || supplemental_alias_match(entry.label, query)
+}
+
+fn classify_emoji(label: &str) -> EmojiCategory {
+    let label = label.to_ascii_lowercase();
+
+    if label.starts_with("flag:") || label.starts_with("regional indicator") {
+        return EmojiCategory::Flags;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "food",
+            "drink",
+            "beverage",
+            "fruit",
+            "vegetable",
+            "bread",
+            "rice",
+            "curry",
+            "sandwich",
+            "taco",
+            "burrito",
+            "pizza",
+            "burger",
+            "fries",
+            "salad",
+            "spaghetti",
+            "sushi",
+            "cake",
+            "cookie",
+            "chocolate",
+            "candy",
+            "honey",
+            "croissant",
+            "bagel",
+            "dumpling",
+            "popcorn",
+            "ice",
+            "coffee",
+            "tea",
+            "beer",
+            "wine",
+            "cocktail",
+            "milk",
+            "bottle",
+            "cup",
+            "egg",
+            "meat",
+            "bacon",
+            "shrimp",
+            "oyster",
+            "lobster",
+            "crab",
+            "apple",
+            "banana",
+            "grapes",
+            "strawberry",
+            "cherry",
+            "peach",
+            "pear",
+            "pineapple",
+            "coconut",
+            "kiwi",
+            "avocado",
+            "olive",
+            "carrot",
+            "corn",
+            "pepper",
+            "mushroom",
+            "potato",
+            "tamale",
+            "fondue",
+            "mate",
+            "bubble tea",
+        ],
+    ) {
+        return EmojiCategory::Food;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "face",
+            "hand",
+            "person",
+            "people",
+            "adult",
+            "child",
+            "baby",
+            "boy",
+            "girl",
+            "man",
+            "woman",
+            "men",
+            "women",
+            "family",
+            "couple",
+            "kiss",
+            "heart",
+            "bride",
+            "groom",
+            "prince",
+            "princess",
+            "superhero",
+            "supervillain",
+            "mage",
+            "fairy",
+            "vampire",
+            "merperson",
+            "elf",
+            "genie",
+            "zombie",
+            "runner",
+            "walking",
+            "kneeling",
+            "standing",
+            "dancing",
+            "bald",
+            "beard",
+            "pregnant",
+            "breast-feeding",
+            "feeding baby",
+            "guard",
+            "detective",
+            "farmer",
+            "cook",
+            "student",
+            "singer",
+            "teacher",
+            "judge",
+            "pilot",
+            "astronaut",
+            "artist",
+            "firefighter",
+            "police",
+            "ninja",
+            "construction worker",
+            "health worker",
+            "mechanic",
+            "scientist",
+            "technologist",
+            "office worker",
+            "factory worker",
+            "mx claus",
+            "santa",
+            "claus",
+        ],
+    ) {
+        return EmojiCategory::People;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "animal",
+            "bird",
+            "mammal",
+            "monkey",
+            "gorilla",
+            "orangutan",
+            "dog",
+            "cat",
+            "mouse",
+            "hamster",
+            "rabbit",
+            "fox",
+            "bear",
+            "panda",
+            "koala",
+            "tiger",
+            "lion",
+            "cow",
+            "pig",
+            "frog",
+            "monkey",
+            "chicken",
+            "penguin",
+            "duck",
+            "eagle",
+            "owl",
+            "bat",
+            "wolf",
+            "boar",
+            "horse",
+            "unicorn",
+            "honeybee",
+            "bug",
+            "butterfly",
+            "snail",
+            "beetle",
+            "ant",
+            "cricket",
+            "spider",
+            "scorpion",
+            "mosquito",
+            "microbe",
+            "turtle",
+            "snake",
+            "lizard",
+            "octopus",
+            "fish",
+            "whale",
+            "dolphin",
+            "shark",
+            "crocodile",
+            "leopard",
+            "zebra",
+            "bison",
+            "camel",
+            "llama",
+            "giraffe",
+            "elephant",
+            "hippo",
+            "rhino",
+            "sloth",
+            "otter",
+            "skunk",
+            "kangaroo",
+            "badger",
+            "paw",
+            "plant",
+            "flower",
+            "blossom",
+            "tree",
+            "leaf",
+            "herb",
+            "seedling",
+            "cactus",
+            "palm",
+            "mushroom",
+            "sun",
+            "moon",
+            "star",
+            "globe",
+            "earth",
+            "rainbow",
+            "cloud",
+            "rain",
+            "snow",
+            "lightning",
+            "tornado",
+            "fog",
+            "wind",
+            "fire",
+            "droplet",
+            "water wave",
+            "ocean",
+            "volcano",
+            "comet",
+        ],
+    ) {
+        return EmojiCategory::Nature;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "sport",
+            "ball",
+            "medal",
+            "trophy",
+            "game",
+            "dice",
+            "dart",
+            "puzzle",
+            "chess",
+            "bowling",
+            "fishing",
+            "diving",
+            "boxing",
+            "martial arts",
+            "goal",
+            "ski",
+            "sled",
+            "curling",
+            "golf",
+            "tennis",
+            "badminton",
+            "lacrosse",
+            "cricket game",
+            "softball",
+            "flying disc",
+            "yo-yo",
+            "kite",
+            "performing arts",
+            "artist palette",
+            "microphone",
+            "headphone",
+            "musical",
+            "guitar",
+            "piano",
+            "trumpet",
+            "violin",
+            "drum",
+            "saxophone",
+            "accordion",
+            "banjo",
+        ],
+    ) {
+        return EmojiCategory::Activity;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "car",
+            "taxi",
+            "bus",
+            "trolley",
+            "train",
+            "tram",
+            "railway",
+            "locomotive",
+            "truck",
+            "tractor",
+            "bicycle",
+            "bike",
+            "scooter",
+            "motor",
+            "wheel",
+            "police car",
+            "ambulance",
+            "fire engine",
+            "airplane",
+            "plane",
+            "helicopter",
+            "rocket",
+            "satellite",
+            "canoe",
+            "boat",
+            "ship",
+            "ferry",
+            "anchor",
+            "fuel",
+            "traffic",
+            "map",
+            "compass",
+            "camping",
+            "beach",
+            "mountain",
+            "volcano",
+            "building",
+            "house",
+            "city",
+            "stadium",
+            "statue",
+            "bridge",
+            "mosque",
+            "church",
+            "temple",
+            "castle",
+            "hotel",
+            "hospital",
+            "school",
+            "bank",
+            "factory",
+            "office",
+            "post office",
+            "sunrise",
+            "sunset",
+            "night",
+            "island",
+            "desert",
+            "passport",
+            "baggage",
+            "luggage",
+            "globe showing",
+            "carousel",
+            "ferris",
+        ],
+    ) {
+        return EmojiCategory::Travel;
+    }
+
+    if contains_any(
+        label.as_str(),
+        &[
+            "phone",
+            "computer",
+            "keyboard",
+            "printer",
+            "camera",
+            "video",
+            "television",
+            "radio",
+            "light bulb",
+            "flashlight",
+            "candle",
+            "book",
+            "notebook",
+            "ledger",
+            "newspaper",
+            "scroll",
+            "page",
+            "mail",
+            "envelope",
+            "package",
+            "box",
+            "briefcase",
+            "folder",
+            "clipboard",
+            "calendar",
+            "chart",
+            "paperclip",
+            "pushpin",
+            "scissors",
+            "ruler",
+            "lock",
+            "key",
+            "hammer",
+            "axe",
+            "pick",
+            "tool",
+            "screwdriver",
+            "wrench",
+            "nut",
+            "gear",
+            "magnet",
+            "ladder",
+            "bucket",
+            "coin",
+            "money",
+            "gem",
+            "ring",
+            "crown",
+            "backpack",
+            "handbag",
+            "pouch",
+            "wallet",
+            "shoe",
+            "boot",
+            "shirt",
+            "coat",
+            "dress",
+            "socks",
+            "gloves",
+            "scarf",
+            "hat",
+            "glasses",
+            "mask",
+            "pill",
+            "syringe",
+            "stethoscope",
+            "bed",
+            "couch",
+            "chair",
+            "toilet",
+            "shower",
+            "bathtub",
+            "window",
+            "door",
+            "mirror",
+            "gift",
+            "battery",
+            "alarm clock",
+            "watch",
+            "hourglass",
+            "bomb",
+            "gun",
+            "knife",
+            "dagger",
+            "shield",
+            "sword",
+            "boomerang",
+            "hook",
+            "toolbox",
+            "barber pole",
+        ],
+    ) {
+        return EmojiCategory::Objects;
+    }
+
+    EmojiCategory::Symbols
+}
+
+fn contains_any(label: &str, keywords: &[&str]) -> bool {
+    keywords
+        .iter()
+        .any(|keyword| label_matches_keyword(label, keyword))
+}
+
+fn label_matches_keyword(label: &str, keyword: &str) -> bool {
+    if keyword.contains(' ') || keyword.contains('-') {
+        return label.contains(keyword);
+    }
+
+    label
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(|token| token == keyword)
+}
+
+fn supplemental_alias_match(label: &str, query: &str) -> bool {
+    let label = label.to_ascii_lowercase();
+    match query {
+        "laugh" | "lol" | "joy" => {
+            label.contains("tears of joy") || label.contains("rolling on the floor laughing")
+        }
+        "notification" => label.contains("bell"),
+        "alert" => label.contains("warning") || label.contains("siren"),
+        "love" => label.contains("heart") || label.contains("kiss"),
+        "smile" | "happy" => {
+            label.contains("smiling") || label.contains("grinning") || label.contains("beaming")
+        }
+        "sad" | "cry" => label.contains("crying") || label.contains("tear"),
+        _ => false,
+    }
 }
 
 fn trigger_chrome(
@@ -1074,13 +1648,21 @@ fn store_emoji_selector_state(ui: &mut Ui, id: Id, state: EmojiSelectorState) {
 
 #[cfg(test)]
 mod tests {
-    use super::{filtered_entries, EmojiCategory, EmojiSelector, EmojiSelectorState};
+    use super::{
+        classify_emoji, emoji_visible_entries, filtered_entries, EmojiCategory, EmojiEntry,
+        EmojiSelector, EmojiSelectorState, EMOJI_VISIBLE_ROWS,
+    };
     use crate::components::ComponentUiExt;
     use crate::theme::{self, ThemeMode};
     use egui::{CentralPanel, Context, Event, Id, Modifiers, PointerButton, RawInput};
 
     #[test]
     fn query_matches_labels_aliases_and_direct_emoji() {
+        assert_eq!(
+            classify_emoji("face with tears of joy"),
+            EmojiCategory::People
+        );
+
         let people = filtered_entries("laugh", EmojiCategory::People);
         assert!(people.iter().any(|entry| entry.emoji == "😂"));
 
@@ -1099,6 +1681,36 @@ mod tests {
             .all(|entry| entry.category == EmojiCategory::People));
         assert!(people.iter().any(|entry| entry.emoji == "🙂"));
         assert!(!people.iter().any(|entry| entry.emoji == "🍕"));
+    }
+
+    #[test]
+    fn picker_catalog_includes_full_twemoji_set() {
+        let all = filtered_entries("", EmojiCategory::All);
+        assert!(all.len() > 1_900);
+        assert!(all.iter().any(|entry| entry.emoji == "🩷"));
+        assert!(all.iter().any(|entry| entry.emoji == "🫠"));
+        assert!(all.iter().any(|entry| entry.emoji == "🇺🇳"));
+    }
+
+    #[test]
+    fn top_results_are_limited_to_visible_rows() {
+        const ENTRY: EmojiEntry = EmojiEntry {
+            emoji: "🙂",
+            label: "slightly smiling face",
+            aliases: &[],
+            category: EmojiCategory::People,
+        };
+
+        let entries = vec![ENTRY; 64];
+        assert_eq!(
+            emoji_visible_entries(&entries, 4).len(),
+            EMOJI_VISIBLE_ROWS * 4
+        );
+        assert_eq!(
+            emoji_visible_entries(&entries, 7).len(),
+            EMOJI_VISIBLE_ROWS * 7
+        );
+        assert_eq!(emoji_visible_entries(&entries[..6], 4).len(), 6);
     }
 
     #[test]

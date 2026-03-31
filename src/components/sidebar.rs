@@ -2,7 +2,6 @@ use super::{
     api::{with_component_overrides, ComponentUi, ComponentUiExt},
     Button, ButtonVariant, Label, LabelTone, LabelWeight,
 };
-use crate::layout;
 use crate::theme::ColorRole;
 use crate::ui::tokens;
 use egui::{Color32, CornerRadius, Id, Key, Margin, Order, Stroke, StrokeKind, Ui};
@@ -252,9 +251,12 @@ fn draw_sidebar_header(
     runtime: crate::theme::ThemeRuntime,
     close_requested: &mut bool,
 ) {
-    let _ = layout::leading_trailing().gap(8.0).min_height(28.0).show(
-        ui,
+    let width = ui.available_width();
+    let _ = ui.allocate_ui_with_layout(
+        egui::vec2(width, 28.0),
+        egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
             let mut components = ui.components();
             let _ = components.label(
                 Label::new(title)
@@ -262,25 +264,31 @@ fn draw_sidebar_header(
                     .weight(LabelWeight::Semibold)
                     .size(16.0),
             );
-        },
-        |ui| {
-            if ui
-                .components()
-                .button(
-                    Button::icon_only("x")
-                        .variant(ButtonVariant::Ghost)
-                        .size(super::ControlSize::Sm)
-                        .icon_size(12.0)
-                        .icon_tint(crate::theme::resolved_color(
-                            runtime,
-                            ColorRole::SidebarForeground,
-                        ))
-                        .min_size(egui::vec2(28.0, 28.0)),
-                )
-                .clicked()
-            {
-                *close_requested = true;
-            }
+
+            let trailing_width = ui.available_width().max(0.0);
+            let _ = ui.allocate_ui_with_layout(
+                egui::vec2(trailing_width, 28.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    if ui
+                        .components()
+                        .button(
+                            Button::icon_only("x")
+                                .variant(ButtonVariant::Ghost)
+                                .size(super::ControlSize::Sm)
+                                .icon_size(12.0)
+                                .icon_tint(crate::theme::resolved_color(
+                                    runtime,
+                                    ColorRole::SidebarForeground,
+                                ))
+                                .min_size(egui::vec2(28.0, 28.0)),
+                        )
+                        .clicked()
+                    {
+                        *close_requested = true;
+                    }
+                },
+            );
         },
     );
 }

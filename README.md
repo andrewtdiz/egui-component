@@ -5,7 +5,7 @@
 The crate is organized around three public layers:
 
 - `egui_component::components::*` for typed component builders and `ui.components()`
-- `egui_component::layout::*` for explicit row, column, inset, and spacer composition
+- `egui_component::layout::*` for vendored taffy flex/grid primitives
 - `egui_component::theme::*` for theme installation and scoped theme changes
 
 The crate also ships a host-owned declarative layer for editor scripting:
@@ -16,10 +16,12 @@ The crate also ships a host-owned declarative layer for editor scripting:
 
 ```toml
 [dependencies]
-egui = "0.33.3"
-eframe = "0.33.3"
+egui = "0.34.1"
+eframe = "0.34.1"
 egui-component = { path = "../egui-component-mainline" }
 ```
+
+No feature flag is required for taffy-backed layout.
 
 ## Start A New Project
 
@@ -34,8 +36,8 @@ Then add `egui`, `eframe`, and this component library to `Cargo.toml`:
 
 ```toml
 [dependencies]
-egui = "0.33.3"
-eframe = "0.33.3"
+egui = "0.34.1"
+eframe = "0.34.1"
 egui-component = { path = "../egui-component-mainline" }
 ```
 
@@ -105,7 +107,7 @@ cargo run
 From there, use:
 
 - `egui_component::theme::*` to install or scope themes
-- `egui_component::layout::*` for rows, columns, inset, and alignment
+- `egui_component::layout::*` for direct taffy layout via `tui`, `tid`, and `taffy`
 - `egui_component::prelude::*` for the typed component builders
 - `egui_component::contract::*` when the host needs to render a curated declarative surface from serialized data
 
@@ -164,16 +166,38 @@ let _ = ui.select(
 let _ = ui.button(Button::new("Save").variant(ButtonVariant::Primary));
 ```
 
-Use `layout::*` for composition and re-enter typed components inside closures:
+Use egui's native `ui.horizontal` / `ui.vertical` for simple composition, and `layout::*` when you need flex or grid behavior from taffy:
 
 ```rust
-use egui_component::layout;
+use egui::Id;
+use egui_component::layout::{taffy, tid, tui, TuiBuilderLogic};
 use egui_component::prelude::*;
+use egui_component::layout::taffy::prelude::{auto, length, percent};
 
-let _ = layout::row().gap(8.0).show(ui, |ui| {
+tui(ui, Id::new("actions"))
+    .reserve_available_width()
+    .style(taffy::Style {
+        flex_direction: taffy::FlexDirection::Row,
+        gap: length(8.0),
+        size: taffy::Size {
+            width: percent(1.0),
+            height: auto(),
+        },
+        ..Default::default()
+    })
+    .show(|tui| {
+        tui.id(tid("save")).ui(|ui| {
+            let _ = ui.components().button(Button::new("Save").variant(ButtonVariant::Primary));
+        });
+        tui.id(tid("cancel")).ui(|ui| {
+            let _ = ui.components().button(Button::new("Cancel").variant(ButtonVariant::Secondary));
+        });
+    });
+
+let _ = ui.horizontal(|ui| {
     let mut ui = ui.components();
-    let _ = ui.button(Button::new("Save").variant(ButtonVariant::Primary));
-    let _ = ui.button(Button::new("Cancel").variant(ButtonVariant::Secondary));
+    let _ = ui.button(Button::new("Preview").variant(ButtonVariant::Secondary));
+    let _ = ui.button(Button::new("Duplicate").variant(ButtonVariant::Ghost));
 });
 ```
 
@@ -193,7 +217,7 @@ The repo currently ships these examples:
 - `contract-showcase`: declarative editor surface driven entirely through `egui_component::contract::*`
 - `contract-schema`: prints the machine-readable contract schema JSON
 - `contract-reference`: prints the generated human-readable contract reference
-- `content-composition`: reusable `layout::*` composition with cards, labels, buttons, kbd, and scoped overrides
+- `content-composition`: reusable layout composition with cards, labels, buttons, kbd, and scoped overrides
 - `popup-patterns`: focused popup interactions with `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
 

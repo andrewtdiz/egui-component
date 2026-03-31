@@ -1,5 +1,4 @@
 use super::{api::ComponentUi, api::ComponentUiExt, Kbd, KbdGroup, TextInput};
-use crate::layout;
 use crate::primitives::{
     content::muted_empty_state,
     row::{row_chrome, RowChrome},
@@ -260,31 +259,33 @@ fn draw_command_results(
         .auto_shrink([false, false])
         .show(ui.ui_mut(), |ui| {
             let mut ui = ComponentUi::with_overrides(ui, overrides);
-            let _ = layout::column().gap(1.0).show(ui.ui_mut(), |ui| {
-                let mut ui = ComponentUi::with_overrides(ui, overrides);
-                if visible_items.is_empty() {
-                    let _ = layout::sized_box()
-                        .width(ui.available_width())
-                        .height(40.0)
-                        .show(ui.ui_mut(), |ui| {
-                            let _ = layout::align()
-                                .justify(layout::Justify::Center)
-                                .align(layout::Align::Center)
-                                .show(ui, |ui| muted_empty_state(ui, "No commands"));
-                        });
-                    return;
-                }
+            let _ = ui.ui_mut().scope(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.vertical(|ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    if visible_items.is_empty() {
+                        let width = ui.available_width();
+                        let _ = ui.ui_mut().allocate_ui_with_layout(
+                            egui::vec2(width, 40.0),
+                            Layout::left_to_right(Align::Center)
+                                .with_main_align(Align::Center)
+                                .with_cross_align(Align::Center),
+                            |ui| muted_empty_state(ui, "No commands"),
+                        );
+                        return;
+                    }
 
-                for (index, item) in visible_items.iter().copied().enumerate() {
-                    draw_command_row(
-                        &mut ui,
-                        item,
-                        group_width,
-                        shortcut_width,
-                        show_group_column,
-                        selected_index == Some(index),
-                    );
-                }
+                    for (index, item) in visible_items.iter().copied().enumerate() {
+                        draw_command_row(
+                            &mut ui,
+                            item,
+                            group_width,
+                            shortcut_width,
+                            show_group_column,
+                            selected_index == Some(index),
+                        );
+                    }
+                })
             });
         });
 }
@@ -397,14 +398,10 @@ fn draw_command_row(
             .scope_builder(UiBuilder::new().max_rect(shortcut_rect), |ui| {
                 ui.set_min_width(shortcut_rect.width());
                 ui.set_max_width(shortcut_rect.width());
-                let _ = layout::align()
-                    .justify(layout::Justify::End)
-                    .align(layout::Align::Center)
-                    .show(ui, |ui| {
-                        let mut ui = ComponentUi::with_overrides(ui, overrides);
-                        let _ =
-                            render_shortcut_keycaps(&mut ui, &shortcut_keys, selected, emphasized);
-                    });
+                let _ = ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let mut ui = ComponentUi::with_overrides(ui, overrides);
+                    let _ = render_shortcut_keycaps(&mut ui, &shortcut_keys, selected, emphasized);
+                });
             });
     }
 }

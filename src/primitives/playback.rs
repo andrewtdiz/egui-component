@@ -12,7 +12,6 @@ pub(crate) struct PlaybackButtonStyle {
     pub icon_size: f32,
     pub fill: egui::Color32,
     pub hover_fill: egui::Color32,
-    pub active_fill: egui::Color32,
     pub stroke: Stroke,
     pub icon_tint: egui::Color32,
     pub paused_icon_name: &'static str,
@@ -27,7 +26,7 @@ pub(crate) fn paint_playback_button(
     style: PlaybackButtonStyle,
 ) {
     let fill = if response.is_pointer_button_down_on() {
-        style.active_fill
+        style.hover_fill
     } else if response.hovered() {
         style.hover_fill
     } else {

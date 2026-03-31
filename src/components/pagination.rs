@@ -5,7 +5,6 @@ use super::{
     label::{Label, LabelTone},
 };
 use crate::{
-    layout,
     primitives::{row_chrome, RowChrome},
     ui::{tokens, typography},
 };
@@ -73,9 +72,9 @@ fn draw_pagination(
                 let runtime = crate::theme::runtime_for_ui(ui);
                 apply_pagination_corner_radius(ui, runtime);
 
-                layout::row()
-                    .gap(PAGINATION_ITEM_GAP)
-                    .show(ui, |ui| {
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.x = PAGINATION_ITEM_GAP;
+                    ui.horizontal(|ui| {
                         let mut ui = ComponentUi::with_overrides(ui, overrides);
                         if *current_page > 1
                             && ui
@@ -121,9 +120,11 @@ fn draw_pagination(
                         }
                     })
                     .response
+                })
             })
             .inner
         })
+        .inner
         .inner
 }
 

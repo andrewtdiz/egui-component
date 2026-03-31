@@ -37,7 +37,7 @@ Available examples:
 - `contract-reference`
   Prints the generated human-readable contract reference from the same Rust registry.
 - `content-composition`
-  Reusable composition patterns with `layout::*`, `Card`, `Label`, `Button`, `Kbd`, and scoped overrides.
+  Reusable composition patterns with native egui stacks, vendored taffy primitives, `Card`, `Label`, `Button`, `Kbd`, and scoped overrides.
 - `popup-patterns`
   Popup interaction patterns for `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`.
 - `theme-playground`

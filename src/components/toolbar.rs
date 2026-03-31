@@ -1,5 +1,4 @@
 use super::api::{with_component_overrides, ComponentUi};
-use crate::layout;
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
 use egui::{Align2, Color32, Id, Order, Pos2, Stroke, Ui, Vec2};
@@ -120,7 +119,13 @@ fn draw_toolbar<R>(
                 )
                 .padding(props.padding_x, props.padding_y)
                 .shadow(props.shadow.unwrap_or(tokens::tailwind_shadow_sm(runtime))),
-                |ui| layout::row().gap(tokens::LAYOUT_GAP_XS).show(ui, add).inner,
+                |ui| {
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = tokens::LAYOUT_GAP_XS;
+                        ui.horizontal(add).inner
+                    })
+                    .inner
+                },
             )
             .inner
         })

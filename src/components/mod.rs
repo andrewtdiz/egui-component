@@ -21,6 +21,7 @@ mod field;
 mod file_tree;
 mod hierarchy;
 mod icon;
+mod icon_toolbar;
 mod image;
 mod image_tile;
 mod input;
@@ -73,6 +74,7 @@ pub use hierarchy::{
     Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle,
 };
 pub use icon::Icon;
+pub use icon_toolbar::{IconToolbar, IconToolbarItem};
 pub use image::Image;
 pub use image_tile::{ImageTile, ImageTilePlaybackState, ImageTileSize, ImageTileState};
 pub use input::{TextInput, TextInputOverride};

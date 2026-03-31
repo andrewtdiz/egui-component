@@ -5,6 +5,18 @@ const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../../assets/images/showc
 
 const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
 const TOOLBAR_ACTION_OPTIONS: [&str; 3] = ["Edit", "BG Remover", "Eraser"];
+const ICON_TOOLBAR_ITEMS: [IconToolbarItem<'static>; 8] = [
+    IconToolbarItem::new("mouse-pointer-2").tooltip("Select"),
+    IconToolbarItem::new("move").tooltip("Move"),
+    IconToolbarItem::new("rotate-ccw").tooltip("Rotate"),
+    IconToolbarItem::new("arrow-up-right").tooltip("Expand"),
+    IconToolbarItem::new("crosshair").tooltip("Center"),
+    IconToolbarItem::new("package-2")
+        .tooltip("Group")
+        .badge_fill(Color32::from_rgb(40, 150, 255)),
+    IconToolbarItem::new("copy").tooltip("Duplicate"),
+    IconToolbarItem::new("trash").tooltip("Delete"),
+];
 const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(35, 45, 75),
     Color32::from_rgb(103, 132, 162),
@@ -162,11 +174,6 @@ const HIERARCHY_STYLE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Normal"), TabOption::new(1, "Component")];
 const HIERARCHY_ICON_STYLE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Emoji"), TabOption::new(1, "Icons")];
-const THEME_MODE_OPTIONS: [TabOption<'static>; 3] = [
-    TabOption::icon_only(0, "Light", "sun-medium"),
-    TabOption::icon_only(1, "Dark", "moon-star"),
-    TabOption::icon_only(2, "System", "monitor"),
-];
 const SHOWCASE_BASE_COLOR: BaseColor = BaseColor::Slate;
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
@@ -512,6 +519,7 @@ pub struct ShowcaseApp {
     hierarchy_style_index: usize,
     hierarchy_icon_style_index: usize,
     input_value: String,
+    search_input_value: String,
     field_value: String,
     emoji_selector_value: String,
     checkbox_value: bool,
@@ -520,6 +528,7 @@ pub struct ShowcaseApp {
     collab_cursor_preview_position: egui::Vec2,
     switch_value: bool,
     small_switch_value: bool,
+    icon_toolbar_selected_index: usize,
     toolbar_color_index: usize,
     canva_position_tab_index: usize,
     canva_layer_filter_index: usize,
@@ -588,6 +597,7 @@ impl Default for ShowcaseApp {
             hierarchy_style_index: 0,
             hierarchy_icon_style_index: 0,
             input_value: "Player_Robot".to_owned(),
+            search_input_value: "Robot".to_owned(),
             field_value: "M_Robot_Body".to_owned(),
             emoji_selector_value: "🙂".to_owned(),
             checkbox_value: true,
@@ -596,6 +606,7 @@ impl Default for ShowcaseApp {
             collab_cursor_preview_position: COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION,
             switch_value: true,
             small_switch_value: false,
+            icon_toolbar_selected_index: 0,
             toolbar_color_index: 0,
             canva_position_tab_index: 0,
             canva_layer_filter_index: 0,

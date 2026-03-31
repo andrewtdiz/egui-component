@@ -1,6 +1,7 @@
 use super::{
     collab_cursor_preview_anchor, collab_cursor_preview_position, configure_snapshot,
-    install_context, render_snapshot_surface, sidebar_preview_toggle_rect, update, ShowcaseApp,
+    install_context, render_snapshot_surface, show_width, sidebar_preview_toggle_rect, update,
+    ShowcaseApp,
 };
 use crate::{ComponentKind, ThemeMode};
 use egui::{pos2, vec2, CentralPanel, Context, RawInput, Rect};
@@ -19,6 +20,7 @@ fn snapshot_surface_renders_representative_components_without_panic() {
         ComponentKind::DragBoard,
         ComponentKind::EmojiSelector,
         ComponentKind::FileTree,
+        ComponentKind::IconToolbar,
         ComponentKind::Sidebar,
         ComponentKind::Toast,
     ] {
@@ -46,6 +48,28 @@ fn showcase_update_renders_narrow_layout_without_panic() {
             ..Default::default()
         },
         |ctx| update(&mut app, ctx),
+    );
+}
+
+#[test]
+fn canva_brand_kit_taffy_preview_renders_in_constrained_width_without_panic() {
+    let context = Context::default();
+    install_context(&context);
+    let mut app = ShowcaseApp::default();
+    app.selected_component = ComponentKind::CanvaBrandKit;
+
+    let _ = context.run(
+        RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(640.0, 540.0))),
+            ..Default::default()
+        },
+        |ctx| {
+            CentralPanel::default().show(ctx, |ui| {
+                let _ = show_width(ui, 480.0, |ui| {
+                    render_snapshot_surface(&mut app, ui);
+                });
+            });
+        },
     );
 }
 

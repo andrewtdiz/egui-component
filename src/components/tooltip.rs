@@ -4,7 +4,7 @@ use super::{
 };
 use crate::ui::tokens;
 use egui::util::IdTypeMap;
-use egui::{CursorIcon, Response};
+use egui::{CursorIcon, Response, Ui};
 
 const TOOLTIP_GAP: f32 = 6.0;
 const TOOLTIP_PADDING_X: i8 = 6;
@@ -86,6 +86,11 @@ impl ComponentUi<'_> {
     }
 }
 
+pub(crate) fn attach_text_tooltip(ui: &mut Ui, response: &Response, text: &str) {
+    let overrides = ComponentUi::new(ui).overrides();
+    show_tooltip_for_response(response, Tooltip::text(text), overrides);
+}
+
 fn show_tooltip_for_response(
     response: &Response,
     props: Tooltip<'_>,
@@ -127,7 +132,8 @@ fn show_tooltip_for_response(
     }
 
     let runtime = crate::theme::runtime_for_context(&response.ctx);
-    let tooltip_frame = tooltip_frame(&response.ctx.style(), runtime);
+    let style = response.ctx.global_style();
+    let tooltip_frame = tooltip_frame(style.as_ref(), runtime);
     let mut tooltip = egui::Tooltip::for_widget(response).gap(TOOLTIP_GAP);
     tooltip.popup = tooltip.popup.frame(tooltip_frame);
     match props.placement {
@@ -161,7 +167,7 @@ fn show_tooltip_for_response(
     let _ = tooltip.show(|ui| {
         with_component_overrides(ui, overrides, |ui| {
             let mut ui = ComponentUi::new(ui);
-            let _ = ui.label(crate::components::Label::new(props.text).tone(LabelTone::Secondary));
+            let _ = ui.label(crate::components::Label::new(props.text).tone(LabelTone::Primary));
         });
     });
 }

@@ -24,6 +24,7 @@ pub enum ComponentKind {
     FileTree,
     Hierarchy,
     Icon,
+    IconToolbar,
     Image,
     ImageTile,
     Input,
@@ -97,6 +98,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Icon,
         id: "icon",
         label: "Icon",
+        group: ComponentGroup::Primitive,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::IconToolbar,
+        id: "icon-toolbar",
+        label: "Icon Toolbar",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -467,6 +474,10 @@ mod tests {
             Some(ComponentKind::NumberInput)
         );
         assert_eq!(parse_component_kind("icon"), Some(ComponentKind::Icon));
+        assert_eq!(
+            parse_component_kind("icon_toolbar"),
+            Some(ComponentKind::IconToolbar)
+        );
         assert_eq!(
             parse_component_kind("twemoji"),
             Some(ComponentKind::Twemoji)

@@ -84,13 +84,19 @@ pub fn update(app: &mut ContractDemoApp, ctx: &egui::Context) {
     let tree = app.build_tree();
     let mut events = Vec::new();
 
-    CentralPanel::default().show(ctx, |ui| {
-        ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                events = render_tree(ui, &tree);
-            });
-    });
+    #[allow(
+        deprecated,
+        reason = "eframe App::update still renders top-level panels from Context"
+    )]
+    {
+        CentralPanel::default().show(ctx, |ui| {
+            ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    events = render_tree(ui, &tree);
+                });
+        });
+    }
 
     if !events.is_empty() {
         for event in &events {

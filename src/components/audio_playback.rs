@@ -9,6 +9,7 @@ use std::time::Duration;
 const AUDIO_PLAYBACK_HEIGHT: f32 = 32.0;
 const AUDIO_PLAYBACK_BUTTON_SIZE: f32 = 30.0;
 const AUDIO_PLAYBACK_BUTTON_ICON_SIZE: f32 = 13.0;
+const AUDIO_PLAYBACK_BUTTON_BORDER_WIDTH: f32 = 2.0;
 const AUDIO_PLAYBACK_CONTENT_GAP: f32 = 10.0;
 const AUDIO_PLAYBACK_ACTION_GAP: f32 = 6.0;
 const AUDIO_PLAYBACK_WAVEFORM_HEIGHT: f32 = 20.0;
@@ -167,18 +168,9 @@ fn resolve_audio_playback_style(runtime: crate::theme::ThemeRuntime) -> AudioPla
         playback_button: PlaybackButtonStyle {
             icon_size: AUDIO_PLAYBACK_BUTTON_ICON_SIZE,
             fill: tokens::TRANSPARENT,
-            hover_fill: tokens::row_hover_bg(runtime).gamma_multiply(if dark_mode {
-                0.82
-            } else {
-                0.68
-            }),
-            active_fill: tokens::row_active_bg(runtime).gamma_multiply(if dark_mode {
-                0.92
-            } else {
-                0.78
-            }),
+            hover_fill: tokens::button_secondary_hover_bg(runtime),
             stroke: Stroke::new(
-                1.0,
+                AUDIO_PLAYBACK_BUTTON_BORDER_WIDTH,
                 tokens::text_primary(runtime).gamma_multiply(if dark_mode { 0.58 } else { 0.42 }),
             ),
             icon_tint: tokens::text_primary(runtime),

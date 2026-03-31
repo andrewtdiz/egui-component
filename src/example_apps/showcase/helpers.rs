@@ -2,7 +2,7 @@
 fn draw_toolbar_contents(ui: &mut Ui, toolbar_color_index: &mut usize) {
     let selected_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Foreground));
 
-    let _ = layout::row().gap(6.0).show(ui, |ui| {
+    let _ = show_row(ui, 6.0, |ui| {
         for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
             let _ = ui
                 .components()
@@ -313,11 +313,11 @@ fn render_canva_brand_color_swatches(ui: &mut Ui) {
         ("Warm Gold", "#F5C04A", Color32::from_rgb(245, 192, 74)),
         ("Ink", "#111827", Color32::from_rgb(17, 24, 39)),
     ] {
-        let _ = layout::row().gap(10.0).show(ui, |ui| {
+        let _ = show_row(ui, 10.0, |ui| {
             let _ = ui
                 .components()
                 .color(Color::new(fill).size(28.0).stroke(border));
-            let _ = layout::column().gap(2.0).show(ui, |ui| {
+            let _ = show_column(ui, 2.0, |ui| {
                 let _ = ui.components().label(
                     Label::new(name)
                         .tone(LabelTone::Primary)
@@ -406,13 +406,18 @@ fn render_canva_brand_chart_cards(ui: &mut Ui) {
 
 fn draw_canva_brand_asset_grid(ui: &mut Ui, columns: usize, count: usize, tall: bool, kind: &str) {
     let tile_height = if tall { 120.0 } else { 92.0 };
-    let _ = layout::tile_grid()
-        .columns(columns)
-        .gap(10.0)
-        .tile_height(tile_height)
-        .show(ui, count, |ui, index, rect| {
+    let _ = show_tile_grid(
+        ui,
+        Some(columns),
+        120.0,
+        10.0,
+        Some(tile_height),
+        None,
+        count,
+        |ui, index, rect| {
             paint_canva_brand_asset_tile(ui, rect, kind, index);
-        });
+        },
+    );
 }
 
 fn paint_canva_brand_asset_tile(ui: &Ui, rect: egui::Rect, kind: &str, index: usize) {
@@ -527,7 +532,7 @@ fn draw_canva_edit_tool_row(ui: &mut Ui, selected_index: &mut usize) {
         .id_salt("component_showcase_canva_edit_tool_row")
         .auto_shrink([false, true])
         .show(ui, |ui| {
-            let _ = layout::row().gap(8.0).show(ui, |ui| {
+            let _ = show_row(ui, 8.0, |ui| {
                 for (index, option) in CANVA_EDIT_SELECTION_OPTIONS.iter().enumerate() {
                     let selected = *selected_index == index;
                     if draw_canva_edit_tool_chip(ui, option, selected).clicked() {
@@ -613,7 +618,7 @@ fn draw_canva_edit_rail(
         .id_salt(id)
         .auto_shrink([false, true])
         .show(ui, |ui| {
-            let _ = layout::row().gap(12.0).show(ui, |ui| {
+            let _ = show_row(ui, 12.0, |ui| {
                 for (index, item) in items.iter().enumerate() {
                     let selected = selected_index
                         .as_ref()
@@ -768,14 +773,19 @@ fn paint_canva_edit_tile(
 }
 
 fn draw_canva_position_button_grid(ui: &mut Ui, actions: &[(&str, &str, bool)]) {
-    let _ = layout::tile_grid()
-        .columns(2)
-        .gap(8.0)
-        .tile_height(40.0)
-        .show(ui, actions.len(), |ui, index, rect| {
+    let _ = show_tile_grid(
+        ui,
+        Some(2),
+        120.0,
+        8.0,
+        Some(40.0),
+        None,
+        actions.len(),
+        |ui, index, rect| {
             let (label, icon, enabled) = actions[index];
             let _ = draw_canva_position_action_button(ui, rect, index, label, icon, enabled);
-        });
+        },
+    );
 }
 
 fn draw_canva_position_action_button(
@@ -850,12 +860,9 @@ fn draw_canva_position_action_button(
 }
 
 fn draw_canva_background_placeholder_grid(ui: &mut Ui) {
-    let _ = layout::tile_grid()
-        .min_tile_width(84.0)
-        .gap(8.0)
-        .show(ui, 15, |ui, index, rect| {
-            paint_canva_background_placeholder(ui, rect, index);
-        });
+    let _ = show_tile_grid(ui, None, 84.0, 8.0, None, None, 15, |ui, index, rect| {
+        paint_canva_background_placeholder(ui, rect, index);
+    });
 }
 
 fn paint_canva_background_placeholder(ui: &Ui, rect: egui::Rect, index: usize) {
@@ -1097,7 +1104,7 @@ fn draw_canva_layers_list(
     let mut pending_move = None;
     let ordered_ids = ordered_canva_layer_ids(order, items);
 
-    let _ = layout::column().gap(14.0).show(ui, |ui| {
+    let _ = show_column(ui, 14.0, |ui| {
         for (row_index, item_id) in ordered_ids.iter().copied().enumerate() {
             let item = items
                 .iter()
@@ -1348,7 +1355,7 @@ fn released_canva_layer_payload(
 }
 
 fn draw_canva_number_field(ui: &mut Ui, label: &str, value: &mut f32, input: NumberInput) {
-    let _ = layout::column().gap(6.0).show(ui, |ui| {
+    let _ = show_column(ui, 6.0, |ui| {
         let _ = ui.components().label(
             Label::new(label)
                 .tone(LabelTone::Muted)
@@ -1360,7 +1367,7 @@ fn draw_canva_number_field(ui: &mut Ui, label: &str, value: &mut f32, input: Num
 }
 
 fn draw_canva_ratio_field(ui: &mut Ui, width: f32, locked: &mut bool) {
-    let _ = layout::column().gap(6.0).show(ui, |ui| {
+    let _ = show_column(ui, 6.0, |ui| {
         let _ = ui.components().label(
             Label::new("Ratio")
                 .tone(LabelTone::Muted)
@@ -1383,7 +1390,7 @@ fn draw_canva_ratio_field(ui: &mut Ui, width: f32, locked: &mut bool) {
 }
 
 fn draw_image_tile_metadata_row(ui: &mut Ui, text: &str) {
-    let _ = layout::row().gap(6.0).show(ui, |ui| {
+    let _ = show_row(ui, 6.0, |ui| {
         let mut components = ui.components();
         let _ = components.icon(Icon::new("globe").size(12.0).tint(IMAGE_TILE_META_ACCENT));
         let _ = components.label(Label::new("•").tone(LabelTone::Muted));

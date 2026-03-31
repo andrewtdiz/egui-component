@@ -1,6 +1,29 @@
-use egui::{CentralPanel, Context, Id};
-use egui_component::layout;
+use egui::{Align, CentralPanel, Id, Layout};
 use egui_component::prelude::*;
+
+fn row<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = gap.max(0.0);
+        ui.horizontal(add)
+    })
+    .inner
+}
+
+fn column<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = gap.max(0.0);
+        ui.vertical(add)
+    })
+    .inner
+}
 
 const TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::new(0, "Stack"),
@@ -39,9 +62,9 @@ struct ContentCompositionApp {
 }
 
 impl eframe::App for ContentCompositionApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        CentralPanel::default().show(ctx, |ui| {
-            let _ = layout::column().gap(16.0).show(ui, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        CentralPanel::default().show_inside(ui, |ui| {
+            let _ = column(ui, 16.0, |ui| {
                 hero_block(ui, self.active_view);
 
                 {
@@ -49,8 +72,8 @@ impl eframe::App for ContentCompositionApp {
                     components.tabs(Id::new("composition-tabs"), &mut self.active_view, &TAB_OPTIONS);
                 }
 
-                let _ = layout::row().gap(16.0).show(ui, |ui| {
-                    let _ = layout::column().gap(16.0).show(ui, |ui| {
+                let _ = row(ui, 16.0, |ui| {
+                    let _ = column(ui, 16.0, |ui| {
                         section_card(ui, "Reusable layout", |ui| {
                             composition_toolbar(ui);
                             ui.add_space(12.0);
@@ -67,7 +90,7 @@ impl eframe::App for ContentCompositionApp {
                                 ),
                                 |ui| {
                                     let _ = ui.components().card(Card::new(), |ui| {
-                                        let _ = layout::column().gap(10.0).show(ui, |ui| {
+                                        let _ = column(ui, 10.0, |ui| {
                                             {
                                                 let mut components = ui.components();
                                                 let _ = components.label(
@@ -81,7 +104,7 @@ impl eframe::App for ContentCompositionApp {
                                                     .size(11.0),
                                                 );
                                             }
-                                            let _ = layout::row().gap(10.0).show(ui, |ui| {
+                                            let _ = row(ui, 10.0, |ui| {
                                                 let mut components = ui.components();
                                                 let _ = components.button(
                                                     Button::new("Preview").leading_icon("eye"),
@@ -97,7 +120,7 @@ impl eframe::App for ContentCompositionApp {
                         });
                     });
 
-                    let _ = layout::column().gap(16.0).show(ui, |ui| {
+                    let _ = column(ui, 16.0, |ui| {
                         section_card(ui, "Content sample", |ui| {
                             content_stack(
                                 ui,
@@ -119,7 +142,7 @@ impl eframe::App for ContentCompositionApp {
 
 fn hero_block(ui: &mut egui::Ui, active_view: usize) {
     let _ = ui.components().card(Card::new().padding(18, 18), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             {
                 let mut components = ui.components();
                 let _ = components.label(
@@ -140,7 +163,7 @@ fn hero_block(ui: &mut egui::Ui, active_view: usize) {
                 );
             }
 
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let _ = row(ui, 10.0, |ui| {
                 let mut components = ui.components();
                 let _ = components.button(
                     Button::new("Create section")
@@ -164,7 +187,7 @@ fn hero_block(ui: &mut egui::Ui, active_view: usize) {
 }
 
 fn composition_toolbar(ui: &mut egui::Ui) {
-    let _ = layout::row().gap(10.0).show(ui, |ui| {
+    let _ = row(ui, 10.0, |ui| {
         let mut components = ui.components();
         let _ = components.label(Label::new("Primary").weight(LabelWeight::Semibold));
         let _ = components.label(Label::new("Secondary").tone(LabelTone::Secondary));
@@ -173,7 +196,7 @@ fn composition_toolbar(ui: &mut egui::Ui) {
 }
 
 fn feature_grid(ui: &mut egui::Ui) {
-    let _ = layout::column().gap(12.0).show(ui, |ui| {
+    let _ = column(ui, 12.0, |ui| {
         feature_row(
             ui,
             "Cards create structure",
@@ -200,27 +223,24 @@ fn feature_grid(ui: &mut egui::Ui) {
 
 fn feature_row(ui: &mut egui::Ui, title: &str, body: &str, note: &str, key: &str) {
     let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
-        let _ = layout::row().gap(12.0).show(ui, |ui| {
-            let _ = layout::column().gap(4.0).show(ui, |ui| {
+        let _ = row(ui, 12.0, |ui| {
+            let _ = column(ui, 4.0, |ui| {
                 let mut components = ui.components();
                 let _ =
                     components.label(Label::new(title).weight(LabelWeight::Semibold).size(13.0));
                 let _ = components.label(Label::new(body).tone(LabelTone::Muted));
                 let _ = components.label(Label::new(note).tone(LabelTone::Secondary).size(11.0));
             });
-            let _ = layout::align()
-                .justify(layout::Justify::End)
-                .align(layout::Align::Center)
-                .show(ui, |ui| {
-                    let mut components = ui.components();
-                    let _ = components.kbd(key);
-                });
+            let _ = ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let mut components = ui.components();
+                let _ = components.kbd(key);
+            });
         });
     });
 }
 
 fn content_stack(ui: &mut egui::Ui, accent_label: &str, email: &mut String, query: &mut String) {
-    let _ = layout::column().gap(12.0).show(ui, |ui| {
+    let _ = column(ui, 12.0, |ui| {
         let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
             let mut components = ui.components();
             let _ = components.label(Label::new("Article preview").weight(LabelWeight::Semibold));
@@ -254,7 +274,7 @@ fn content_stack(ui: &mut egui::Ui, accent_label: &str, email: &mut String, quer
 
 fn rail_actions(ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             {
                 let mut components = ui.components();
                 let _ =
@@ -267,7 +287,7 @@ fn rail_actions(ui: &mut egui::Ui) {
                 );
             }
 
-            let _ = layout::column().gap(8.0).show(ui, |ui| {
+            let _ = column(ui, 8.0, |ui| {
                 action_line(ui, "Save draft", "Ctrl", "S", "Save");
                 action_line(ui, "Open palette", "Ctrl", "K", "Open");
                 action_line(ui, "Search docs", "Ctrl", "Shift", "F");
@@ -277,7 +297,7 @@ fn rail_actions(ui: &mut egui::Ui) {
 }
 
 fn action_line(ui: &mut egui::Ui, label: &str, first: &str, second: &str, trigger: &str) {
-    let _ = layout::row().gap(8.0).show(ui, |ui| {
+    let _ = row(ui, 8.0, |ui| {
         let mut components = ui.components();
         let _ = components.label(Label::new(label).weight(LabelWeight::Semibold));
         let _ = components.kbd(first);
@@ -288,7 +308,7 @@ fn action_line(ui: &mut egui::Ui, label: &str, first: &str, second: &str, trigge
 
 fn section_card(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
     let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             {
                 let mut components = ui.components();
                 let _ = components.label(Label::new(title).weight(LabelWeight::Bold).size(14.0));

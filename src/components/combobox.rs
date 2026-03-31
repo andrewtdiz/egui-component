@@ -2,7 +2,6 @@ use super::{
     api::{ComponentUi, ComponentUiExt},
     TextInput,
 };
-use crate::layout;
 use crate::primitives::{
     content::muted_empty_state,
     control::{control_frame, ControlFrame},
@@ -146,31 +145,37 @@ impl ComponentUi<'_> {
                                     String::new()
                                 };
                                 let mut shown = 0usize;
-                                let _ = layout::column().gap(2.0).show(ui, |ui| {
-                                    for (index, option) in props.options.iter().copied().enumerate()
-                                    {
-                                        if props.searchable
-                                            && !query_lower.is_empty()
-                                            && !option
-                                                .to_ascii_lowercase()
-                                                .contains(query_lower.as_str())
+                                let _ = ui.scope(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 2.0;
+                                    ui.vertical(|ui| {
+                                        for (index, option) in
+                                            props.options.iter().copied().enumerate()
                                         {
-                                            continue;
-                                        }
+                                            if props.searchable
+                                                && !query_lower.is_empty()
+                                                && !option
+                                                    .to_ascii_lowercase()
+                                                    .contains(query_lower.as_str())
+                                            {
+                                                continue;
+                                            }
 
-                                        shown += 1;
-                                        let selected = is_selected(selected_indices, index);
-                                        if draw_option_row(ui, option, selected, row_width, runtime)
+                                            shown += 1;
+                                            let selected = is_selected(selected_indices, index);
+                                            if draw_option_row(
+                                                ui, option, selected, row_width, runtime,
+                                            )
                                             .clicked()
-                                        {
-                                            toggle_selected_index(selected_indices, index);
-                                            trigger_response.mark_changed();
+                                            {
+                                                toggle_selected_index(selected_indices, index);
+                                                trigger_response.mark_changed();
+                                            }
                                         }
-                                    }
 
-                                    if shown == 0 {
-                                        let _ = muted_empty_state(ui, "No matches");
-                                    }
+                                        if shown == 0 {
+                                            let _ = muted_empty_state(ui, "No matches");
+                                        }
+                                    })
                                 });
                             });
                     },

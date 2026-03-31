@@ -1,6 +1,29 @@
-use egui::{CentralPanel, Context, Id, ScrollArea};
-use egui_component::layout;
+use egui::{CentralPanel, Id, ScrollArea};
 use egui_component::prelude::*;
+
+fn row<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = gap.max(0.0);
+        ui.horizontal(add)
+    })
+    .inner
+}
+
+fn column<R>(
+    ui: &mut egui::Ui,
+    gap: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = gap.max(0.0);
+        ui.vertical(add)
+    })
+    .inner
+}
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -91,12 +114,12 @@ impl Default for PopupPatternsApp {
 }
 
 impl eframe::App for PopupPatternsApp {
-    fn update(&mut self, context: &Context, _frame: &mut eframe::Frame) {
-        CentralPanel::default().show(context, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        CentralPanel::default().show_inside(ui, |ui| {
             ui.set_max_width(1080.0);
             ui.add_space(12.0);
 
-            let _ = layout::column().gap(10.0).show(ui, |ui| {
+            let _ = column(ui, 10.0, |ui| {
                 let mut components = ui.components();
                 let _ = components.label(
                     Label::new("Popup Patterns")
@@ -133,7 +156,7 @@ impl eframe::App for PopupPatternsApp {
 
 fn render_tooltip_section(ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Tooltip")
@@ -147,7 +170,7 @@ fn render_tooltip_section(ui: &mut egui::Ui) {
                 .tone(LabelTone::Muted),
             );
 
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let _ = row(ui, 10.0, |ui| {
                 for (label, placement, text) in TOOLTIP_ENTRIES {
                     let tooltip = Tooltip::new(label, text)
                         .placement(placement)
@@ -162,7 +185,7 @@ fn render_tooltip_section(ui: &mut egui::Ui) {
 
 fn render_menu_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Dropdown Menu")
@@ -174,7 +197,7 @@ fn render_menu_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
                     .tone(LabelTone::Muted),
             );
 
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let _ = row(ui, 10.0, |ui| {
                 let mut components = ui.components();
                 let (_, state) = components.dropdown_menu(
                     DropdownMenu::new("Actions")
@@ -202,7 +225,7 @@ fn render_menu_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
 
 fn render_popover_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Popover")
@@ -227,7 +250,7 @@ fn render_popover_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
                     )
                 },
                 |ui, open| {
-                    let _ = layout::column().gap(10.0).show(ui, |ui| {
+                    let _ = column(ui, 10.0, |ui| {
                         let mut components = ui.components();
                         let _ = components.label(
                             Label::new("Share project")
@@ -247,7 +270,7 @@ fn render_popover_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
                         );
 
                         ui.add_space(4.0);
-                        let _ = layout::row().gap(8.0).show(ui, |ui| {
+                        let _ = row(ui, 8.0, |ui| {
                             let mut components = ui.components();
                             if components
                                 .button(Button::new("Cancel").variant(ButtonVariant::Ghost))
@@ -272,7 +295,7 @@ fn render_popover_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
 
 fn render_dialogue_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(16, 16), |ui| {
-        let _ = layout::column().gap(10.0).show(ui, |ui| {
+        let _ = column(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Dialogue")
@@ -302,7 +325,7 @@ fn render_dialogue_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
             }
 
             ui.add_space(4.0);
-            let _ = layout::row().gap(10.0).show(ui, |ui| {
+            let _ = row(ui, 10.0, |ui| {
                 let _ = ui.components().kbd_group((), |ui| {
                     let mut components = ui.components();
                     let _ = components.kbd("Esc");
@@ -320,7 +343,7 @@ fn render_dialogue_section(app: &mut PopupPatternsApp, ui: &mut egui::Ui) {
 
 fn render_status(app: &PopupPatternsApp, ui: &mut egui::Ui) {
     let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
-        let _ = layout::row().gap(10.0).show(ui, |ui| {
+        let _ = row(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Status")

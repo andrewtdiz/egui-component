@@ -32,6 +32,9 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::EmojiSelector => {
             app.emoji_selector_value = "🍕".to_owned();
         }
+        ComponentKind::IconToolbar => {
+            app.icon_toolbar_selected_index = 0;
+        }
         ComponentKind::Dialogue => {
             app.dialogue_open = true;
         }
@@ -85,30 +88,33 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
 pub fn update(app: &mut ShowcaseApp, ctx: &egui::Context) {
     prepare_frame(app, ctx);
     let runtime = theme::runtime_for_context(ctx);
-    TopBottomPanel::top("component_showcase_topbar")
-        .resizable(false)
-        .frame(
-            egui::Frame::new()
-                .fill(showcase_header_fill(runtime))
-                .stroke(Stroke::NONE),
-        )
-        .show(ctx, |ui| app.render_topbar(ui));
+    #[allow(deprecated, reason = "eframe App::update still renders top-level panels from Context")]
+    {
+        Panel::top("component_showcase_topbar")
+            .resizable(false)
+            .frame(
+                egui::Frame::new()
+                    .fill(showcase_header_fill(runtime))
+                    .stroke(Stroke::NONE),
+            )
+            .show(ctx, |ui| app.render_topbar(ui));
 
-    SidePanel::left("component_showcase_sidebar")
-        .resizable(true)
-        .default_width(SIDEBAR_WIDTH)
-        .min_width(200.0)
-        .max_width(320.0)
-        .show(ctx, |ui| app.render_sidebar(ui));
+        Panel::left("component_showcase_sidebar")
+            .resizable(true)
+            .default_size(SIDEBAR_WIDTH)
+            .min_size(200.0)
+            .max_size(320.0)
+            .show(ctx, |ui| app.render_sidebar(ui));
 
-    CentralPanel::default().show(ctx, |ui| app.render_center(ui));
+        CentralPanel::default().show(ctx, |ui| app.render_center(ui));
+    }
 }
 
 impl ShowcaseApp {
     fn render_sidebar(&mut self, ui: &mut Ui) {
         ui.add_space(8.0);
 
-        let _ = layout::column().gap(8.0).show(ui, |ui| {
+        let _ = show_column(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(
                 Label::new("Components")
@@ -151,7 +157,7 @@ impl ShowcaseApp {
     }
 
     fn render_topbar(&mut self, ui: &mut Ui) {
-        let _ = layout::inset().padding(16, 10).show(ui, |ui| {
+        let _ = show_inset(ui, 16, 10, |ui| {
             show_showcase_topbar_row(ui, &mut self.theme_mode);
         });
         let _ = ui.components().separator();
@@ -199,6 +205,7 @@ impl ShowcaseApp {
             ComponentKind::Color => self.render_color_preview(ui),
             ComponentKind::Image => self.render_image_preview(ui),
             ComponentKind::Icon => self.render_icon_preview(ui),
+            ComponentKind::IconToolbar => self.render_icon_toolbar_preview(ui),
             ComponentKind::Twemoji => self.render_twemoji_preview(ui),
             ComponentKind::EmojiSelector => self.render_emoji_selector_preview(ui),
             ComponentKind::Kbd => self.render_kbd_preview(ui),
@@ -248,15 +255,14 @@ impl ShowcaseApp {
 
 pub fn render_snapshot_component(app: &mut ShowcaseApp, ui: &mut Ui) -> egui::Response {
     ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-        layout::sized_box()
-            .width(preview_surface_width(
-                app.selected_component,
-                ui.available_width(),
-            ))
-            .show(ui, |ui| {
+        show_width(
+            ui,
+            preview_surface_width(app.selected_component, ui.available_width()),
+            |ui| {
                 app.render_selected_preview(ui);
-            })
-            .response
+            },
+        )
+        .response
     })
     .inner
 }
@@ -266,8 +272,11 @@ pub fn render_snapshot_surface(app: &mut ShowcaseApp, ui: &mut Ui) {
 }
 
 fn show_showcase_topbar_row(ui: &mut Ui, theme_mode: &mut ThemeMode) {
-    let _ = layout::leading_trailing().gap(12.0).min_height(30.0).show(
+    let _ = show_leading_trailing(
         ui,
+        12.0,
+        30.0,
+        egui::Align::Center,
         |ui| {
             let mut components = ui.components();
             let _ = components.label(
@@ -277,29 +286,40 @@ fn show_showcase_topbar_row(ui: &mut Ui, theme_mode: &mut ThemeMode) {
             );
         },
         |ui| {
-            let _ = layout::row().gap(12.0).show(ui, |ui| {
-                let mut components = ui.components();
-                let _ = components.label(
-                    Label::new("Theme mode")
-                        .tone(LabelTone::Muted)
-                        .size(SMALL_TEXT),
-                );
-
-                let mut selected_mode = theme_mode_index(*theme_mode);
-                components.segmented_tabs(
-                    Id::new("component_showcase_theme_mode"),
-                    &mut selected_mode,
-                    &THEME_MODE_OPTIONS,
-                );
-                *theme_mode = theme_mode_from_index(selected_mode);
-            });
+            show_showcase_theme_mode_selector(ui, theme_mode);
         },
     );
 }
 
+fn show_showcase_theme_mode_selector(ui: &mut Ui, theme_mode: &mut ThemeMode) {
+    let options = [
+        TabOption::icon_only(0, "Light", "sun-medium"),
+        TabOption::icon_only(1, "Dark", "moon-star"),
+        TabOption::icon_only(2, "System", "monitor"),
+    ];
+    let mut selected_mode = match *theme_mode {
+        ThemeMode::Light => 0,
+        ThemeMode::Dark => 1,
+        ThemeMode::System => 2,
+    };
+    ui.components().segmented_tabs(
+        Id::new("component_showcase_theme_mode"),
+        &mut selected_mode,
+        &options,
+    );
+    *theme_mode = match selected_mode {
+        0 => ThemeMode::Light,
+        1 => ThemeMode::Dark,
+        _ => ThemeMode::System,
+    };
+}
+
 fn show_canva_panel_header(ui: &mut Ui, title: &str) -> egui::Response {
-    layout::leading_trailing().gap(8.0).min_height(28.0).show(
+    show_leading_trailing(
         ui,
+        8.0,
+        28.0,
+        egui::Align::Center,
         |ui| {
             let _ = ui.components().label(
                 Label::new(title)
@@ -324,81 +344,70 @@ fn show_section_title_with_trailing_label(
     title: &str,
     trailing_label: &str,
 ) -> egui::Response {
-    layout::leading_trailing()
-        .gap(8.0)
-        .min_height(30.0)
-        .align(layout::Align::Center)
-        .show(
-            ui,
-            |ui| {
-                let _ = ui.components().label(
-                    Label::new(title)
-                        .tone(LabelTone::Primary)
-                        .weight(LabelWeight::Semibold),
-                );
-            },
-            |ui| {
-                let _ = ui.components().button(
-                    Button::new(trailing_label)
-                        .variant(ButtonVariant::Ghost)
-                        .label_weight(ButtonLabelWeight::Regular),
-                );
-            },
-        )
+    show_leading_trailing(ui, 8.0, 30.0, egui::Align::Center, |ui| {
+        let _ = ui.components().label(
+            Label::new(title)
+                .tone(LabelTone::Primary)
+                .weight(LabelWeight::Semibold),
+        );
+    }, |ui| {
+        let _ = ui.components().button(
+            Button::new(trailing_label)
+                .variant(ButtonVariant::Ghost)
+                .label_weight(ButtonLabelWeight::Regular),
+        );
+    })
 }
 
 fn show_section_link_row(ui: &mut Ui, icon: &str, label: &str) -> egui::Response {
     let primary_tint = text_secondary(ui);
     let muted_tint = text_muted(ui);
-    layout::leading_trailing()
-        .gap(10.0)
-        .min_height(22.0)
-        .align(layout::Align::Center)
-        .show(
-            ui,
-            |ui| {
-                let _ = layout::row()
-                    .gap(10.0)
-                    .align(layout::Align::Center)
-                    .show(ui, |ui| {
-                        let _ = ui
-                            .components()
-                            .icon(Icon::new(icon).size(18.0).tint(primary_tint));
-                        let _ = ui.components().label(
-                            Label::new(label)
-                                .tone(LabelTone::Primary)
-                                .weight(LabelWeight::Semibold),
-                        );
-                    });
-            },
-            |ui| {
-                let _ = ui
-                    .components()
-                    .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
-            },
-        )
+    show_leading_trailing(ui, 10.0, 22.0, egui::Align::Center, |ui| {
+        let _ = show_row(ui, 10.0, |ui| {
+            let _ = ui
+                .components()
+                .icon(Icon::new(icon).size(18.0).tint(primary_tint));
+            let _ = ui.components().label(
+                Label::new(label)
+                    .tone(LabelTone::Primary)
+                    .weight(LabelWeight::Semibold),
+            );
+        });
+    }, |ui| {
+        let _ = ui
+            .components()
+            .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
+    })
 }
 
 fn draw_showcase_sidebar_item(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
     let runtime = crate::theme::runtime_for_ui(ui);
-    let selected_fill = crate::ui::tokens::button_secondary_active_bg(runtime);
     let hover_fill = crate::ui::tokens::button_secondary_hover_bg(runtime).linear_multiply(0.78);
+    let label_font = crate::ui::typography::label_font();
     let foreground = if selected {
         theme::color(ui, ColorRole::Foreground)
     } else {
         text_secondary(ui)
     };
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+    let label_width = ui.fonts_mut(|fonts| {
+        fonts
+            .layout_no_wrap(label.to_owned(), label_font.clone(), foreground)
+            .size()
+            .x
+    });
+    let button_width = (label_width + 20.0).ceil().min(ui.available_width());
+    let (rect, response) = ui.allocate_exact_size(vec2(button_width, 30.0), Sense::click());
+    let pressed = response.is_pointer_button_down_on();
 
     let fill = if selected {
-        selected_fill
-    } else if response.hovered() {
+        hover_fill
+    } else if response.hovered() || pressed {
         hover_fill
     } else {
         Color32::TRANSPARENT
     };
 
-    if selected || response.hovered() {
+    if selected || response.hovered() || pressed {
         ui.painter()
             .rect_filled(rect, egui::CornerRadius::same(radius_md(ui)), fill);
     }
@@ -407,7 +416,7 @@ fn draw_showcase_sidebar_item(ui: &mut Ui, label: &str, selected: bool) -> egui:
         egui::pos2(rect.left() + 10.0, rect.center().y),
         Align2::LEFT_CENTER,
         label,
-        crate::ui::typography::label_font(),
+        label_font,
         foreground,
     );
 

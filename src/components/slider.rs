@@ -118,12 +118,21 @@ fn paint_slider(ui: &Ui, rect: Rect, response: &Response, value: f32, range: &Ra
     } else {
         tokens::slider_thumb_border(runtime)
     };
+    let thumb_border_width = slider_thumb_border_width(thumb_hovered, thumb_pressed);
     ui.painter().circle(
         thumb_center,
         thumb_radius,
         thumb_fill,
-        Stroke::new(1.0, thumb_border),
+        Stroke::new(thumb_border_width, thumb_border),
     );
+}
+
+fn slider_thumb_border_width(thumb_hovered: bool, thumb_pressed: bool) -> f32 {
+    if thumb_hovered || thumb_pressed {
+        1.5
+    } else {
+        1.0
+    }
 }
 
 fn normalized_slider_value(value: f32, range: &RangeInclusive<f32>) -> f32 {
@@ -248,7 +257,14 @@ impl From<(Id, f32)> for NumberInput {
 fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Response {
     with_input_chrome(ui, |ui| {
         let runtime = crate::theme::runtime_for_ui(ui);
+        let drag_value_text_style = ui.style().drag_value_text_style.clone();
+        let drag_value_font = drag_value_text_style.resolve(ui.style());
         ui.style_mut().visuals.selection.stroke = tokens::input_focus_stroke(runtime);
+        ui.spacing_mut().button_padding = crate::primitives::control::centered_input_button_padding(
+            ui,
+            &drag_value_font,
+            f32::from(tokens::INPUT_PADDING_X),
+        );
         ui.push_id(props.id, |ui| {
             let fine_adjustment = ui.input(|input| input.modifiers.shift);
             let decimals = if fine_adjustment {
@@ -285,7 +301,10 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
             if props.prefix_align_left {
                 if let Some(prefix) = props.prefix.as_deref() {
                     ui.painter().text(
-                        egui::pos2(response.rect.left() + 10.0, response.rect.center().y),
+                        egui::pos2(
+                            response.rect.left() + f32::from(tokens::INPUT_PADDING_X),
+                            response.rect.center().y,
+                        ),
                         Align2::LEFT_CENTER,
                         prefix,
                         typography::label_font(),
@@ -304,4 +323,23 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
 pub enum NumberInputAxis {
     Horizontal,
     Vertical,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalized_slider_value, slider_thumb_border_width};
+
+    #[test]
+    fn slider_thumb_border_is_emphasized_on_hover() {
+        assert_eq!(slider_thumb_border_width(false, false), 1.0);
+        assert_eq!(slider_thumb_border_width(true, false), 1.5);
+        assert_eq!(slider_thumb_border_width(false, true), 1.5);
+    }
+
+    #[test]
+    fn normalized_slider_value_clamps_to_range() {
+        assert_eq!(normalized_slider_value(-10.0, &(0.0..=100.0)), 0.0);
+        assert_eq!(normalized_slider_value(50.0, &(0.0..=100.0)), 0.5);
+        assert_eq!(normalized_slider_value(120.0, &(0.0..=100.0)), 1.0);
+    }
 }

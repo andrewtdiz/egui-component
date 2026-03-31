@@ -235,9 +235,7 @@ fn draw_menu_bar_trigger(
     let font_id: FontId = typography::proportional(MENU_BAR_TEXT_SIZE);
     let response = ui.interact(rect, id, egui::Sense::click());
 
-    let fill = if response.is_pointer_button_down_on() {
-        tokens::row_active_bg(runtime)
-    } else if active || response.hovered() {
+    let fill = if active || response.hovered() || response.is_pointer_button_down_on() {
         tokens::row_selected_bg(runtime)
     } else {
         tokens::TRANSPARENT

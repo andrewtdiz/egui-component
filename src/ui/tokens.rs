@@ -9,16 +9,8 @@ pub(crate) const SPACING_BUTTON_PADDING_Y: f32 = 7.0;
 pub(crate) const SPACING_INTERACT_HEIGHT: f32 = 34.0;
 pub(crate) const LAYOUT_GAP_XS: f32 = 4.0;
 pub(crate) const LAYOUT_GAP_SM: f32 = 5.0;
-pub(crate) const LAYOUT_GAP_MD: f32 = 7.0;
-pub(crate) const LAYOUT_INSET_X: i8 = 8;
-pub(crate) const LAYOUT_INSET_Y: i8 = 8;
 pub(crate) const INPUT_PADDING_X: i8 = 10;
 pub(crate) const INPUT_PADDING_Y: i8 = 6;
-
-const LAYOUT_DEBUG_FLOW: Color32 = Color32::from_rgb(56, 189, 248);
-const LAYOUT_DEBUG_BOX: Color32 = Color32::from_rgb(251, 191, 36);
-const LAYOUT_DEBUG_OUTER: Color32 = Color32::from_rgb(248, 113, 113);
-const LAYOUT_DEBUG_INNER: Color32 = Color32::from_rgb(74, 222, 128);
 
 fn role(runtime: ThemeRuntime, role: ColorRole) -> Color32 {
     theme::resolved_color(runtime, role)
@@ -61,11 +53,7 @@ pub(crate) fn row_hover_bg(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn row_active_bg(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        row_selected_bg(runtime),
-        role(runtime, ColorRole::Foreground),
-        0.06,
-    )
+    row_hover_bg(runtime)
 }
 
 pub(crate) fn text_primary(runtime: ThemeRuntime) -> Color32 {
@@ -137,11 +125,7 @@ pub(crate) fn button_secondary_hover_bg(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn button_secondary_active_bg(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Secondary),
-        role(runtime, ColorRole::Foreground),
-        0.08,
-    )
+    button_secondary_hover_bg(runtime)
 }
 
 pub(crate) fn button_secondary_border(runtime: ThemeRuntime) -> Color32 {
@@ -181,11 +165,7 @@ pub(crate) fn primary_hover_bg(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn primary_active_bg(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Primary),
-        role(runtime, ColorRole::Background),
-        0.24,
-    )
+    primary_hover_bg(runtime)
 }
 
 pub(crate) fn primary_fg(runtime: ThemeRuntime) -> Color32 {
@@ -206,22 +186,6 @@ pub(crate) fn image_tile_selected_fill(runtime: ThemeRuntime) -> Color32 {
 
 pub(crate) fn image_tile_selected_stroke(runtime: ThemeRuntime) -> Color32 {
     role(runtime, ColorRole::Ring)
-}
-
-pub(crate) fn layout_debug_flow(_: ThemeRuntime) -> Color32 {
-    LAYOUT_DEBUG_FLOW
-}
-
-pub(crate) fn layout_debug_box(_: ThemeRuntime) -> Color32 {
-    LAYOUT_DEBUG_BOX
-}
-
-pub(crate) fn layout_debug_outer(_: ThemeRuntime) -> Color32 {
-    LAYOUT_DEBUG_OUTER
-}
-
-pub(crate) fn layout_debug_inner(_: ThemeRuntime) -> Color32 {
-    LAYOUT_DEBUG_INNER
 }
 
 pub(crate) fn row_selected_bg(runtime: ThemeRuntime) -> Color32 {
@@ -288,9 +252,7 @@ pub(crate) fn row_bg(
 ) -> Color32 {
     if selected {
         row_selected_bg(runtime)
-    } else if pressed {
-        row_active_bg(runtime)
-    } else if hovered {
+    } else if pressed || hovered {
         row_hover_bg(runtime)
     } else {
         TRANSPARENT
@@ -306,39 +268,39 @@ pub(crate) fn slider_track_active(runtime: ThemeRuntime) -> Color32 {
 }
 
 pub(crate) fn slider_thumb_fill(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Muted)
+    mix(
+        role(runtime, ColorRole::Muted),
+        role(runtime, ColorRole::Foreground),
+        if runtime.mode.is_dark() { 0.18 } else { 0.12 },
+    )
 }
 
 pub(crate) fn slider_thumb_hover_fill(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Muted),
-        role(runtime, ColorRole::Foreground),
-        0.08,
-    )
+    slider_thumb_fill(runtime)
 }
 
 pub(crate) fn slider_thumb_active_fill(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Muted),
-        role(runtime, ColorRole::Foreground),
-        0.16,
-    )
+    slider_thumb_hover_fill(runtime)
 }
 
 pub(crate) fn slider_thumb_border(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Border)
+    mix(
+        role(runtime, ColorRole::Border),
+        role(runtime, ColorRole::Foreground),
+        if runtime.mode.is_dark() { 0.1 } else { 0.05 },
+    )
 }
 
 pub(crate) fn slider_thumb_hover_border(runtime: ThemeRuntime) -> Color32 {
     mix(
         role(runtime, ColorRole::Border),
-        role(runtime, ColorRole::Ring),
-        0.25,
+        role(runtime, ColorRole::Foreground),
+        if runtime.mode.is_dark() { 0.24 } else { 0.12 },
     )
 }
 
 pub(crate) fn slider_thumb_active_border(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Ring)
+    slider_thumb_hover_border(runtime)
 }
 
 pub(crate) fn input_focus_border(runtime: ThemeRuntime) -> Color32 {
@@ -363,7 +325,12 @@ pub(crate) fn radius_lg(runtime: ThemeRuntime) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{button_secondary_active_border, button_secondary_hover_border};
+    use super::{
+        button_secondary_active_bg, button_secondary_active_border, button_secondary_hover_bg,
+        button_secondary_hover_border, primary_active_bg, primary_hover_bg, row_active_bg,
+        row_hover_bg, slider_thumb_active_border, slider_thumb_active_fill, slider_thumb_fill,
+        slider_thumb_hover_border, slider_thumb_hover_fill,
+    };
     use crate::theme::ThemeRuntime;
 
     #[test]
@@ -374,5 +341,32 @@ mod tests {
             button_secondary_active_border(runtime),
             button_secondary_hover_border(runtime)
         );
+    }
+
+    #[test]
+    fn active_background_tokens_match_hover_tokens() {
+        let runtime = ThemeRuntime::default();
+
+        assert_eq!(
+            button_secondary_active_bg(runtime),
+            button_secondary_hover_bg(runtime)
+        );
+        assert_eq!(primary_active_bg(runtime), primary_hover_bg(runtime));
+        assert_eq!(row_active_bg(runtime), row_hover_bg(runtime));
+        assert_eq!(
+            slider_thumb_active_fill(runtime),
+            slider_thumb_hover_fill(runtime)
+        );
+        assert_eq!(
+            slider_thumb_active_border(runtime),
+            slider_thumb_hover_border(runtime)
+        );
+    }
+
+    #[test]
+    fn slider_thumb_fill_matches_hover_fill() {
+        let runtime = ThemeRuntime::default();
+
+        assert_eq!(slider_thumb_fill(runtime), slider_thumb_hover_fill(runtime));
     }
 }

@@ -14,7 +14,6 @@ use crate::components::{
     LabelWeight, MenuBar, MenuBarItem, NumberInput, Progress, Select, Sidebar, Spinner, Switch,
     TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar,
 };
-use crate::layout;
 use crate::primitives::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
 use crate::ui::tokens;
@@ -132,50 +131,63 @@ impl FrameRenderer {
     }
 
     fn render_row(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRow) {
-        let _ = layout::row()
-            .gap(props.gap)
-            .justify(map_justify(props.justify))
-            .align(map_align(props.align))
-            .show(ui.ui_mut(), |ui| self.render_children(ui, &props.children));
+        let layout = Layout::left_to_right(map_align(props.align))
+            .with_main_align(map_justify(props.justify))
+            .with_cross_align(map_align(props.align));
+        let _ = ui.ui_mut().scope(|ui| {
+            ui.spacing_mut().item_spacing.x = props.gap;
+            let _ = ui.with_layout(layout, |ui| self.render_children(ui, &props.children));
+        });
     }
 
     fn render_column(&mut self, ui: &mut ComponentUi<'_>, props: &ContractColumn) {
-        let _ = layout::column()
-            .gap(props.gap)
-            .justify(map_justify(props.justify))
-            .align(map_align(props.align))
-            .show(ui.ui_mut(), |ui| self.render_children(ui, &props.children));
+        let layout = Layout::top_down(map_align(props.align))
+            .with_main_align(map_justify(props.justify))
+            .with_cross_align(map_align(props.align));
+        let _ = ui.ui_mut().scope(|ui| {
+            ui.spacing_mut().item_spacing.y = props.gap;
+            let _ = ui.with_layout(layout, |ui| self.render_children(ui, &props.children));
+        });
     }
 
     fn render_inset(&mut self, ui: &mut ComponentUi<'_>, props: &ContractInset) {
-        let _ = layout::inset()
-            .padding(props.padding_x as i8, props.padding_y as i8)
+        let _ = egui::Frame::new()
+            .inner_margin(egui::Margin::symmetric(
+                props.padding_x as i8,
+                props.padding_y as i8,
+            ))
             .show(ui.ui_mut(), |ui| self.render_children(ui, &props.children));
     }
 
     fn render_sized_box(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSizedBox) {
-        let mut sized = layout::sized_box();
-        if let Some(width) = props.width {
-            sized = sized.width(width);
-        }
-        if let Some(height) = props.height {
-            sized = sized.height(height);
-        }
-        let _ = sized.show(ui.ui_mut(), |ui| self.render_children(ui, &props.children));
+        let _ = ui.ui_mut().scope(|ui| {
+            if let Some(width) = props.width {
+                ui.set_min_width(width);
+                ui.set_max_width(width);
+            }
+            if let Some(height) = props.height {
+                ui.set_min_height(height);
+                ui.set_max_height(height);
+            }
+            self.render_children(ui, &props.children);
+        });
     }
 
     fn render_spacer(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSpacer) {
-        let mut spacer = layout::spacer();
-        if props.flex {
-            spacer = spacer.flex();
-        } else if let (Some(width), Some(height)) = (props.width, props.height) {
-            spacer = spacer.size(width, height);
-        } else if let Some(width) = props.width {
-            spacer = spacer.width(width);
-        } else if let Some(height) = props.height {
-            spacer = spacer.height(height);
-        }
-        let _ = spacer.show(ui.ui_mut());
+        let ui = ui.ui_mut();
+        let size = if props.flex {
+            match ui.layout().main_dir() {
+                egui::Direction::LeftToRight | egui::Direction::RightToLeft => {
+                    egui::vec2(ui.available_width().max(0.0), props.height.unwrap_or(0.0))
+                }
+                egui::Direction::TopDown | egui::Direction::BottomUp => {
+                    egui::vec2(props.width.unwrap_or(0.0), ui.available_height().max(0.0))
+                }
+            }
+        } else {
+            egui::vec2(props.width.unwrap_or(0.0), props.height.unwrap_or(0.0))
+        };
+        let _ = ui.allocate_exact_size(size, egui::Sense::hover());
     }
 
     fn render_card(&mut self, ui: &mut ComponentUi<'_>, props: &crate::contract::ContractCard) {
@@ -300,7 +312,8 @@ impl FrameRenderer {
             .enumerate()
             .map(
                 |(index, item)| match (item.icon.as_deref(), item.icon_only) {
-                    (Some(icon), true) => TabOption::icon_only(index, item.label.as_str(), icon),
+                    (Some(icon), true) => TabOption::icon_only(index, item.label.as_str(), icon)
+                        .tooltip(item.label.as_str()),
                     (Some(icon), false) => TabOption::with_icon(index, item.label.as_str(), icon),
                     (None, _) => TabOption::new(index, item.label.as_str()),
                 },
@@ -969,19 +982,19 @@ impl FrameRenderer {
     }
 }
 
-fn map_justify(value: ContractJustify) -> crate::layout::Justify {
+fn map_justify(value: ContractJustify) -> Align {
     match value {
-        ContractJustify::Start => crate::layout::Justify::Start,
-        ContractJustify::Center => crate::layout::Justify::Center,
-        ContractJustify::End => crate::layout::Justify::End,
+        ContractJustify::Start => Align::Min,
+        ContractJustify::Center => Align::Center,
+        ContractJustify::End => Align::Max,
     }
 }
 
-fn map_align(value: ContractAlign) -> crate::layout::Align {
+fn map_align(value: ContractAlign) -> Align {
     match value {
-        ContractAlign::Start => crate::layout::Align::Start,
-        ContractAlign::Center => crate::layout::Align::Center,
-        ContractAlign::End => crate::layout::Align::End,
+        ContractAlign::Start => Align::Min,
+        ContractAlign::Center => Align::Center,
+        ContractAlign::End => Align::Max,
     }
 }
 
@@ -1137,39 +1150,45 @@ fn draw_contract_toast(
                 ui.set_min_width(inner_width);
                 ui.set_max_width(inner_width);
 
-                let _ = layout::leading_trailing()
-                    .gap(8.0)
-                    .min_height(TOAST_CLOSE_BUTTON_SIZE)
-                    .show(
-                        ui,
-                        |ui| {
-                            let mut components = ui.components();
-                            let _ = components.label(
-                                Label::new(toast.title.as_str())
-                                    .tone(LabelTone::Primary)
-                                    .weight(LabelWeight::Semibold),
-                            );
-                        },
-                        |ui| {
-                            let mut components = ui.components();
-                            if components
-                                .button(
-                                    Button::icon_only("x")
-                                        .variant(ButtonVariant::Ghost)
-                                        .size(ControlSize::Sm)
-                                        .icon_size(12.0)
-                                        .icon_tint(tokens::text_muted(runtime))
-                                        .min_size(egui::vec2(
-                                            TOAST_CLOSE_BUTTON_SIZE,
-                                            TOAST_CLOSE_BUTTON_SIZE,
-                                        )),
-                                )
-                                .clicked()
-                            {
-                                dismissed = true;
-                            }
-                        },
-                    );
+                let header_width = ui.available_width();
+                let _ = ui.allocate_ui_with_layout(
+                    egui::vec2(header_width, TOAST_CLOSE_BUTTON_SIZE),
+                    Layout::left_to_right(Align::Center),
+                    |ui: &mut egui::Ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        let mut components = ui.components();
+                        let _ = components.label(
+                            Label::new(toast.title.as_str())
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Semibold),
+                        );
+
+                        let trailing_width = ui.available_width().max(0.0);
+                        let _ = ui.allocate_ui_with_layout(
+                            egui::vec2(trailing_width, TOAST_CLOSE_BUTTON_SIZE),
+                            Layout::right_to_left(Align::Center),
+                            |ui: &mut egui::Ui| {
+                                let mut components = ui.components();
+                                if components
+                                    .button(
+                                        Button::icon_only("x")
+                                            .variant(ButtonVariant::Ghost)
+                                            .size(ControlSize::Sm)
+                                            .icon_size(12.0)
+                                            .icon_tint(tokens::text_muted(runtime))
+                                            .min_size(egui::vec2(
+                                                TOAST_CLOSE_BUTTON_SIZE,
+                                                TOAST_CLOSE_BUTTON_SIZE,
+                                            )),
+                                    )
+                                    .clicked()
+                                {
+                                    dismissed = true;
+                                }
+                            },
+                        );
+                    },
+                );
 
                 if let Some(description) = toast.description.as_deref() {
                     ui.add_space(4.0);
@@ -1237,13 +1256,14 @@ fn contract_toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> e
 
 #[cfg(test)]
 mod tests {
-    use super::{render_tree, should_emit_dialogue_closed};
+    use super::{contract_toast_shadow, render_tree, should_emit_dialogue_closed};
     use crate::components::ToastIntent;
     use crate::contract::{
         ContractButton, ContractCommon, ContractNode, ContractToastItem, ContractToastViewport,
         ContractTree, EventKind,
     };
     use crate::theme::{self, ThemeMode, ThemeSpec};
+    use crate::ui::tokens;
     use egui::{pos2, CentralPanel, Context, Event, Modifiers, PointerButton, RawInput};
 
     fn run_frame(
@@ -1254,7 +1274,10 @@ mod tests {
         let mut events = Vec::new();
         let _ = context.run(input, |context| {
             CentralPanel::default().show(context, |ui| {
-                events = render_tree(ui, tree);
+                let new_events = render_tree(ui, tree);
+                if !new_events.is_empty() {
+                    events = new_events;
+                }
             });
         });
         events
@@ -1317,6 +1340,22 @@ mod tests {
         assert!(!should_emit_dialogue_closed(true, false, false, true));
         assert!(should_emit_dialogue_closed(true, false, false, false));
         assert!(!should_emit_dialogue_closed(false, false, false, false));
+    }
+
+    #[test]
+    fn contract_toast_shadow_keeps_md_offset_and_fades_with_depth() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+
+        let runtime = theme::runtime_for_context(&context);
+        let base = tokens::tailwind_shadow_md(runtime);
+
+        assert_eq!(contract_toast_shadow(runtime, 0), base);
+
+        let stacked = contract_toast_shadow(runtime, 2);
+        assert_eq!(stacked.offset, base.offset);
+        assert!(stacked.blur < base.blur);
+        assert!(stacked.color.a() < base.color.a());
     }
 
     #[test]

@@ -1,12 +1,10 @@
-use super::api::ComponentUi;
-use crate::layout;
+use super::{api::ComponentUi, tooltip::attach_text_tooltip};
 use crate::ui::{icons, tokens, typography};
 use egui::{Align2, CornerRadius, CursorIcon, Id, Rect, RichText, Stroke, StrokeKind, Ui};
 
 const INLINE_TAB_GAP: f32 = 3.0;
 const INLINE_TAB_HEIGHT: f32 = 24.0;
 const INLINE_TAB_MIN_WIDTH: f32 = 48.0;
-const INLINE_TAB_ICON_ONLY_MIN_WIDTH: f32 = 34.0;
 const INLINE_TAB_PADDING_X: f32 = 11.0;
 const INLINE_TAB_GROUP_PADDING: f32 = 4.0;
 const INLINE_TAB_ICON_SIZE: f32 = 14.0;
@@ -30,6 +28,7 @@ pub struct TabOption<'a> {
     pub label: &'a str,
     pub icon: Option<&'a str>,
     pub icon_only: bool,
+    pub tooltip: Option<&'a str>,
 }
 
 impl<'a> TabOption<'a> {
@@ -39,6 +38,7 @@ impl<'a> TabOption<'a> {
             label,
             icon: None,
             icon_only: false,
+            tooltip: None,
         }
     }
 
@@ -48,6 +48,7 @@ impl<'a> TabOption<'a> {
             label,
             icon: Some(icon),
             icon_only: false,
+            tooltip: None,
         }
     }
 
@@ -57,7 +58,13 @@ impl<'a> TabOption<'a> {
             label,
             icon: Some(icon),
             icon_only: true,
+            tooltip: None,
         }
+    }
+
+    pub const fn tooltip(mut self, tooltip: &'a str) -> Self {
+        self.tooltip = Some(tooltip);
+        self
     }
 }
 
@@ -125,38 +132,41 @@ fn draw_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption<'_>]
     let runtime = crate::theme::runtime_for_ui(ui);
 
     ui.push_id(id, |ui| {
-        let _ = layout::row().gap(6.0).show(ui, |ui| {
-            for option in options {
-                let selected = *current == option.value;
-                let response = ui
-                    .add(
-                        egui::Button::new(RichText::new(option.label).color(if selected {
-                            tokens::row_selected_text(runtime)
-                        } else {
-                            tokens::text_secondary(runtime)
-                        }))
-                        .fill(tokens::TRANSPARENT)
-                        .stroke(Stroke::new(1.0, tokens::TRANSPARENT))
-                        .corner_radius(CornerRadius::ZERO)
-                        .min_size(egui::vec2(0.0, tokens::SPACING_INTERACT_HEIGHT)),
-                    )
-                    .on_hover_cursor(CursorIcon::PointingHand);
+        let _ = ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.horizontal(|ui| {
+                for option in options {
+                    let selected = *current == option.value;
+                    let response = ui
+                        .add(
+                            egui::Button::new(RichText::new(option.label).color(if selected {
+                                tokens::row_selected_text(runtime)
+                            } else {
+                                tokens::text_secondary(runtime)
+                            }))
+                            .fill(tokens::TRANSPARENT)
+                            .stroke(Stroke::new(1.0, tokens::TRANSPARENT))
+                            .corner_radius(CornerRadius::ZERO)
+                            .min_size(egui::vec2(0.0, tokens::SPACING_INTERACT_HEIGHT)),
+                        )
+                        .on_hover_cursor(CursorIcon::PointingHand);
 
-                if selected {
-                    let y = response.rect.bottom() - 1.0;
-                    ui.painter().line_segment(
-                        [
-                            egui::pos2(response.rect.left() + 4.0, y),
-                            egui::pos2(response.rect.right() - 4.0, y),
-                        ],
-                        Stroke::new(2.6, tokens::text_secondary(runtime)),
-                    );
-                }
+                    if selected {
+                        let y = response.rect.bottom() - 1.0;
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(response.rect.left() + 4.0, y),
+                                egui::pos2(response.rect.right() - 4.0, y),
+                            ],
+                            Stroke::new(2.6, tokens::text_secondary(runtime)),
+                        );
+                    }
 
-                if response.clicked() && !selected {
-                    *current = option.value;
+                    if response.clicked() && !selected {
+                        *current = option.value;
+                    }
                 }
-            }
+            })
         });
     });
 }
@@ -178,6 +188,9 @@ fn draw_segmented_tabs(
         let tab_widths = options
             .iter()
             .map(|option| {
+                if option.icon_only {
+                    return INLINE_TAB_HEIGHT;
+                }
                 let label_width = if option.icon_only {
                     0.0
                 } else {
@@ -199,12 +212,7 @@ fn draw_segmented_tabs(
                         INLINE_TAB_ICON_SIZE + INLINE_TAB_ICON_GAP
                     }
                 });
-                let min_width = if option.icon_only {
-                    INLINE_TAB_ICON_ONLY_MIN_WIDTH
-                } else {
-                    INLINE_TAB_MIN_WIDTH
-                };
-                (label_width + icon_width + (INLINE_TAB_PADDING_X * 2.0)).max(min_width)
+                (label_width + icon_width + (INLINE_TAB_PADDING_X * 2.0)).max(INLINE_TAB_MIN_WIDTH)
             })
             .collect::<Vec<_>>();
         let group_size = segmented_tabs_group_size(&tab_widths);
@@ -225,7 +233,11 @@ fn draw_segmented_tabs(
             let response = ui.interact(rect, ui.id().with(option.value), egui::Sense::click());
             let selected = *current == option.value;
             let fill = if selected {
-                inline_tabs_selected_fill(runtime)
+                if response.is_pointer_button_down_on() || response.hovered() {
+                    inline_tabs_selected_hover_fill(runtime)
+                } else {
+                    inline_tabs_selected_fill(runtime)
+                }
             } else if response.is_pointer_button_down_on() {
                 inline_tabs_pressed_fill(runtime)
             } else if response.hovered() {
@@ -296,11 +308,9 @@ fn draw_segmented_tabs(
                 );
             }
 
-            let response = if option.icon_only {
-                response.on_hover_text(option.label)
-            } else {
-                response
-            };
+            if let Some(tooltip) = option.tooltip {
+                attach_text_tooltip(ui, &response, tooltip);
+            }
 
             if response.clicked() && !selected {
                 *current = option.value;
@@ -353,16 +363,20 @@ fn inline_tabs_selected_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color
     }
 }
 
+fn inline_tabs_selected_hover_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        inline_tabs_selected_fill(runtime).linear_multiply(1.08)
+    } else {
+        inline_tabs_selected_fill(runtime).linear_multiply(0.94)
+    }
+}
+
 fn inline_tabs_hover_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
     tokens::row_hover_bg(runtime)
 }
 
 fn inline_tabs_pressed_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
-    if runtime.mode.is_dark() {
-        tokens::input_background(runtime)
-    } else {
-        tokens::row_active_bg(runtime)
-    }
+    inline_tabs_hover_fill(runtime)
 }
 
 fn inline_tabs_selected_text(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
@@ -382,9 +396,9 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
     *current = (*current).min(options.len().saturating_sub(1));
 
     ui.push_id(id, |ui| {
-        layout::row()
-            .gap(STACKED_TAB_GAP)
-            .show(ui, |ui| {
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = STACKED_TAB_GAP;
+            ui.horizontal(|ui| {
                 for option in options {
                     let selected = *current == option.value;
                     let (rect, response) =
@@ -444,7 +458,9 @@ fn draw_stacked_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOpt
             })
             .response
             .rect
+        })
     })
+    .inner
     .inner
 }
 
@@ -493,7 +509,11 @@ fn draw_blender_topbar_tabs(
             let response = ui.interact(rect, ui.id().with(option.value), egui::Sense::click());
             let selected = *current == option.value;
             let fill = if selected {
-                blender_topbar_selected_fill(runtime)
+                if response.is_pointer_button_down_on() || response.hovered() {
+                    blender_topbar_selected_hover_fill(runtime)
+                } else {
+                    blender_topbar_selected_fill(runtime)
+                }
             } else if response.is_pointer_button_down_on() {
                 blender_topbar_pressed_fill(runtime)
             } else if response.hovered() {
@@ -573,11 +593,7 @@ fn blender_topbar_hover_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color
 }
 
 fn blender_topbar_pressed_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
-    if runtime.mode.is_dark() {
-        tokens::button_secondary_active_bg(runtime).linear_multiply(0.9)
-    } else {
-        tokens::button_secondary_active_bg(runtime)
-    }
+    blender_topbar_hover_fill(runtime)
 }
 
 fn blender_topbar_selected_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
@@ -585,6 +601,14 @@ fn blender_topbar_selected_fill(runtime: crate::theme::ThemeRuntime) -> egui::Co
         tokens::card_background(runtime).linear_multiply(1.06)
     } else {
         tokens::card_background(runtime)
+    }
+}
+
+fn blender_topbar_selected_hover_fill(runtime: crate::theme::ThemeRuntime) -> egui::Color32 {
+    if runtime.mode.is_dark() {
+        blender_topbar_selected_fill(runtime).linear_multiply(1.08)
+    } else {
+        blender_topbar_selected_fill(runtime).linear_multiply(0.96)
     }
 }
 
@@ -613,9 +637,9 @@ fn draw_rail_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption
     *current = (*current).min(options.len().saturating_sub(1));
 
     ui.push_id(id, |ui| {
-        layout::column()
-            .gap(RAIL_TAB_GAP)
-            .show(ui, |ui| {
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y = RAIL_TAB_GAP;
+            ui.vertical(|ui| {
                 for option in options {
                     let selected = *current == option.value;
                     let (rect, response) =
@@ -676,7 +700,9 @@ fn draw_rail_tabs(ui: &mut Ui, id: Id, current: &mut usize, options: &[TabOption
             })
             .response
             .rect
+        })
     })
+    .inner
     .inner
 }
 
@@ -697,9 +723,9 @@ fn draw_toggle_rail_tabs(
     }
 
     ui.push_id(id, |ui| {
-        layout::column()
-            .gap(RAIL_TAB_GAP)
-            .show(ui, |ui| {
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y = RAIL_TAB_GAP;
+            ui.vertical(|ui| {
                 for option in options {
                     let selected = *current == Some(option.value);
                     let (rect, response) =
@@ -764,19 +790,23 @@ fn draw_toggle_rail_tabs(
             })
             .response
             .rect
+        })
     })
+    .inner
     .inner
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        blender_topbar_corner_radius, draw_blender_topbar_tabs, draw_rail_tabs,
-        draw_segmented_tabs, draw_stacked_tabs, draw_toggle_rail_tabs, segmented_tabs_group_size,
-        segmented_tabs_rects, TabOption, BLENDER_TAB_GAP, BLENDER_TAB_HEIGHT,
-        INLINE_TAB_GROUP_PADDING, INLINE_TAB_HEIGHT, RAIL_TAB_GAP, RAIL_TAB_SIZE, STACKED_TAB_GAP,
-        STACKED_TAB_SIZE,
+        blender_topbar_corner_radius, blender_topbar_selected_fill,
+        blender_topbar_selected_hover_fill, draw_blender_topbar_tabs, draw_rail_tabs,
+        draw_segmented_tabs, draw_stacked_tabs, draw_toggle_rail_tabs, inline_tabs_selected_fill,
+        inline_tabs_selected_hover_fill, segmented_tabs_group_size, segmented_tabs_rects,
+        TabOption, BLENDER_TAB_GAP, BLENDER_TAB_HEIGHT, INLINE_TAB_GAP, INLINE_TAB_GROUP_PADDING,
+        INLINE_TAB_HEIGHT, RAIL_TAB_GAP, RAIL_TAB_SIZE, STACKED_TAB_GAP, STACKED_TAB_SIZE,
     };
+    use crate::theme::{self, ThemeMode};
     use egui::{CentralPanel, Context, Id, RawInput, Rect};
 
     #[test]
@@ -816,6 +846,38 @@ mod tests {
         });
 
         assert!(rect.width() > 0.0);
+        assert_eq!(
+            rect.height(),
+            INLINE_TAB_HEIGHT + (INLINE_TAB_GROUP_PADDING * 2.0)
+        );
+    }
+
+    #[test]
+    fn icon_only_segmented_tabs_use_square_segments() {
+        let context = Context::default();
+        let mut rect = Rect::NOTHING;
+        let options = [
+            TabOption::icon_only(0, "Light", "sun-medium"),
+            TabOption::icon_only(1, "Dark", "moon-star"),
+            TabOption::icon_only(2, "System", "monitor"),
+        ];
+        let mut current = 0;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                rect = draw_segmented_tabs(
+                    ui,
+                    Id::new("segmented_tabs_icon_only_test"),
+                    &mut current,
+                    &options,
+                );
+            });
+        });
+
+        let expected_width = (INLINE_TAB_HEIGHT * options.len() as f32)
+            + (INLINE_TAB_GAP * options.len().saturating_sub(1) as f32)
+            + (INLINE_TAB_GROUP_PADDING * 2.0);
+        assert_eq!(rect.width(), expected_width);
         assert_eq!(
             rect.height(),
             INLINE_TAB_HEIGHT + (INLINE_TAB_GROUP_PADDING * 2.0)
@@ -908,6 +970,30 @@ mod tests {
         assert_eq!(idle.se, 0);
         assert!(selected.nw > idle.nw);
         assert!(selected.ne > idle.ne);
+    }
+
+    #[test]
+    fn selected_segmented_tabs_have_hover_fill() {
+        let context = Context::default();
+        theme::install(&context, theme::ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+
+        assert_ne!(
+            inline_tabs_selected_hover_fill(runtime),
+            inline_tabs_selected_fill(runtime)
+        );
+    }
+
+    #[test]
+    fn selected_blender_tabs_have_hover_fill() {
+        let context = Context::default();
+        theme::install(&context, theme::ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+
+        assert_ne!(
+            blender_topbar_selected_hover_fill(runtime),
+            blender_topbar_selected_fill(runtime)
+        );
     }
 
     #[test]

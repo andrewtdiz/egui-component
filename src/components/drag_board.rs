@@ -1,5 +1,4 @@
 use super::api::ComponentUi;
-use crate::layout;
 use crate::ui::{tokens, typography};
 use egui::{
     vec2, Align, Align2, CornerRadius, CursorIcon, Id, Response, RichText, Sense, Stroke,
@@ -99,26 +98,29 @@ fn draw_drag_board(
     let mut combined_response: Option<Response> = None;
     let mut changed = false;
 
-    let _ = layout::row().gap(DRAG_BOARD_REGION_GAP).show(ui, |ui| {
-        for (region, title) in [
-            (DragBoardRegion::Left, props.left_title),
-            (DragBoardRegion::Right, props.right_title),
-        ] {
-            let response = draw_drag_board_region(
-                ui,
-                current_regions,
-                props,
-                region,
-                title,
-                region_width,
-                runtime,
-                &mut changed,
-            );
-            combined_response = Some(match combined_response.take() {
-                Some(previous) => previous.union(response),
-                None => response,
-            });
-        }
+    let _ = ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = DRAG_BOARD_REGION_GAP;
+        ui.horizontal(|ui| {
+            for (region, title) in [
+                (DragBoardRegion::Left, props.left_title),
+                (DragBoardRegion::Right, props.right_title),
+            ] {
+                let response = draw_drag_board_region(
+                    ui,
+                    current_regions,
+                    props,
+                    region,
+                    title,
+                    region_width,
+                    runtime,
+                    &mut changed,
+                );
+                combined_response = Some(match combined_response.take() {
+                    Some(previous) => previous.union(response),
+                    None => response,
+                });
+            }
+        })
     });
 
     let mut response =
@@ -241,32 +243,37 @@ fn draw_drag_board_item(
     runtime: crate::theme::ThemeRuntime,
     width: f32,
 ) {
-    let _ = layout::sized_box().width(width).show(ui, |ui| {
+    let _ = ui.scope(|ui| {
+        ui.set_min_width(width);
+        ui.set_max_width(width);
         let frame = egui::Frame::new()
             .fill(tokens::card_background(runtime))
             .stroke(Stroke::new(1.0, tokens::separator(runtime)))
             .corner_radius(CornerRadius::same(tokens::radius_md(runtime)))
             .inner_margin(egui::Margin::same(12));
         let response = frame.show(ui, |ui| {
-            let _ = layout::column().gap(DRAG_BOARD_ITEM_GAP).show(ui, |ui| {
-                let _ = ui.add(
-                    egui::Label::new(
-                        RichText::new(item.title)
-                            .font(typography::label_font())
-                            .color(tokens::text_primary(runtime)),
-                    )
-                    .selectable(false),
-                );
-                if let Some(description) = item.description.filter(|text| !text.is_empty()) {
+            let _ = ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = DRAG_BOARD_ITEM_GAP;
+                ui.vertical(|ui| {
                     let _ = ui.add(
                         egui::Label::new(
-                            RichText::new(description)
-                                .size(12.0)
-                                .color(tokens::text_muted(runtime)),
+                            RichText::new(item.title)
+                                .font(typography::label_font())
+                                .color(tokens::text_primary(runtime)),
                         )
                         .selectable(false),
                     );
-                }
+                    if let Some(description) = item.description.filter(|text| !text.is_empty()) {
+                        let _ = ui.add(
+                            egui::Label::new(
+                                RichText::new(description)
+                                    .size(12.0)
+                                    .color(tokens::text_muted(runtime)),
+                            )
+                            .selectable(false),
+                        );
+                    }
+                })
             });
         });
         let _ = response.response.on_hover_cursor(CursorIcon::Grab);
@@ -471,7 +478,9 @@ mod tests {
 
         let _ = context.run(input, |context| {
             CentralPanel::default().show(context, |ui| {
-                let _ = crate::layout::sized_box().width(TEST_WIDTH).show(ui, |ui| {
+                let _ = ui.scope(|ui| {
+                    ui.set_min_width(TEST_WIDTH);
+                    ui.set_max_width(TEST_WIDTH);
                     board_rect = ui.components().drag_board(current_regions, props).rect;
                 });
             });

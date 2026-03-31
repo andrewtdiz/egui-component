@@ -1,6 +1,5 @@
 use super::api::{with_component_overrides, ComponentUi};
 use super::{LabelTone, LabelWeight};
-use crate::layout;
 use crate::ui::tokens;
 use egui::{Color32, CornerRadius, Id, Response, Sense, StrokeKind, Ui};
 
@@ -103,9 +102,9 @@ fn draw_collapsible<R>(
         .ui_mut()
         .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
             let mut ui = ComponentUi::with_overrides(ui, overrides);
-            let _ = layout::row()
-                .gap(tokens::LAYOUT_GAP_SM)
-                .show(ui.ui_mut(), |ui| {
+            let _ = ui.ui_mut().scope(|ui| {
+                ui.spacing_mut().item_spacing.x = tokens::LAYOUT_GAP_SM;
+                ui.horizontal(|ui| {
                     let mut ui = ComponentUi::with_overrides(ui, overrides);
                     let expand_icon = if *open {
                         "chevron-down"
@@ -134,7 +133,8 @@ fn draw_collapsible<R>(
                             .weight(LabelWeight::Semibold),
                     );
 
-                    let _ = layout::spacer().show(ui.ui_mut());
+                    let remaining_width = ui.ui_mut().available_width().max(0.0);
+                    ui.ui_mut().add_space(remaining_width);
                     if let Some(trailing_icon) = props.trailing_icon {
                         let _ = ui.icon(
                             crate::components::Icon::new(trailing_icon).size(13.0).tint(
@@ -144,7 +144,8 @@ fn draw_collapsible<R>(
                             ),
                         );
                     }
-                });
+                })
+            });
         });
 
     if *open {

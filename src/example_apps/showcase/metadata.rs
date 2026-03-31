@@ -72,6 +72,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         ComponentKind::CanvaEditImage => ShowcaseSection::Canva,
         ComponentKind::CanvaPosition => ShowcaseSection::Canva,
         ComponentKind::CollabCursor
+        | ComponentKind::IconToolbar
         | ComponentKind::MenuBar
         | ComponentKind::Toolbar
         | ComponentKind::ImageTile
@@ -98,6 +99,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::DragBoard => available_width.min(560.0),
         ComponentKind::FileTree => available_width.min(360.0),
         ComponentKind::Hierarchy => available_width.min(440.0),
+        ComponentKind::IconToolbar => available_width.min(560.0),
         ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
         ComponentKind::Sidebar => available_width.min(820.0),
@@ -112,6 +114,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Color => "Circular solid color swatches.",
         ComponentKind::Image => "PNG-backed raster image rendering.",
         ComponentKind::Icon => "Lucide icon rendering.",
+        ComponentKind::IconToolbar => {
+            "Icon-first toolbar with built-in selection state and automatically scaled icons."
+        }
         ComponentKind::Twemoji => "Color emoji rendering from vendored Twemoji SVG assets.",
         ComponentKind::EmojiSelector => {
             "Button-triggered emoji picker with search, categories, and Twemoji rendering."
@@ -231,21 +236,6 @@ fn sidebar_preview_toggle_icon(side_index: usize, open: bool) -> &'static str {
     }
 }
 
-fn theme_mode_index(mode: ThemeMode) -> usize {
-    match mode {
-        ThemeMode::Light => 0,
-        ThemeMode::Dark => 1,
-        ThemeMode::System => 2,
-    }
-}
-
-fn theme_mode_from_index(index: usize) -> ThemeMode {
-    match index {
-        0 => ThemeMode::Light,
-        1 => ThemeMode::Dark,
-        _ => ThemeMode::System,
-    }
-}
 
 fn clamp_state(state: &mut ShowcaseApp) {
     state.canva_background_color_index = state
@@ -263,6 +253,9 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.toolbar_color_index = state
         .toolbar_color_index
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
+    state.icon_toolbar_selected_index = state
+        .icon_toolbar_selected_index
+        .min(ICON_TOOLBAR_ITEMS.len().saturating_sub(1));
     state.collab_cursor_preview_position.x = state.collab_cursor_preview_position.x.clamp(0.0, 1.0);
     state.collab_cursor_preview_position.y = state.collab_cursor_preview_position.y.clamp(0.0, 1.0);
     state.canva_position_tab_index = state

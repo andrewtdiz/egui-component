@@ -24,7 +24,7 @@ impl ShowcaseApp {
                 .size(SMALL_TEXT),
         );
         ui.add_space(6.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             for fill in TOOLBAR_SWATCHES {
                 let _ = components.color(Color::new(fill).size(20.0));
@@ -38,7 +38,7 @@ impl ShowcaseApp {
                 .size(SMALL_TEXT),
         );
         ui.add_space(6.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             for fill in TOOLBAR_SWATCHES {
                 let _ = components.color(Color::new(fill).size(20.0).stroke(border));
@@ -73,7 +73,7 @@ impl ShowcaseApp {
                 .size(SMALL_TEXT),
         );
         ui.add_space(6.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.slider(&mut self.image_rotation_degrees, (-180.0..=180.0, 220.0));
             let rotation_label = format!("{:.0}deg", self.image_rotation_degrees.round());
@@ -94,13 +94,55 @@ impl ShowcaseApp {
     }
 
     fn render_icon_preview(&mut self, ui: &mut Ui) {
-        let _ = layout::row().gap(10.0).show(ui, |ui| {
+        let _ = show_row(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.icon(Icon::new("bot").size(16.0));
             let _ = components.icon(Icon::new("settings-2").size(16.0));
             let _ = components.icon(Icon::new("sparkles").size(16.0));
             let _ = components.icon(Icon::new("gamepad-2").size(16.0));
             let _ = components.icon(Icon::new("wand-sparkles").size(16.0));
+        });
+    }
+
+    fn render_icon_toolbar_preview(&mut self, ui: &mut Ui) {
+        let canvas_fill = if theme::runtime_for_ui(ui).mode.is_dark() {
+            app_background(ui)
+        } else {
+            TOOLBAR_CANVAS_LIGHT_FILL
+        };
+        let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
+        let selected_label = ICON_TOOLBAR_ITEMS[self.icon_toolbar_selected_index]
+            .tooltip
+            .unwrap_or("Selected");
+
+        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+            let width = 420.0_f32.min(ui.available_width());
+            let _ = ui
+                .components()
+                .card(Card::new().fill(canvas_fill).stroke(card_stroke), |ui| {
+                    ui.set_width(width);
+                    let (host_rect, _) =
+                        ui.allocate_exact_size(vec2(width - 24.0, 136.0), Sense::hover());
+                    let _ = ui.scope_builder(egui::UiBuilder::new().max_rect(host_rect), |ui| {
+                        let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                            ui.add_space(26.0);
+                            let _ = ui.components().icon_toolbar(
+                                &mut self.icon_toolbar_selected_index,
+                                IconToolbar::new(
+                                    Id::new("component_showcase_icon_toolbar"),
+                                    &ICON_TOOLBAR_ITEMS,
+                                ),
+                            );
+                            ui.add_space(14.0);
+                            let selected_text = format!("Selected: {selected_label}");
+                            let _ = ui.components().label(
+                                Label::new(selected_text.as_str())
+                                    .tone(LabelTone::Muted)
+                                    .size(SMALL_TEXT),
+                            );
+                        });
+                    });
+                });
         });
     }
 
@@ -112,7 +154,7 @@ impl ShowcaseApp {
         );
         ui.add_space(6.0);
 
-        let _ = layout::row().gap(12.0).show(ui, |ui| {
+        let _ = show_row(ui, 12.0, |ui| {
             let mut components = ui.components();
             let _ = components.twemoji(Twemoji::new("🔥").size(16.0));
             let _ = components.twemoji(Twemoji::new("🔥").size(24.0));
@@ -128,9 +170,9 @@ impl ShowcaseApp {
         );
         ui.add_space(6.0);
 
-        let _ = layout::row().gap(14.0).show(ui, |ui| {
+        let _ = show_row(ui, 14.0, |ui| {
             for (emoji, label) in TWEMOJI_SEQUENCE_SAMPLES {
-                let _ = layout::column().gap(6.0).show(ui, |ui| {
+                let _ = show_column(ui, 6.0, |ui| {
                     let _ = ui.components().twemoji(Twemoji::new(emoji).size(32.0));
                     let _ = ui
                         .components()
@@ -165,12 +207,22 @@ impl ShowcaseApp {
     }
 
     fn render_input_preview(&mut self, ui: &mut Ui) {
-        let _ = ui.components().text_input(
-            &mut self.input_value,
-            TextInput::new()
-                .width(280.0)
-                .placeholder("Type component name"),
-        );
+        let _ = ui.vertical(|ui| {
+            let _ = ui.components().text_input(
+                &mut self.input_value,
+                TextInput::new()
+                    .width(280.0)
+                    .placeholder("Type component name"),
+            );
+            ui.add_space(10.0);
+            let _ = ui.components().text_input(
+                &mut self.search_input_value,
+                TextInput::new()
+                    .width(280.0)
+                    .placeholder("Search")
+                    .leading_icon("search"),
+            );
+        });
     }
 
     fn render_field_preview(&mut self, ui: &mut Ui) {
@@ -185,7 +237,7 @@ impl ShowcaseApp {
     fn render_button_preview(&mut self, ui: &mut Ui) {
         let selected_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Foreground));
 
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.button(Button::new("Primary").variant(ButtonVariant::Primary));
             let _ = components.button(Button::new("Secondary").variant(ButtonVariant::Secondary));
@@ -194,7 +246,36 @@ impl ShowcaseApp {
         });
 
         ui.add_space(8.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
+            let mut components = ui.components();
+            let _ = components.button(
+                Button::new("New Draft")
+                    .leading_icon("file-plus")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Primary),
+            );
+            let _ = components.button(
+                Button::new("Search")
+                    .leading_icon("search")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Secondary),
+            );
+            let _ = components.button(
+                Button::new("Share")
+                    .leading_icon("share-2")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Ghost),
+            );
+            let _ = components.button(
+                Button::new("Export")
+                    .leading_icon("download")
+                    .icon_size(15.0)
+                    .variant(ButtonVariant::Link),
+            );
+        });
+
+        ui.add_space(8.0);
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.button(
                 Button::icon_only("wand-sparkles")
@@ -219,7 +300,7 @@ impl ShowcaseApp {
         });
 
         ui.add_space(8.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
                 let stroke = if index == 1 {
@@ -262,10 +343,13 @@ impl ShowcaseApp {
                     );
 
                     ui.add_space(12.0);
-                    let _ = layout::leading_trailing().gap(12.0).min_height(36.0).show(
+                    let _ = show_leading_trailing(
                         ui,
+                        12.0,
+                        36.0,
+                        egui::Align::Center,
                         |ui| {
-                            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                            let _ = show_row(ui, 8.0, |ui| {
                                 let _ = ui.components().button(
                                     Button::icon_only("palette")
                                         .variant(ButtonVariant::Secondary)
@@ -338,74 +422,8 @@ impl ShowcaseApp {
             let _ = ui
                 .components()
                 .card(Card::new().padding(14, 14).fill(panel_fill), |ui| {
-                    let _ = ui.with_layout(Layout::left_to_right(egui::Align::Min), |ui| {
-                        ui.set_width(panel_width);
-
-                        let left_width = 170.0;
-                        let gap = 14.0;
-
-                        let _ = ui.scope(|ui| {
-                            let _ = ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
-                                ui.set_width(left_width);
-
-                                let _ = ui.components().text_input(
-                                    &mut self.canva_brand_query,
-                                    TextInput::new()
-                                        .width(left_width)
-                                        .placeholder("Search")
-                                        .leading_icon("search")
-                                        .border_color(CANVA_BRAND_ACCENT),
-                                );
-
-                                ui.add_space(10.0);
-                                let _ = ui.components().label(
-                                    Label::new("All Brand Templates")
-                                        .tone(LabelTone::Secondary)
-                                        .weight(LabelWeight::Semibold),
-                                );
-
-                                ui.add_space(10.0);
-                                let _ = ui.components().separator();
-                                ui.add_space(10.0);
-                                let _ = ui.components().select(
-                                    &mut self.canva_brand_select_index,
-                                    Select::from_id(
-                                        Id::new("component_showcase_canva_brand_select"),
-                                        &CANVA_BRAND_SELECT_OPTIONS,
-                                    )
-                                    .width(left_width)
-                                    .variant(SelectVariant::Secondary)
-                                    .leading_icon("badge-cent"),
-                                );
-
-                                ui.add_space(6.0);
-                                for (index, category) in CANVA_BRAND_CATEGORIES.iter().enumerate() {
-                                    let selected = self.canva_brand_category_index == index;
-                                    if draw_canva_brand_nav_item(ui, category, selected, left_width)
-                                        .clicked()
-                                    {
-                                        self.canva_brand_category_index = index;
-                                    }
-                                    if index + 1 < CANVA_BRAND_CATEGORIES.len() {
-                                        ui.add_space(2.0);
-                                    }
-                                }
-                            });
-                        });
-
-                        ui.add_space(gap);
-                        draw_canva_brand_vertical_divider(ui, 520.0);
-                        ui.add_space(gap);
-
-                        let _ = ui.scope(|ui| {
-                            let _ = ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
-                                ui.set_width(
-                                    (panel_width - left_width - gap * 2.0 - 1.0).max(260.0),
-                                );
-                                render_canva_brand_detail(ui, self.canva_brand_category_index);
-                            });
-                        });
-                    });
+                    ui.set_width(panel_width);
+                    render_canva_brand_kit_layout(self, ui, panel_width);
                 });
         });
     }
@@ -518,7 +536,7 @@ impl ShowcaseApp {
                             .floor()
                             .max(96.0);
 
-                        let _ = layout::row().gap(field_gap).show(ui, |ui| {
+                        let _ = show_row(ui, field_gap, |ui| {
                             draw_canva_number_field(
                                 ui,
                                 "Width",
@@ -549,7 +567,7 @@ impl ShowcaseApp {
                         });
 
                         ui.add_space(10.0);
-                        let _ = layout::row().gap(field_gap).show(ui, |ui| {
+                        let _ = show_row(ui, field_gap, |ui| {
                             draw_canva_number_field(
                                 ui,
                                 "X",
@@ -611,7 +629,7 @@ impl ShowcaseApp {
     }
 
     fn render_checkbox_preview(&mut self, ui: &mut Ui) {
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.checkbox(&mut self.checkbox_value, Checkbox::new());
 
@@ -638,7 +656,7 @@ impl ShowcaseApp {
     }
 
     fn render_collab_cursor_preview(&mut self, ui: &mut Ui) {
-        let _ = layout::row().gap(10.0).show(ui, |ui| {
+        let _ = show_row(ui, 10.0, |ui| {
             let mut components = ui.components();
             let _ = components.label(Label::new("Color").tone(LabelTone::Muted).size(SMALL_TEXT));
             let _ = components.color_input(
@@ -710,7 +728,7 @@ impl ShowcaseApp {
     }
 
     fn render_slider_preview(&mut self, ui: &mut Ui) {
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.slider(&mut self.slider_value, (0.0..=100.0, 250.0));
             let value_label = format!("{:.0}", self.slider_value.round());
@@ -723,7 +741,7 @@ impl ShowcaseApp {
     }
 
     fn render_number_input_preview(&mut self, ui: &mut Ui) {
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             let _ = components.number_input(
                 &mut self.number_x_value,
@@ -827,48 +845,46 @@ impl ShowcaseApp {
     fn render_card_preview(&mut self, ui: &mut Ui) {
         let card_fill = input_background(ui);
         let card_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Border));
-        let _ = layout::sized_box()
-            .width(ui.available_width())
-            .show(ui, |ui| {
-                let _ =
-                    ui.components()
-                        .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
-                            ui.set_min_width(ui.available_width());
+        let _ = show_width(ui, ui.available_width(), |ui| {
+            let _ = ui
+                .components()
+                .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
+                    ui.set_min_width(ui.available_width());
 
-                            let _ = layout::column().gap(6.0).show(ui, |ui| {
-                                let _ = ui.components().label(
-                                    Label::new("Card Title")
-                                        .tone(LabelTone::Primary)
-                                        .weight(LabelWeight::Bold)
-                                        .size(16.0),
-                                );
-                                let _ = ui.components().label(
-                                    Label::new("Cards wrap related content in a bordered panel.")
-                                        .tone(LabelTone::Muted),
-                                );
-                            });
+                    let _ = show_column(ui, 6.0, |ui| {
+                        let _ = ui.components().label(
+                            Label::new("Card Title")
+                                .tone(LabelTone::Primary)
+                                .weight(LabelWeight::Bold)
+                                .size(16.0),
+                        );
+                        let _ = ui.components().label(
+                            Label::new("Cards wrap related content in a bordered panel.")
+                                .tone(LabelTone::Muted),
+                        );
+                    });
 
-                            ui.add_space(6.0);
-                            let _ = ui.components().separator();
-                            ui.add_space(6.0);
+                    ui.add_space(6.0);
+                    let _ = ui.components().separator();
+                    ui.add_space(6.0);
 
-                            let footer_size =
-                                egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-                            let _ = ui.allocate_ui_with_layout(
-                                footer_size,
-                                Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let mut components = ui.components();
-                                    let _ = components.button(
-                                        Button::new("Save").variant(ButtonVariant::Primary),
-                                    );
-                                    let _ = components.button(
-                                        Button::new("Cancel").variant(ButtonVariant::Secondary),
-                                    );
-                                },
+                    let footer_size =
+                        egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+                    let _ = ui.allocate_ui_with_layout(
+                        footer_size,
+                        Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let mut components = ui.components();
+                            let _ = components.button(
+                                Button::new("Save").variant(ButtonVariant::Primary),
                             );
-                        });
-            });
+                            let _ = components.button(
+                                Button::new("Cancel").variant(ButtonVariant::Secondary),
+                            );
+                        },
+                    );
+                });
+        });
     }
 
     fn render_progress_preview(&mut self, ui: &mut Ui) {
@@ -876,7 +892,7 @@ impl ShowcaseApp {
             .components()
             .progress(self.progress_value, Progress::new().width(280.0));
         ui.add_space(10.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             if components
                 .button(Button::new("Advance").variant(ButtonVariant::Primary))
@@ -895,7 +911,7 @@ impl ShowcaseApp {
 
     fn render_spinner_preview(&mut self, ui: &mut Ui) {
         let spinner_tint = theme::color(ui, ColorRole::Foreground);
-        let _ = layout::row().gap(16.0).show(ui, |ui| {
+        let _ = show_row(ui, 16.0, |ui| {
             let mut components = ui.components();
             let _ = components.spinner(Spinner::new().size(16.0));
             let _ = components.spinner(Spinner::new().size(22.0));
@@ -987,7 +1003,7 @@ impl ShowcaseApp {
             .components()
             .card(Card::new().fill(card_fill).stroke(card_stroke), |ui| {
                 let primary_tint = theme::color(ui, ColorRole::Primary);
-                let _ = layout::row().gap(12.0).show(ui, |ui| {
+                let _ = show_row(ui, 12.0, |ui| {
                     let mut components = ui.components();
                     if self.skeleton_loading {
                         let _ = components.skeleton(Skeleton::new().circle(44.0));
@@ -997,14 +1013,14 @@ impl ShowcaseApp {
                         );
                     }
 
-                    let _ = layout::column().gap(8.0).show(ui, |ui| {
+                    let _ = show_column(ui, 8.0, |ui| {
                         let mut components = ui.components();
                         if self.skeleton_loading {
                             let _ = components.skeleton((180.0, 16.0));
                             let _ = components.skeleton((240.0, 12.0));
                             let _ = components.skeleton((212.0, 12.0));
                             ui.add_space(2.0);
-                            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                            let _ = show_row(ui, 8.0, |ui| {
                                 let mut components = ui.components();
                                 let _ = components.skeleton((72.0, 28.0));
                                 let _ = components.skeleton((96.0, 28.0));
@@ -1023,7 +1039,7 @@ impl ShowcaseApp {
                                 .size(SMALL_TEXT),
                             );
                             ui.add_space(2.0);
-                            let _ = layout::row().gap(8.0).show(ui, |ui| {
+                            let _ = show_row(ui, 8.0, |ui| {
                                 let mut components = ui.components();
                                 let _ = components.button(
                                     Button::new("Inspect").variant(ButtonVariant::Primary),
@@ -1047,7 +1063,7 @@ impl ShowcaseApp {
         );
 
         ui.add_space(8.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             if components
                 .button(Button::new("Reset").variant(ButtonVariant::Secondary))
@@ -1078,7 +1094,7 @@ impl ShowcaseApp {
         );
 
         ui.add_space(8.0);
-        let _ = layout::row().gap(8.0).show(ui, |ui| {
+        let _ = show_row(ui, 8.0, |ui| {
             let mut components = ui.components();
             if components
                 .button(Button::new("Clear").variant(ButtonVariant::Secondary))
@@ -1129,7 +1145,7 @@ impl ShowcaseApp {
                     .button(Button::new("Open Popover").variant(ButtonVariant::Secondary))
             },
             |ui, open| {
-                let _ = layout::column().gap(10.0).show(ui, |ui| {
+                let _ = show_column(ui, 10.0, |ui| {
                     let mut components = ui.components();
                     let _ = components.label(
                         Label::new("Layout settings")
@@ -1145,7 +1161,7 @@ impl ShowcaseApp {
                     let _ = components.switch(&mut self.switch_value, "Snap to grid");
 
                     ui.add_space(4.0);
-                    let _ = layout::row().gap(8.0).show(ui, |ui| {
+                    let _ = show_row(ui, 8.0, |ui| {
                         let mut components = ui.components();
                         if components
                             .button(Button::new("Close").variant(ButtonVariant::Ghost))
@@ -1522,7 +1538,7 @@ impl ShowcaseApp {
                             .width(sidebar_width)
                             .backdrop(false),
                         |ui, open| {
-                            let _ = layout::column().gap(8.0).show(ui, |ui| {
+                            let _ = show_column(ui, 8.0, |ui| {
                                 let _ = ui.components().button(
                                     Button::new("New Draft")
                                         .variant(ButtonVariant::Primary)
@@ -1578,7 +1594,7 @@ impl ShowcaseApp {
 
         ui.add_space(8.0);
         let _ =
-            layout::row().gap(8.0).show(ui, |ui| {
+            show_row(ui, 8.0, |ui| {
                 let mut components = ui.components();
                 if components
                     .button(Button::new("Neutral").variant(ButtonVariant::Secondary))

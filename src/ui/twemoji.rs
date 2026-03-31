@@ -17,10 +17,6 @@ pub fn image(emoji: &str, size: f32) -> Option<egui::Image<'static>> {
     Some(egui::Image::new(image_source(emoji)?).fit_to_exact_size(egui::vec2(icon_size, icon_size)))
 }
 
-pub fn supported(emoji: &str) -> bool {
-    resolve_asset(emoji).is_some()
-}
-
 fn twemoji_uri(emoji: &str) -> String {
     let mut uri = String::from(TWEMOJI_URI_PREFIX);
     let mut wrote_codepoint = false;
@@ -66,12 +62,11 @@ fn strip_variation_selectors(emoji: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{image_source, supported};
+    use super::image_source;
 
     #[test]
     fn resolves_standard_twemoji_assets() {
         assert!(image_source("🔥").is_some());
-        assert!(supported("🔥"));
     }
 
     #[test]
@@ -86,6 +81,5 @@ mod tests {
     #[test]
     fn rejects_non_emoji_text() {
         assert!(image_source("hello").is_none());
-        assert!(!supported("hello"));
     }
 }
