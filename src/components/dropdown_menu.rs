@@ -31,6 +31,8 @@ pub struct DropdownMenuAction<'a> {
     pub label: &'a str,
     pub icon: Option<&'a str>,
     pub shortcut: Option<&'a str>,
+    pub enabled: bool,
+    pub selected: bool,
 }
 
 impl<'a> DropdownMenuAction<'a> {
@@ -40,6 +42,8 @@ impl<'a> DropdownMenuAction<'a> {
             label,
             icon: None,
             shortcut: None,
+            enabled: true,
+            selected: false,
         }
     }
 
@@ -50,6 +54,16 @@ impl<'a> DropdownMenuAction<'a> {
 
     pub const fn shortcut(mut self, shortcut: &'a str) -> Self {
         self.shortcut = Some(shortcut);
+        self
+    }
+
+    pub const fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    pub const fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
         self
     }
 }
@@ -272,6 +286,7 @@ fn draw_entries(
                     row_width,
                     None,
                     true,
+                    true,
                 );
                 let _ = egui::containers::menu::SubMenu::new().show(
                     ui.ui_mut(),
@@ -318,12 +333,13 @@ fn draw_action_row(
         action.icon,
         row_width,
         action.shortcut,
+        action.enabled,
         false,
     );
     if let (Some(shortcut), Some(trailing_rect)) = (action.shortcut, trailing_rect) {
         draw_shortcut_keycaps(ui.ui_mut(), trailing_rect, shortcut);
     }
-    if response.clicked() {
+    if action.enabled && response.clicked() {
         *selected_action = Some(action.id);
         ui.close();
     }
@@ -335,6 +351,7 @@ fn draw_menu_row(
     icon: Option<&str>,
     menu_width: f32,
     shortcut: Option<&str>,
+    enabled: bool,
     submenu: bool,
 ) -> (Response, Option<Rect>) {
     let runtime = crate::theme::runtime_for_ui(ui);
@@ -352,7 +369,9 @@ fn draw_menu_row(
         },
     );
 
-    let label_color = if response.hovered() || response.is_pointer_button_down_on() {
+    let label_color = if !enabled {
+        tokens::text_muted(runtime)
+    } else if response.hovered() || response.is_pointer_button_down_on() {
         tokens::text_primary(runtime)
     } else {
         tokens::text_secondary(runtime)
@@ -398,10 +417,13 @@ fn draw_menu_row(
         }
     }
 
-    (
-        response.on_hover_cursor(CursorIcon::PointingHand),
-        trailing_rect,
-    )
+    let response = if enabled {
+        response.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        response
+    };
+
+    (response, trailing_rect)
 }
 
 fn draw_shortcut_keycaps(ui: &mut Ui, trailing_rect: Rect, shortcut: &str) {

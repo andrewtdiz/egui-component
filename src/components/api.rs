@@ -1,7 +1,9 @@
+use std::ops::{Deref, DerefMut};
+
 use super::{
     button::ButtonOverride, card::CardOverride, input::TextInputOverride, label::LabelOverride,
 };
-use egui::{Id, Rect, Ui, Vec2};
+use egui::{Id, InnerResponse, Rect, Ui, Vec2};
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -85,6 +87,14 @@ impl<'ui> ComponentUi<'ui> {
         Self { ui, overrides }
     }
 
+    pub fn raw(&self) -> &Ui {
+        self.ui
+    }
+
+    pub fn raw_mut(&mut self) -> &mut Ui {
+        self.ui
+    }
+
     pub(crate) fn ui(&self) -> &Ui {
         self.ui
     }
@@ -107,15 +117,15 @@ impl<'ui> ComponentUi<'ui> {
         with_component_overrides(self.ui, scoped_overrides, add)
     }
 
-    pub(crate) fn spacing(&self) -> &egui::style::Spacing {
+    pub fn spacing(&self) -> &egui::style::Spacing {
         self.ui.spacing()
     }
 
-    pub(crate) fn available_width(&self) -> f32 {
+    pub fn available_width(&self) -> f32 {
         self.ui.available_width()
     }
 
-    pub(crate) fn allocate_exact_size(
+    pub fn allocate_exact_size(
         &mut self,
         desired_size: Vec2,
         sense: egui::Sense,
@@ -123,32 +133,71 @@ impl<'ui> ComponentUi<'ui> {
         self.ui.allocate_exact_size(desired_size, sense)
     }
 
-    pub(crate) fn painter(&self) -> &egui::Painter {
+    pub fn painter(&self) -> &egui::Painter {
         self.ui.painter()
     }
 
-    pub(crate) fn ctx(&self) -> &egui::Context {
+    pub fn ctx(&self) -> &egui::Context {
         self.ui.ctx()
     }
 
-    pub(crate) fn add_space(&mut self, amount: f32) {
+    pub fn add_space(&mut self, amount: f32) {
         self.ui.add_space(amount);
     }
 
-    pub(crate) fn set_min_width(&mut self, width: f32) {
+    pub fn set_min_width(&mut self, width: f32) {
         self.ui.set_min_width(width);
     }
 
-    pub(crate) fn set_max_width(&mut self, width: f32) {
+    pub fn set_max_width(&mut self, width: f32) {
         self.ui.set_max_width(width);
     }
 
-    pub(crate) fn style(&self) -> &egui::Style {
+    pub fn centered_lane<R>(
+        &mut self,
+        width: f32,
+        layout: egui::Layout,
+        add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+    ) -> InnerResponse<R> {
+        let available_width = self.ui.available_width().max(0.0);
+        let lane_width = width.max(0.0).min(available_width);
+        let overrides = self.overrides;
+        self.ui
+            .allocate_ui_with_layout(
+                egui::vec2(available_width, 0.0),
+                egui::Layout::top_down(egui::Align::Center).with_cross_align(egui::Align::Center),
+                |ui| {
+                    ui.allocate_ui_with_layout(egui::vec2(lane_width, 0.0), layout, |ui| {
+                        let mut components = ComponentUi::with_overrides(ui, overrides);
+                        components.set_min_width(lane_width);
+                        components.set_max_width(lane_width);
+                        add(&mut components)
+                    })
+                },
+            )
+            .inner
+    }
+
+    pub fn style(&self) -> &egui::Style {
         self.ui.style()
     }
 
-    pub(crate) fn close(&mut self) {
+    pub fn close(&mut self) {
         self.ui.close();
+    }
+}
+
+impl Deref for ComponentUi<'_> {
+    type Target = Ui;
+
+    fn deref(&self) -> &Self::Target {
+        self.ui
+    }
+}
+
+impl DerefMut for ComponentUi<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.ui
     }
 }
 

@@ -9,6 +9,7 @@ mod collab_cursor;
 mod collapsible;
 mod color;
 mod color_input;
+mod color_strip;
 mod combobox;
 mod command;
 mod common;
@@ -29,6 +30,7 @@ mod kbd;
 mod label;
 mod menu_bar;
 mod pagination;
+mod palette_preview;
 mod popover;
 mod progress;
 mod radio;
@@ -58,6 +60,7 @@ pub use collab_cursor::CollabCursor;
 pub use collapsible::Collapsible;
 pub use color::Color;
 pub use color_input::ColorInput;
+pub use color_strip::{ColorStrip, ColorStripKind};
 pub use combobox::Combobox;
 pub use command::{Command, CommandItem};
 pub use common::ControlSize;
@@ -71,7 +74,8 @@ pub use emoji_selector::EmojiSelector;
 pub use field::Field;
 pub use file_tree::{FileTree, FileTreeItemKind, FileTreeNode};
 pub use hierarchy::{
-    Hierarchy, HierarchyIconStyle, HierarchyItemKind, HierarchyNode, HierarchyStyle,
+    Hierarchy, HierarchyDropPlacement, HierarchyIconStyle, HierarchyItemKind, HierarchyMoveRequest,
+    HierarchyNode, HierarchyResponse, HierarchyRowState, HierarchyStyle,
 };
 pub use icon::Icon;
 pub use icon_toolbar::{IconToolbar, IconToolbarItem};
@@ -82,6 +86,7 @@ pub use kbd::{Kbd, KbdGroup};
 pub use label::{Label, LabelOverride, LabelTone, LabelWeight};
 pub use menu_bar::{MenuBar, MenuBarItem, MenuBarState};
 pub use pagination::Pagination;
+pub use palette_preview::PalettePreview;
 pub use popover::{Popover, PopoverAlign, PopoverResponse, PopoverSide};
 pub use progress::Progress;
 pub use radio::{Radio, RadioGroup, RadioOption};

@@ -1,7 +1,7 @@
 use super::api::{with_component_overrides, ComponentUi};
 use crate::primitives::surface::{surface_frame, SurfaceFrame};
 use crate::ui::tokens;
-use egui::{Align2, Color32, Id, Order, Pos2, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, Id, Order, Pos2, Rect, Stroke, Ui, Vec2};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Toolbar {
@@ -14,6 +14,7 @@ pub struct Toolbar {
     pub padding_x: i8,
     pub padding_y: i8,
     pub shadow: Option<egui::Shadow>,
+    pub bounds_rect: Option<Rect>,
 }
 
 impl Toolbar {
@@ -28,6 +29,7 @@ impl Toolbar {
             padding_x: 8,
             padding_y: 6,
             shadow: None,
+            bounds_rect: None,
         }
     }
 
@@ -66,6 +68,11 @@ impl Toolbar {
         self.shadow = Some(shadow);
         self
     }
+
+    pub fn bounds_rect(mut self, bounds_rect: Rect) -> Self {
+        self.bounds_rect = Some(bounds_rect);
+        self
+    }
 }
 
 impl From<Id> for Toolbar {
@@ -93,7 +100,7 @@ fn draw_toolbar<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
     let runtime = crate::theme::runtime_for_ui(ui);
-    let parent_rect = ui.max_rect();
+    let parent_rect = props.bounds_rect.unwrap_or_else(|| ui.max_rect());
     let anchor_pos = anchored_pos(parent_rect, props.anchor) + props.offset;
     let area_id = props.id.with("area");
 

@@ -6,6 +6,7 @@ pub struct Color {
     pub fill: Color32,
     pub size: f32,
     pub stroke: Stroke,
+    pub corner_radius: Option<u8>,
 }
 
 impl Color {
@@ -14,6 +15,7 @@ impl Color {
             fill,
             size: 20.0,
             stroke: Stroke::NONE,
+            corner_radius: None,
         }
     }
 
@@ -24,6 +26,11 @@ impl Color {
 
     pub fn stroke(mut self, stroke: Stroke) -> Self {
         self.stroke = stroke;
+        self
+    }
+
+    pub fn rounded(mut self, corner_radius: u8) -> Self {
+        self.corner_radius = Some(corner_radius);
         self
     }
 }
@@ -48,6 +55,16 @@ fn draw_color(ui: &mut Ui, props: Color) -> Response {
 }
 
 pub(crate) fn paint_color(painter: &egui::Painter, rect: Rect, props: Color) {
+    if let Some(corner_radius) = props.corner_radius {
+        painter.rect(
+            rect,
+            egui::CornerRadius::same(corner_radius),
+            props.fill,
+            props.stroke,
+            egui::StrokeKind::Inside,
+        );
+        return;
+    }
     let diameter = props.size.min(rect.width()).min(rect.height()).max(1.0);
     let stroke_width = props.stroke.width.max(0.0);
     let radius = (diameter * 0.5 - stroke_width * 0.5).max(0.0);

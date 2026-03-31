@@ -12,6 +12,7 @@ pub struct TextInput<'a> {
     pub placeholder: Option<&'a str>,
     pub leading_icon: Option<&'a str>,
     pub border_color: Option<Color32>,
+    pub password: bool,
 }
 
 impl<'a> TextInput<'a> {
@@ -21,6 +22,7 @@ impl<'a> TextInput<'a> {
             placeholder: None,
             leading_icon: None,
             border_color: None,
+            password: false,
         }
     }
 
@@ -41,6 +43,11 @@ impl<'a> TextInput<'a> {
 
     pub fn border_color(mut self, border_color: Color32) -> Self {
         self.border_color = Some(border_color);
+        self
+    }
+
+    pub fn password(mut self, password: bool) -> Self {
+        self.password = password;
         self
     }
 }
@@ -130,6 +137,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
                     .weak(),
             );
         }
+<<<<<<< HEAD
         let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
         let (outer_rect, outer_response) =
             ui.allocate_exact_size(desired_size, egui::Sense::click());
@@ -147,6 +155,11 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
             ),
         );
 
+=======
+        if props.password {
+            text_edit = text_edit.password(true);
+        }
+>>>>>>> 70230a4 (updates)
         let background_slot = ui.painter().add(Shape::Noop);
         let inner_response = ui
             .scope_builder(
