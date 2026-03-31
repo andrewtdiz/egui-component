@@ -1,8 +1,7 @@
 use super::api::ComponentUi;
 use crate::ui::{icons, tokens, twemoji, typography};
 use egui::{
-    vec2, Align2, Color32, CornerRadius, CursorIcon, Id, Rect, Response, Sense, Stroke, StrokeKind,
-    Ui,
+    vec2, Align2, Color32, CornerRadius, Id, Rect, Response, Sense, Stroke, StrokeKind, Ui,
 };
 
 const HIERARCHY_DEFAULT_WIDTH: f32 = 320.0;
@@ -22,7 +21,7 @@ const HIERARCHY_SELECTION_LINE: Color32 = Color32::from_rgb(138, 182, 255);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum HierarchyItemKind {
     Folder,
-    Entity,
+    GameObject,
     Frame,
     Group,
     Player,
@@ -51,7 +50,7 @@ impl HierarchyItemKind {
         match icon_style {
             HierarchyIconStyle::Emoji => match self {
                 Self::Folder => HierarchyItemIcon::Twemoji("📁"),
-                Self::Entity => HierarchyItemIcon::Twemoji("📦"),
+                Self::GameObject => HierarchyItemIcon::Twemoji("📦"),
                 Self::Frame => HierarchyItemIcon::Twemoji("🧩"),
                 Self::Group => HierarchyItemIcon::Twemoji("⚙️"),
                 Self::Player => HierarchyItemIcon::Twemoji("🧍"),
@@ -62,7 +61,7 @@ impl HierarchyItemKind {
             },
             HierarchyIconStyle::Icons => match self {
                 Self::Folder => HierarchyItemIcon::Icon("bootstrap:folder-fill"),
-                Self::Entity => HierarchyItemIcon::Icon("box"),
+                Self::GameObject => HierarchyItemIcon::Icon("box"),
                 Self::Frame => HierarchyItemIcon::Icon("frame"),
                 Self::Group => HierarchyItemIcon::Icon("group"),
                 Self::Player => HierarchyItemIcon::Icon("person-standing"),
@@ -145,6 +144,7 @@ pub struct Hierarchy<'nodes> {
     pub style: HierarchyStyle,
     pub allow_drag_and_drop: bool,
     pub show_lock_action: bool,
+    pub panel_chrome: bool,
 }
 
 impl<'nodes> Hierarchy<'nodes> {
@@ -160,6 +160,7 @@ impl<'nodes> Hierarchy<'nodes> {
             style: HierarchyStyle::default(),
             allow_drag_and_drop: true,
             show_lock_action: true,
+            panel_chrome: true,
         }
     }
 
@@ -200,6 +201,11 @@ impl<'nodes> Hierarchy<'nodes> {
 
     pub fn show_lock_action(mut self, show_lock_action: bool) -> Self {
         self.show_lock_action = show_lock_action;
+        self
+    }
+
+    pub fn panel_chrome(mut self, panel_chrome: bool) -> Self {
+        self.panel_chrome = panel_chrome;
         self
     }
 }
@@ -306,11 +312,19 @@ fn draw_hierarchy(
             (*selected_id).or_else(|| selected_ids.first().copied()),
         )
     };
-    let frame = egui::Frame::new()
-        .fill(tokens::muted_surface(runtime))
-        .stroke(Stroke::new(1.0, tokens::separator(runtime)))
-        .corner_radius(CornerRadius::same(tokens::radius_lg(runtime)))
-        .inner_margin(egui::Margin::same(HIERARCHY_PANEL_PADDING));
+    let frame = if props.panel_chrome {
+        egui::Frame::new()
+            .fill(tokens::muted_surface(runtime))
+            .stroke(Stroke::new(1.0, tokens::separator(runtime)))
+            .corner_radius(CornerRadius::same(tokens::radius_lg(runtime)))
+            .inner_margin(egui::Margin::same(HIERARCHY_PANEL_PADDING))
+    } else {
+        egui::Frame::new()
+            .fill(Color32::TRANSPARENT)
+            .stroke(Stroke::NONE)
+            .corner_radius(CornerRadius::ZERO)
+            .inner_margin(egui::Margin::ZERO)
+    };
 
     let mut response = frame
         .show(ui, |ui| {
@@ -351,7 +365,9 @@ fn draw_hierarchy(
         && pointer_pos.is_some_and(|pointer| response.rect.contains(pointer))
     {
         let modifiers = pointer_click_modifiers(ui, response.rect);
-        if !modifiers.shift && (selected_id.take().is_some() || !selected_ids.is_empty()) {
+        if !preserves_selection_on_background_click(modifiers)
+            && (selected_id.take().is_some() || !selected_ids.is_empty())
+        {
             changed = true;
             selection_action = Some(HierarchySelectionAction::Clear { modifiers });
             selection_change = Some(None);
@@ -654,11 +670,7 @@ fn draw_hierarchy_row(
     }
 
     RowOutcome {
-        response: if allow_drag_and_drop {
-            response.on_hover_cursor(CursorIcon::Grab)
-        } else {
-            response
-        },
+        response,
         has_children: !node.children.is_empty(),
         child_count: node.children.len(),
         node_id: node.id,
@@ -1209,6 +1221,10 @@ fn pointer_click_modifiers(ui: &Ui, rect: Rect) -> egui::Modifiers {
     })
 }
 
+fn preserves_selection_on_background_click(modifiers: egui::Modifiers) -> bool {
+    modifiers.shift || modifiers.command || modifiers.ctrl || modifiers.mac_cmd
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1217,7 +1233,7 @@ mod tests {
         HierarchySelectionAction, HierarchyStyle,
     };
     use crate::ui::tokens;
-    use egui::{CentralPanel, Context, Event, Id, Modifiers, PointerButton, Pos2, RawInput};
+    use egui::{CentralPanel, Context, Event, Id, Modifiers, PointerButton, Pos2, RawInput, Rect};
 
     #[test]
     fn hovered_hierarchy_rows_use_uniform_corner_radius() {
@@ -1470,8 +1486,8 @@ mod tests {
         let selected_ids = vec![1usize, 2usize];
         let mut rows = Vec::new();
         let mut nodes = vec![
-            HierarchyNode::new(1, "First", HierarchyItemKind::Entity),
-            HierarchyNode::new(2, "Second", HierarchyItemKind::Entity),
+            HierarchyNode::new(1, "First", HierarchyItemKind::GameObject),
+            HierarchyNode::new(2, "Second", HierarchyItemKind::GameObject),
         ];
 
         let _ = context.run(RawInput::default(), |context| {
@@ -1498,7 +1514,7 @@ mod tests {
     #[test]
     fn hierarchy_row_click_reports_modifiers() {
         let context = Context::default();
-        let (row_center, _) =
+        let (row_center, _, _) =
             render_hierarchy_frame(&context, RawInput::default(), Some(1usize), None);
 
         let _ = render_hierarchy_frame(
@@ -1514,7 +1530,7 @@ mod tests {
             Some(1usize),
             None,
         );
-        let (_, selection_action) = render_hierarchy_frame(
+        let (_, _, selection_action) = render_hierarchy_frame(
             &context,
             pointer_input(
                 row_center,
@@ -1540,15 +1556,83 @@ mod tests {
         );
     }
 
+    #[test]
+    fn plain_background_click_clears_selection() {
+        let context = Context::default();
+        let (row_center, panel_rect, _) =
+            render_hierarchy_frame(&context, RawInput::default(), Some(1usize), None);
+        let background = Pos2::new(row_center.x, panel_rect.bottom() - 4.0);
+        let _ = render_hierarchy_frame(
+            &context,
+            background_pointer_input(background, true, Modifiers::NONE),
+            Some(1usize),
+            None,
+        );
+        let (_, _, selection_action) = render_hierarchy_frame(
+            &context,
+            background_pointer_input(background, false, Modifiers::NONE),
+            Some(1usize),
+            None,
+        );
+
+        assert_eq!(
+            selection_action,
+            Some(HierarchySelectionAction::Clear {
+                modifiers: Modifiers::NONE,
+            })
+        );
+    }
+
+    #[test]
+    fn modified_background_click_preserves_selection() {
+        let context = Context::default();
+        let (row_center, panel_rect, _) =
+            render_hierarchy_frame(&context, RawInput::default(), Some(1usize), None);
+        let background = Pos2::new(row_center.x, panel_rect.bottom() - 4.0);
+        let _ = render_hierarchy_frame(
+            &context,
+            background_pointer_input(
+                background,
+                true,
+                Modifiers {
+                    command: true,
+                    ..Modifiers::NONE
+                },
+            ),
+            Some(1usize),
+            None,
+        );
+        let (_, _, selection_action) = render_hierarchy_frame(
+            &context,
+            background_pointer_input(
+                background,
+                false,
+                Modifiers {
+                    command: true,
+                    ..Modifiers::NONE
+                },
+            ),
+            Some(1usize),
+            None,
+        );
+
+        assert_eq!(selection_action, None);
+    }
+
     fn render_hierarchy_frame(
         context: &Context,
         input: RawInput,
         mut selected_id: Option<usize>,
         selected_ids: Option<&[usize]>,
-    ) -> (Pos2, Option<HierarchySelectionAction>) {
+    ) -> (Pos2, Rect, Option<HierarchySelectionAction>) {
         let mut row_center = Pos2::ZERO;
+        let mut panel_rect = Rect::NOTHING;
         let mut selection_action = None;
-        let mut nodes = vec![HierarchyNode::new(1, "Player", HierarchyItemKind::Entity)];
+        let mut nodes = vec![HierarchyNode::new(
+            1,
+            "Player",
+            HierarchyItemKind::GameObject,
+        )];
 
         let _ = context.run(input, |context| {
             CentralPanel::default().show(context, |ui| {
@@ -1558,11 +1642,12 @@ mod tests {
                 }
                 let response = draw_hierarchy(ui, &mut selected_id, hierarchy);
                 row_center = response.rows[0].rect.center();
+                panel_rect = response.response.rect;
                 selection_action = response.selection_action;
             });
         });
 
-        (row_center, selection_action)
+        (row_center, panel_rect, selection_action)
     }
 
     fn pointer_input(position: Pos2, pressed: bool, modifiers: Modifiers) -> RawInput {
@@ -1578,5 +1663,9 @@ mod tests {
             ],
             ..RawInput::default()
         }
+    }
+
+    fn background_pointer_input(position: Pos2, pressed: bool, modifiers: Modifiers) -> RawInput {
+        pointer_input(position, pressed, modifiers)
     }
 }

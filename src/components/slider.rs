@@ -1,4 +1,7 @@
-use super::api::ComponentUi;
+use super::{
+    api::ComponentUi,
+    common::{resolve_input_width, InputWidth},
+};
 use crate::primitives::control::{with_input_chrome, with_slider_chrome};
 use crate::ui::{tokens, typography};
 use egui::{Align2, Color32, CornerRadius, CursorIcon, Id, Rect, Response, Stroke, Ui};
@@ -150,6 +153,8 @@ fn normalized_slider_value(value: f32, range: &RangeInclusive<f32>) -> f32 {
 pub struct NumberInput {
     pub id: Id,
     pub width: f32,
+    pub width_is_custom: bool,
+    pub width_preset: Option<InputWidth>,
     pub range: RangeInclusive<f32>,
     pub speed: f64,
     pub fine_speed: Option<f64>,
@@ -167,6 +172,8 @@ impl NumberInput {
         Self {
             id,
             width: 58.0,
+            width_is_custom: false,
+            width_preset: None,
             range: 0.0..=100.0,
             speed: 0.2,
             fine_speed: None,
@@ -182,6 +189,12 @@ impl NumberInput {
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
+        self.width_is_custom = true;
+        self
+    }
+
+    pub fn width_preset(mut self, width_preset: InputWidth) -> Self {
+        self.width_preset = Some(width_preset);
         self
     }
 
@@ -256,6 +269,12 @@ impl From<(Id, f32)> for NumberInput {
 
 fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Response {
     with_input_chrome(ui, |ui| {
+        let width = resolve_input_width(
+            props.width,
+            props.width_is_custom,
+            props.width_preset,
+            ui.available_width(),
+        );
         let runtime = crate::theme::runtime_for_ui(ui);
         let drag_value_text_style = ui.style().drag_value_text_style.clone();
         let drag_value_font = drag_value_text_style.resolve(ui.style());
@@ -292,7 +311,7 @@ fn draw_number_input(ui: &mut Ui, value: &mut f32, props: NumberInput) -> Respon
                 NumberInputAxis::Vertical => CursorIcon::ResizeVertical,
             };
             let response = ui
-                .add_sized([props.width, ui.spacing().interact_size.y], drag_value)
+                .add_sized([width, ui.spacing().interact_size.y], drag_value)
                 .on_hover_cursor(cursor_icon);
             if response.dragged() {
                 ui.ctx().set_cursor_icon(cursor_icon);

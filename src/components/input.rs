@@ -1,4 +1,7 @@
-use super::api::{ComponentOverride, ComponentOverrides, ComponentUi};
+use super::{
+    api::{ComponentOverride, ComponentOverrides, ComponentUi},
+    common::{resolve_input_width, InputWidth},
+};
 use crate::primitives::control::with_input_chrome;
 use crate::ui::tokens;
 use crate::ui::typography;
@@ -9,6 +12,8 @@ use egui::{
 #[derive(Debug, Clone, Copy)]
 pub struct TextInput<'a> {
     pub width: f32,
+    pub width_is_custom: bool,
+    pub width_preset: Option<InputWidth>,
     pub placeholder: Option<&'a str>,
     pub leading_icon: Option<&'a str>,
     pub border_color: Option<Color32>,
@@ -19,6 +24,8 @@ impl<'a> TextInput<'a> {
     pub fn new() -> Self {
         Self {
             width: 220.0,
+            width_is_custom: false,
+            width_preset: None,
             placeholder: None,
             leading_icon: None,
             border_color: None,
@@ -28,6 +35,12 @@ impl<'a> TextInput<'a> {
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
+        self.width_is_custom = true;
+        self
+    }
+
+    pub fn width_preset(mut self, width_preset: InputWidth) -> Self {
+        self.width_preset = Some(width_preset);
         self
     }
 
@@ -70,6 +83,7 @@ impl TextInputOverride {
     fn apply<'a>(self, mut props: TextInput<'a>) -> TextInput<'a> {
         if let Some(width) = self.width {
             props.width = width;
+            props.width_is_custom = true;
         }
         props
     }
@@ -114,6 +128,12 @@ impl ComponentUi<'_> {
 
 fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egui::Response {
     with_input_chrome(ui, |ui| {
+        let width = resolve_input_width(
+            props.width,
+            props.width_is_custom,
+            props.width_preset,
+            ui.available_width(),
+        );
         let runtime = crate::theme::runtime_for_ui(ui);
         let leading_icon_size = 14.0;
         let leading_icon_extra_padding = if props.leading_icon.is_some() {
@@ -137,7 +157,6 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
                     .weak(),
             );
         }
-<<<<<<< HEAD
         let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
         let (outer_rect, outer_response) =
             ui.allocate_exact_size(desired_size, egui::Sense::click());
@@ -155,11 +174,9 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
             ),
         );
 
-=======
         if props.password {
             text_edit = text_edit.password(true);
         }
->>>>>>> 70230a4 (updates)
         let background_slot = ui.painter().add(Shape::Noop);
         let inner_response = ui
             .scope_builder(

@@ -1,5 +1,6 @@
 use super::{
     api::{ComponentUi, ComponentUiExt},
+    common::{resolve_input_width, InputWidth},
     TextInput,
 };
 use crate::primitives::{
@@ -26,6 +27,8 @@ pub struct Combobox<'a> {
     pub id: Id,
     pub options: &'a [&'a str],
     pub width: f32,
+    pub width_is_custom: bool,
+    pub width_preset: Option<InputWidth>,
     pub max_height: f32,
     pub placeholder: &'a str,
     pub filter_placeholder: &'a str,
@@ -38,6 +41,8 @@ impl<'a> Combobox<'a> {
             id,
             options,
             width: 220.0,
+            width_is_custom: false,
+            width_preset: None,
             max_height: 104.0,
             placeholder: "Select options",
             filter_placeholder: "Filter",
@@ -47,6 +52,12 @@ impl<'a> Combobox<'a> {
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = width.max(1.0);
+        self.width_is_custom = true;
+        self
+    }
+
+    pub fn width_preset(mut self, width_preset: InputWidth) -> Self {
+        self.width_preset = Some(width_preset);
         self
     }
 
@@ -80,6 +91,12 @@ impl ComponentUi<'_> {
     ) -> Response {
         let props = props.into();
         sanitize_selected_indices(selected_indices, props.options.len());
+        let width = resolve_input_width(
+            props.width,
+            props.width_is_custom,
+            props.width_preset,
+            self.ui_mut().available_width(),
+        );
 
         let popup_id = props.id.with("popup");
         let open_state_id = props.id.with("open");
@@ -88,7 +105,7 @@ impl ComponentUi<'_> {
         let mut trigger_response = draw_trigger(
             self.ui_mut(),
             popup_id,
-            props.width,
+            width,
             summary_text.as_str(),
             !selected_indices.is_empty(),
         );
@@ -108,11 +125,10 @@ impl ComponentUi<'_> {
             .gap(4.0)
             .layout(Layout::top_down(Align::Min))
             .show(|ui| {
-                let row_width = (props.width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
+                let row_width = (width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
                 popup_panel(
                     ui,
-                    PopupPanel::new(props.width)
-                        .padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
+                    PopupPanel::new(width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
                     |ui| {
                         ui.set_min_width(row_width);
                         ui.set_max_width(row_width);

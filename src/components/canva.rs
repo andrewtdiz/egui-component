@@ -387,6 +387,27 @@ fn draw_canva_anchor_picker(
             *selected = point_from_grid(row, col);
         }
     }
+    let selected_cell_rect = grid_cell_rect(rect, *selected).shrink(2.0);
+    painter.rect(
+        selected_cell_rect,
+        CornerRadius::same(tokens::radius_md(runtime) / 2),
+        tokens::row_selected_bg(runtime).linear_multiply(0.16),
+        Stroke::new(1.0, tokens::row_selected_bg(runtime)),
+        StrokeKind::Inside,
+    );
+    let grid_stroke = Stroke::new(1.0, tokens::separator(runtime).linear_multiply(0.7));
+    for step in 1..3 {
+        let x = rect.left() + cell_width * step as f32;
+        let y = rect.top() + cell_height * step as f32;
+        painter.line_segment(
+            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+            grid_stroke,
+        );
+        painter.line_segment(
+            [Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+            grid_stroke,
+        );
+    }
     paint_anchor_preview(
         ui,
         rect,
@@ -411,8 +432,7 @@ fn draw_canva_origin_picker(
     let response = ui
         .interact(rect, id, Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    let square_side = (side - 18.0).max(56.0);
-    let square_rect = Rect::from_center_size(rect.center(), egui::vec2(square_side, square_side));
+    let square_rect = rect;
     let painter = ui.painter();
     painter.rect(
         square_rect,
@@ -582,6 +602,22 @@ fn grid_position(value: CanvaNinePoint) -> (usize, usize) {
         CanvaNinePoint::BottomCenter => (2, 1),
         CanvaNinePoint::BottomRight => (2, 2),
     }
+}
+
+fn grid_cell_rect(rect: Rect, value: CanvaNinePoint) -> Rect {
+    let (row, col) = grid_position(value);
+    let cell_width = rect.width() / 3.0;
+    let cell_height = rect.height() / 3.0;
+    Rect::from_min_max(
+        Pos2::new(
+            rect.left() + cell_width * col as f32,
+            rect.top() + cell_height * row as f32,
+        ),
+        Pos2::new(
+            rect.left() + cell_width * (col + 1) as f32,
+            rect.top() + cell_height * (row + 1) as f32,
+        ),
+    )
 }
 
 fn point_positions(rect: Rect) -> [(CanvaNinePoint, Pos2); 9] {

@@ -32,6 +32,7 @@ pub struct Button<'a> {
     pub leading_icon: Option<&'a str>,
     pub icon_size: f32,
     pub color: Option<Color>,
+    pub label_color: Option<Color32>,
     pub icon_tint: Option<Color32>,
     pub icon_only: bool,
     pub trailing_text: Option<&'a str>,
@@ -51,6 +52,7 @@ impl<'a> Button<'a> {
             leading_icon: None,
             icon_size: 14.0,
             color: None,
+            label_color: None,
             icon_tint: None,
             icon_only: false,
             trailing_text: None,
@@ -70,6 +72,7 @@ impl<'a> Button<'a> {
             leading_icon: Some(icon),
             icon_size: 14.0,
             color: None,
+            label_color: None,
             icon_tint: None,
             icon_only: true,
             trailing_text: None,
@@ -89,6 +92,7 @@ impl<'a> Button<'a> {
             leading_icon: None,
             icon_size: 14.0,
             color: Some(color),
+            label_color: None,
             icon_tint: None,
             icon_only: true,
             trailing_text: None,
@@ -130,6 +134,11 @@ impl<'a> Button<'a> {
         self
     }
 
+    pub fn label_color(mut self, label_color: Color32) -> Self {
+        self.label_color = Some(label_color);
+        self
+    }
+
     pub fn trailing_text(mut self, trailing_text: &'a str) -> Self {
         self.trailing_text = Some(trailing_text);
         self.trailing_hint = false;
@@ -167,6 +176,7 @@ impl<'a> Button<'a> {
 pub struct ButtonOverride {
     pub variant: Option<ButtonVariant>,
     pub size: Option<ControlSize>,
+    pub label_color: Option<Color32>,
     pub icon_size: Option<f32>,
     pub icon_tint: Option<Color32>,
     pub icon_only: Option<bool>,
@@ -191,6 +201,11 @@ impl ButtonOverride {
 
     pub fn icon_size(mut self, icon_size: f32) -> Self {
         self.icon_size = Some(icon_size.max(1.0));
+        self
+    }
+
+    pub fn label_color(mut self, label_color: Color32) -> Self {
+        self.label_color = Some(label_color);
         self
     }
 
@@ -224,6 +239,9 @@ impl ButtonOverride {
         if let Some(icon_size) = self.icon_size {
             props.icon_size = icon_size;
         }
+        if let Some(label_color) = self.label_color {
+            props.label_color = Some(label_color);
+        }
         if let Some(icon_tint) = self.icon_tint {
             props.icon_tint = Some(icon_tint);
         }
@@ -250,6 +268,9 @@ impl ComponentOverride for ButtonOverride {
         }
         if let Some(icon_size) = self.icon_size {
             overrides.button.icon_size = Some(icon_size);
+        }
+        if let Some(label_color) = self.label_color {
+            overrides.button.label_color = Some(label_color);
         }
         if let Some(icon_tint) = self.icon_tint {
             overrides.button.icon_tint = Some(icon_tint);
@@ -310,6 +331,7 @@ fn resolve_button_style(
     variant: ButtonVariant,
     size: ControlSize,
     color_override: Option<Color>,
+    label_color_override: Option<Color32>,
     icon_tint_override: Option<Color32>,
 ) -> ResolvedButtonStyle {
     let secondary_fg = Stroke::new(1.0, tokens::text_primary(runtime));
@@ -399,6 +421,10 @@ fn resolve_button_style(
 
     if let Some(icon_tint) = icon_tint_override {
         resolved.icon_tint = icon_tint;
+    }
+
+    if let Some(label_color) = label_color_override {
+        resolved.label_color = Some(label_color);
     }
 
     if let Some(color) = color_override {
@@ -514,6 +540,7 @@ fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
             props.variant,
             props.size,
             props.color,
+            props.label_color,
             props.icon_tint,
         );
         ui.spacing_mut().button_padding = resolved.button_padding;

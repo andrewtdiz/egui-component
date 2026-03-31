@@ -356,7 +356,7 @@ const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const NUMBER_INPUT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
 const NUMBER_INPUT_RED: Color32 = Color32::from_rgb(239, 68, 68);
 
-fn default_hierarchy_nodes() -> Vec<HierarchyNode<'static>> {
+fn default_hierarchy_nodes() -> Vec<HierarchyNode> {
     vec![
         HierarchyNode::new(1, "Gameplay_Systems", HierarchyItemKind::Folder)
             .locked(true)

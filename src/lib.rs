@@ -60,7 +60,6 @@ pub mod prelude {
         Switch, TabOption, TabsVariant, TextInput, TextInputOverride, Toast, ToastIntent,
         ToastPlacement, ToastStack, ToastViewport, ToggleGroup, Toolbar, Tooltip, TooltipPlacement,
         Twemoji,
->>>>>>> 362bd99 (fix)
     };
     pub use crate::theme::{
         BaseColor, ColorRole, OklchColor, RadiusRole, ShadowRole, ThemeMode, ThemePalette,

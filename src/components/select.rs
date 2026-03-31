@@ -23,6 +23,8 @@ pub struct Select<'a> {
     pub popup_id: Id,
     pub options: &'a [&'a str],
     pub width: f32,
+    pub width_is_custom: bool,
+    pub width_preset: Option<InputWidth>,
     pub placeholder: &'a str,
     pub variant: SelectVariant,
     pub leading_icon: Option<&'a str>,
@@ -35,6 +37,8 @@ impl<'a> Select<'a> {
             popup_id,
             options,
             width: 220.0,
+            width_is_custom: false,
+            width_preset: None,
             placeholder: "Select an option",
             variant: SelectVariant::Default,
             leading_icon: None,
@@ -47,6 +51,12 @@ impl<'a> Select<'a> {
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
+        self.width_is_custom = true;
+        self
+    }
+
+    pub fn width_preset(mut self, width_preset: InputWidth) -> Self {
+        self.width_preset = Some(width_preset);
         self
     }
 
@@ -153,10 +163,16 @@ fn draw_select(
     if selected_index.is_some_and(|index| index >= props.options.len()) {
         *selected_index = None;
     }
+    let width = resolve_input_width(
+        props.width,
+        props.width_is_custom,
+        props.width_preset,
+        ui.available_width(),
+    );
 
     let selected_text = selected_index.and_then(|index| props.options.get(index).copied());
     let current_selection = *selected_index;
-    let mut trigger = draw_trigger(ui, props, selected_text);
+    let mut trigger = draw_trigger(ui, props, width, selected_text);
     let mut next_selection = None;
 
     let _ = egui::Popup::menu(&trigger)
@@ -164,10 +180,10 @@ fn draw_select(
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .gap(4.0)
         .show(|ui| {
-            let row_width = (props.width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
+            let row_width = (width - f32::from(MENU_INNER_PADDING_X * 2)).max(96.0);
             popup_panel(
                 ui,
-                PopupPanel::new(props.width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
+                PopupPanel::new(width).padding(MENU_INNER_PADDING_X, MENU_INNER_PADDING_Y),
                 |ui| {
                     ui.set_min_width(row_width);
                     ui.set_max_width(row_width);
@@ -203,7 +219,12 @@ fn draw_select(
     trigger
 }
 
-fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> egui::Response {
+fn draw_trigger(
+    ui: &mut Ui,
+    props: Select<'_>,
+    width: f32,
+    selected_text: Option<&str>,
+) -> egui::Response {
     ui.push_id(props.trigger_id, |ui| {
         let runtime = crate::theme::runtime_for_ui(ui);
         let preview_style = resolve_select_style(
@@ -213,7 +234,7 @@ fn draw_trigger(ui: &mut Ui, props: Select<'_>, selected_text: Option<&str>) -> 
             false,
             selected_text.is_some(),
         );
-        let desired_size = egui::vec2(props.width, preview_style.height);
+        let desired_size = egui::vec2(width, preview_style.height);
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
         let focused = response.has_focus() || egui::Popup::is_id_open(ui.ctx(), props.popup_id);
         let hovered = response.hovered();
