@@ -94,8 +94,8 @@ mod tests {
         let mut host_rect = egui::Rect::NOTHING;
         let mut value = String::new();
 
-        let _ = context.run_ui(RawInput::default(), |ui| {
-            CentralPanel::default().show_inside(ui, |ui| {
+        let _ = context.run(RawInput::default(), |ctx| {
+            CentralPanel::default().show(ctx, |ui| {
                 let _ = ui.with_layout(Layout::top_down(Align::Center), |ui| {
                     host_rect = ui
                         .scope(|ui| {

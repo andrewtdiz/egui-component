@@ -360,52 +360,50 @@ fn default_hierarchy_nodes() -> Vec<HierarchyNode> {
     vec![
         HierarchyNode::new(1, "Gameplay_Systems", HierarchyItemKind::Folder)
             .locked(true)
-            .children(vec![HierarchyNode::new(
-                2,
-                "Character_Rig_A",
-                HierarchyItemKind::Group,
-            )
-            .children(vec![HierarchyNode::new(
-                3,
-                "Player_Controller",
-                HierarchyItemKind::Player,
-            )
             .children(vec![
-                HierarchyNode::new(4, "Iron_Sword_01", HierarchyItemKind::Weapon),
-                HierarchyNode::new(5, "Red_Shirt_1", HierarchyItemKind::Clothing),
-                HierarchyNode::new(6, "Hitbox_Main", HierarchyItemKind::Hitbox),
-            ])])]),
+                HierarchyNode::new(2, "Character_Rig_A", HierarchyItemKind::Group).children(vec![
+                    HierarchyNode::new(3, "Player_Controller", HierarchyItemKind::Player).children(
+                        vec![
+                            HierarchyNode::new(4, "Iron_Sword_01", HierarchyItemKind::Weapon),
+                            HierarchyNode::new(5, "Red_Shirt_1", HierarchyItemKind::Clothing),
+                            HierarchyNode::new(6, "Hitbox_Main", HierarchyItemKind::Hitbox),
+                        ],
+                    ),
+                ]),
+            ]),
     ]
 }
 
 fn default_file_tree_nodes() -> Vec<FileTreeNode<'static>> {
-    vec![FileTreeNode::new(1, "SpaceShooter", FileTreeItemKind::Folder).children(vec![
-        FileTreeNode::new(2, "builtins", FileTreeItemKind::Folder)
-            .expanded(false)
-            .children(vec![FileTreeNode::new(
-                9,
-                "render.pipeline",
-                FileTreeItemKind::File,
-            )]),
-        FileTreeNode::new(3, "assets", FileTreeItemKind::Folder)
-            .expanded(false)
-            .children(vec![FileTreeNode::new(
-                10,
-                "ship.sprite",
-                FileTreeItemKind::File,
-            )]),
-        FileTreeNode::new(4, "input", FileTreeItemKind::Folder)
-            .expanded(false)
-            .children(vec![FileTreeNode::new(
-                11,
-                "bindings.inputmap",
-                FileTreeItemKind::File,
-            )]),
-        FileTreeNode::new(5, "main.collection", FileTreeItemKind::Collection),
-        FileTreeNode::new(6, "player.script", FileTreeItemKind::Script),
-        FileTreeNode::new(7, "game.project", FileTreeItemKind::Project),
-        FileTreeNode::new(8, "README.md", FileTreeItemKind::Markdown),
-    ])]
+    vec![
+        FileTreeNode::new(1, "SpaceShooter", FileTreeItemKind::Folder).children(vec![
+            FileTreeNode::new(2, "builtins", FileTreeItemKind::Folder)
+                .expanded(false)
+                .children(vec![FileTreeNode::new(
+                    9,
+                    "render.pipeline",
+                    FileTreeItemKind::File,
+                )]),
+            FileTreeNode::new(3, "assets", FileTreeItemKind::Folder)
+                .expanded(false)
+                .children(vec![FileTreeNode::new(
+                    10,
+                    "ship.sprite",
+                    FileTreeItemKind::File,
+                )]),
+            FileTreeNode::new(4, "input", FileTreeItemKind::Folder)
+                .expanded(false)
+                .children(vec![FileTreeNode::new(
+                    11,
+                    "bindings.inputmap",
+                    FileTreeItemKind::File,
+                )]),
+            FileTreeNode::new(5, "main.collection", FileTreeItemKind::Collection),
+            FileTreeNode::new(6, "player.script", FileTreeItemKind::Script),
+            FileTreeNode::new(7, "game.project", FileTreeItemKind::Project),
+            FileTreeNode::new(8, "README.md", FileTreeItemKind::Markdown),
+        ]),
+    ]
 }
 
 #[derive(Clone, Copy)]
@@ -514,7 +512,7 @@ pub struct ShowcaseApp {
     drag_board_regions: [DragBoardRegion; 3],
     file_tree_nodes: Vec<FileTreeNode<'static>>,
     file_tree_selected_id: Option<usize>,
-    hierarchy_nodes: Vec<HierarchyNode<'static>>,
+    hierarchy_nodes: Vec<HierarchyNode>,
     hierarchy_selected_id: Option<usize>,
     hierarchy_style_index: usize,
     hierarchy_icon_style_index: usize,

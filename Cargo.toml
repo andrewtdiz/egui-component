@@ -30,8 +30,8 @@ crate-type = ["rlib", "dylib"]
 tracing = []
 
 [dependencies]
-egui = "0.34.1"
-egui_extras = { version = "0.34.1", default-features = false, features = ["file", "image", "svg"] }
+egui = "0.33.3"
+egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
 log = { version = "0.4.28", default-features = false }
 parking_lot = { version = "0.12.5", features = ["arc_lock"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -41,4 +41,4 @@ taffy = { version = "0.7.7", default-features = false, features = ["block_layout
 twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg"] }
 
 [dev-dependencies]
-eframe = "0.34.1"
+eframe = "0.33.3"

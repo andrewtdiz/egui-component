@@ -1,4 +1,7 @@
-use super::api::ComponentUi;
+use super::{
+    api::ComponentUi,
+    common::{resolve_input_width, InputWidth},
+};
 use crate::primitives::{
     control::{control_frame, ControlFrame},
     popup::{popup_panel, PopupPanel},

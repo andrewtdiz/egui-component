@@ -33,28 +33,47 @@ pub struct AudioPlaybackResult {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AudioPlayback {
+pub struct AudioPlayback<'a> {
     pub id: Id,
     pub playback_state: AudioPlaybackState,
+    pub duration_seconds: Option<f64>,
+    pub waveform: Option<&'a [u8]>,
 }
 
-impl AudioPlayback {
+impl<'a> AudioPlayback<'a> {
     pub fn new(id: Id, playback_state: AudioPlaybackState) -> Self {
-        Self { id, playback_state }
+        Self {
+            id,
+            playback_state,
+            duration_seconds: None,
+            waveform: None,
+        }
+    }
+
+    pub fn duration_seconds(mut self, duration_seconds: f64) -> Self {
+        if duration_seconds.is_finite() && duration_seconds > 0.0 {
+            self.duration_seconds = Some(duration_seconds);
+        }
+        self
+    }
+
+    pub fn waveform(mut self, waveform: &'a [u8]) -> Self {
+        self.waveform = Some(waveform);
+        self
     }
 }
 
 impl ComponentUi<'_> {
-    pub fn audio_playback(
+    pub fn audio_playback<'a>(
         &mut self,
-        props: impl Into<AudioPlayback>,
+        props: impl Into<AudioPlayback<'a>>,
     ) -> (Response, AudioPlaybackResult) {
         draw_audio_playback(self, props.into(), false, |_| {})
     }
 
-    pub fn audio_playback_with_actions(
+    pub fn audio_playback_with_actions<'a>(
         &mut self,
-        props: impl Into<AudioPlayback>,
+        props: impl Into<AudioPlayback<'a>>,
         add_actions: impl FnOnce(&mut Ui),
     ) -> (Response, AudioPlaybackResult) {
         draw_audio_playback(self, props.into(), true, add_actions)
@@ -63,13 +82,19 @@ impl ComponentUi<'_> {
 
 fn draw_audio_playback(
     ui: &mut ComponentUi<'_>,
-    props: AudioPlayback,
+    props: AudioPlayback<'_>,
     show_actions: bool,
     add_actions: impl FnOnce(&mut Ui),
 ) -> (Response, AudioPlaybackResult) {
     let runtime = crate::theme::runtime_for_ui(ui);
     let style = resolve_audio_playback_style(runtime);
-    let playback_progress = playback_progress(ui.ui_mut(), props.id, props.playback_state);
+    let playback_duration_seconds = resolve_playback_duration_seconds(props.duration_seconds);
+    let playback_progress = playback_progress(
+        ui.ui_mut(),
+        props.id,
+        props.playback_state,
+        playback_duration_seconds,
+    );
     let row_width = ui.ui().available_width().max(AUDIO_PLAYBACK_BUTTON_SIZE);
     let (row_rect, response) = ui
         .ui_mut()
@@ -120,6 +145,7 @@ fn draw_audio_playback(
         style.waveform_tint,
         style.waveform_active_tint,
         playback_progress,
+        props.waveform,
     );
 
     (
@@ -177,10 +203,10 @@ fn resolve_audio_playback_style(runtime: crate::theme::ThemeRuntime) -> AudioPla
             paused_icon_name: "bootstrap:play-fill",
             playing_icon_name: "bootstrap:pause-fill",
         },
-        waveform_tint: tokens::separator(runtime).gamma_multiply(if dark_mode {
-            1.0
+        waveform_tint: tokens::text_muted(runtime).gamma_multiply(if dark_mode {
+            0.9
         } else {
-            0.88
+            0.82
         }),
         waveform_active_tint: tokens::text_primary(runtime),
     }
@@ -193,7 +219,18 @@ struct AudioPlaybackProgressMemory {
     was_playing: bool,
 }
 
-fn playback_progress(ui: &mut egui::Ui, id: Id, playback_state: AudioPlaybackState) -> f32 {
+fn resolve_playback_duration_seconds(duration_seconds: Option<f64>) -> f64 {
+    duration_seconds
+        .filter(|duration_seconds| duration_seconds.is_finite() && *duration_seconds > 0.0)
+        .unwrap_or(AUDIO_PLAYBACK_DURATION_SECS)
+}
+
+fn playback_progress(
+    ui: &mut egui::Ui,
+    id: Id,
+    playback_state: AudioPlaybackState,
+    duration_seconds: f64,
+) -> f32 {
     let memory_id = id.with("mock_playback_progress");
     let now = ui.ctx().input(|input| input.time);
     let mut memory = ui
@@ -208,12 +245,12 @@ fn playback_progress(ui: &mut egui::Ui, id: Id, playback_state: AudioPlaybackSta
                 } else {
                     memory.progress
                 };
-                memory.started_at_secs =
-                    now - (f64::from(resume_progress) * AUDIO_PLAYBACK_DURATION_SECS);
+                memory.started_at_secs = now - (f64::from(resume_progress) * duration_seconds);
                 memory.progress = resume_progress;
             }
 
-            memory.progress = playback_progress_for_elapsed(now - memory.started_at_secs);
+            memory.progress =
+                playback_progress_for_elapsed(now - memory.started_at_secs, duration_seconds);
             memory.was_playing = true;
 
             ui.data_mut(|data| data.insert_temp(memory_id, memory));
@@ -224,7 +261,8 @@ fn playback_progress(ui: &mut egui::Ui, id: Id, playback_state: AudioPlaybackSta
         }
         AudioPlaybackState::Paused => {
             if memory.was_playing {
-                memory.progress = playback_progress_for_elapsed(now - memory.started_at_secs);
+                memory.progress =
+                    playback_progress_for_elapsed(now - memory.started_at_secs, duration_seconds);
                 memory.was_playing = false;
             }
 
@@ -241,8 +279,8 @@ fn playback_progress(ui: &mut egui::Ui, id: Id, playback_state: AudioPlaybackSta
     memory.progress
 }
 
-fn playback_progress_for_elapsed(elapsed_secs: f64) -> f32 {
-    (elapsed_secs / AUDIO_PLAYBACK_DURATION_SECS).clamp(0.0, 1.0) as f32
+fn playback_progress_for_elapsed(elapsed_secs: f64, duration_seconds: f64) -> f32 {
+    (elapsed_secs / duration_seconds).clamp(0.0, 1.0) as f32
 }
 
 fn paint_waveform(
@@ -251,6 +289,7 @@ fn paint_waveform(
     tint: egui::Color32,
     active_tint: egui::Color32,
     playback_progress: f32,
+    waveform: Option<&[u8]>,
 ) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
@@ -266,11 +305,10 @@ fn paint_waveform(
     );
 
     for index in 0..bar_count {
-        let pattern_index = ((index as f32 / bar_count as f32)
-            * (AUDIO_PLAYBACK_BAR_PATTERN.len().saturating_sub(1) as f32))
-            .round() as usize;
-        let bar_height =
-            waveform_bar_height(rect.height(), AUDIO_PLAYBACK_BAR_PATTERN[pattern_index]);
+        let bar_height = waveform_bar_height(
+            rect.height(),
+            waveform_bar_factor(waveform, index, bar_count),
+        );
         let bar_rect = egui::Rect::from_center_size(
             egui::pos2(rect.left() + (step * (index as f32 + 0.5)), rect.center().y),
             egui::vec2(bar_width, bar_height),
@@ -290,6 +328,20 @@ fn paint_waveform(
     }
 }
 
+fn waveform_bar_factor(waveform: Option<&[u8]>, index: usize, bar_count: usize) -> f32 {
+    let Some(waveform) = waveform.filter(|waveform| !waveform.is_empty()) else {
+        let pattern_index = ((index as f32 / bar_count as f32)
+            * (AUDIO_PLAYBACK_BAR_PATTERN.len().saturating_sub(1) as f32))
+            .round() as usize;
+        return AUDIO_PLAYBACK_BAR_PATTERN[pattern_index];
+    };
+
+    let waveform_index = ((index as f32 / bar_count as f32)
+        * (waveform.len().saturating_sub(1) as f32))
+        .round() as usize;
+    f32::from(waveform[waveform_index]) / f32::from(u8::MAX)
+}
+
 fn waveform_bar_height(total_height: f32, factor: f32) -> f32 {
     (total_height * factor).max(2.0)
 }
@@ -301,8 +353,8 @@ fn filled_bar_width(bar_rect: egui::Rect, progress_x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        filled_bar_width, playback_progress_for_elapsed, waveform_bar_height, AudioPlayback,
-        AudioPlaybackProgressMemory, AudioPlaybackResult, AudioPlaybackState,
+        filled_bar_width, playback_progress_for_elapsed, waveform_bar_factor, waveform_bar_height,
+        AudioPlayback, AudioPlaybackProgressMemory, AudioPlaybackResult, AudioPlaybackState,
         AUDIO_PLAYBACK_BUTTON_SIZE, AUDIO_PLAYBACK_DURATION_SECS,
     };
     use crate::components::{Button, ButtonVariant, ComponentUiExt, ControlSize};
@@ -416,15 +468,30 @@ mod tests {
 
     #[test]
     fn playback_progress_clamps_across_duration() {
-        assert_eq!(playback_progress_for_elapsed(0.0), 0.0);
         assert_eq!(
-            playback_progress_for_elapsed(AUDIO_PLAYBACK_DURATION_SECS * 0.5),
+            playback_progress_for_elapsed(0.0, AUDIO_PLAYBACK_DURATION_SECS),
+            0.0
+        );
+        assert_eq!(
+            playback_progress_for_elapsed(
+                AUDIO_PLAYBACK_DURATION_SECS * 0.5,
+                AUDIO_PLAYBACK_DURATION_SECS,
+            ),
             0.5
         );
         assert_eq!(
-            playback_progress_for_elapsed(AUDIO_PLAYBACK_DURATION_SECS * 2.0),
+            playback_progress_for_elapsed(
+                AUDIO_PLAYBACK_DURATION_SECS * 2.0,
+                AUDIO_PLAYBACK_DURATION_SECS,
+            ),
             1.0
         );
+    }
+
+    #[test]
+    fn provided_waveform_overrides_generic_pattern() {
+        assert_eq!(waveform_bar_factor(Some(&[0, 255]), 0, 2), 0.0);
+        assert_eq!(waveform_bar_factor(Some(&[0, 255]), 1, 2), 1.0);
     }
 
     #[test]
@@ -473,7 +540,7 @@ mod tests {
     fn render_audio_playback(
         context: &Context,
         input: RawInput,
-        props: AudioPlayback,
+        props: AudioPlayback<'_>,
         with_actions: bool,
     ) -> (Rect, AudioPlaybackResult) {
         let mut rect = Rect::NOTHING;

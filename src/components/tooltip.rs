@@ -132,7 +132,7 @@ fn show_tooltip_for_response(
     }
 
     let runtime = crate::theme::runtime_for_context(&response.ctx);
-    let style = response.ctx.global_style();
+    let style = response.ctx.style();
     let tooltip_frame = tooltip_frame(style.as_ref(), runtime);
     let mut tooltip = egui::Tooltip::for_widget(response).gap(TOOLTIP_GAP);
     tooltip.popup = tooltip.popup.frame(tooltip_frame);

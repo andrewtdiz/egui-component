@@ -88,9 +88,12 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
 pub fn update(app: &mut ShowcaseApp, ctx: &egui::Context) {
     prepare_frame(app, ctx);
     let runtime = theme::runtime_for_context(ctx);
-    #[allow(deprecated, reason = "eframe App::update still renders top-level panels from Context")]
+    #[allow(
+        deprecated,
+        reason = "eframe App::update still renders top-level panels from Context"
+    )]
     {
-        Panel::top("component_showcase_topbar")
+        TopBottomPanel::top("component_showcase_topbar")
             .resizable(false)
             .frame(
                 egui::Frame::new()
@@ -99,11 +102,11 @@ pub fn update(app: &mut ShowcaseApp, ctx: &egui::Context) {
             )
             .show(ctx, |ui| app.render_topbar(ui));
 
-        Panel::left("component_showcase_sidebar")
+        SidePanel::left("component_showcase_sidebar")
             .resizable(true)
-            .default_size(SIDEBAR_WIDTH)
-            .min_size(200.0)
-            .max_size(320.0)
+            .default_width(SIDEBAR_WIDTH)
+            .min_width(200.0)
+            .max_width(320.0)
             .show(ctx, |ui| app.render_sidebar(ui));
 
         CentralPanel::default().show(ctx, |ui| app.render_center(ui));
@@ -344,40 +347,54 @@ fn show_section_title_with_trailing_label(
     title: &str,
     trailing_label: &str,
 ) -> egui::Response {
-    show_leading_trailing(ui, 8.0, 30.0, egui::Align::Center, |ui| {
-        let _ = ui.components().label(
-            Label::new(title)
-                .tone(LabelTone::Primary)
-                .weight(LabelWeight::Semibold),
-        );
-    }, |ui| {
-        let _ = ui.components().button(
-            Button::new(trailing_label)
-                .variant(ButtonVariant::Ghost)
-                .label_weight(ButtonLabelWeight::Regular),
-        );
-    })
+    show_leading_trailing(
+        ui,
+        8.0,
+        30.0,
+        egui::Align::Center,
+        |ui| {
+            let _ = ui.components().label(
+                Label::new(title)
+                    .tone(LabelTone::Primary)
+                    .weight(LabelWeight::Semibold),
+            );
+        },
+        |ui| {
+            let _ = ui.components().button(
+                Button::new(trailing_label)
+                    .variant(ButtonVariant::Ghost)
+                    .label_weight(ButtonLabelWeight::Regular),
+            );
+        },
+    )
 }
 
 fn show_section_link_row(ui: &mut Ui, icon: &str, label: &str) -> egui::Response {
     let primary_tint = text_secondary(ui);
     let muted_tint = text_muted(ui);
-    show_leading_trailing(ui, 10.0, 22.0, egui::Align::Center, |ui| {
-        let _ = show_row(ui, 10.0, |ui| {
+    show_leading_trailing(
+        ui,
+        10.0,
+        22.0,
+        egui::Align::Center,
+        |ui| {
+            let _ = show_row(ui, 10.0, |ui| {
+                let _ = ui
+                    .components()
+                    .icon(Icon::new(icon).size(18.0).tint(primary_tint));
+                let _ = ui.components().label(
+                    Label::new(label)
+                        .tone(LabelTone::Primary)
+                        .weight(LabelWeight::Semibold),
+                );
+            });
+        },
+        |ui| {
             let _ = ui
                 .components()
-                .icon(Icon::new(icon).size(18.0).tint(primary_tint));
-            let _ = ui.components().label(
-                Label::new(label)
-                    .tone(LabelTone::Primary)
-                    .weight(LabelWeight::Semibold),
-            );
-        });
-    }, |ui| {
-        let _ = ui
-            .components()
-            .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
-    })
+                .icon(Icon::new("chevron-right").size(18.0).tint(muted_tint));
+        },
+    )
 }
 
 fn draw_showcase_sidebar_item(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {

@@ -148,7 +148,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
             .vertical_align(Align::Center)
             .font(text_font.clone())
             .id(text_edit_id)
-            .frame(egui::Frame::NONE)
+            .frame(false)
             .margin(egui::Margin::ZERO);
         if let Some(placeholder) = props.placeholder {
             text_edit = text_edit.hint_text(

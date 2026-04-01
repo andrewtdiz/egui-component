@@ -1798,7 +1798,7 @@ pub trait TuiBuilderLogic<'r>: AsTuiBuilder<'r> + Sized {
 
             let resp = TuiContainerResponse {
                 min_size: response.rect.size(),
-                intrinsic_size: response.intrinsic_size(),
+                intrinsic_size: response.intrinsic_size,
                 max_size: response.rect.size(),
                 infinite: egui::Vec2b::FALSE,
                 inner: response,

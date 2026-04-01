@@ -8,8 +8,8 @@ use crate::prelude::*;
 use crate::theme::{self, BaseColor, ColorRole, RadiusRole, ThemeMode, ThemeSpec};
 use crate::ui::tokens;
 use egui::{
-    vec2, Align2, CentralPanel, Color32, CornerRadius, CursorIcon, Id, InnerResponse, Layout,
-    Panel, Rect, Response, ScrollArea, Sense, Stroke, Ui, UiBuilder,
+    vec2, Align2, CentralPanel, Color32, CornerRadius, CursorIcon, Id, InnerResponse, Layout, Rect,
+    Response, ScrollArea, Sense, SidePanel, Stroke, TopBottomPanel, Ui, UiBuilder,
 };
 
 fn show_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {

@@ -906,7 +906,7 @@ impl FrameRenderer {
         &mut self,
         node_id: &crate::contract::NodeId,
         hierarchy_action: Option<&ActionId>,
-        nodes: &[HierarchyWidgetNode<'_>],
+        nodes: &[HierarchyWidgetNode],
         bindings: &[HierarchyBinding<'_>],
     ) {
         for node in nodes {
@@ -1020,7 +1020,7 @@ fn build_runtime_hierarchy<'a>(
     items: &'a [ContractHierarchyItem],
     bindings: &mut Vec<HierarchyBinding<'a>>,
     next_runtime_id: &mut usize,
-) -> Vec<HierarchyWidgetNode<'a>> {
+) -> Vec<HierarchyWidgetNode> {
     items
         .iter()
         .map(|item| {
