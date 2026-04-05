@@ -99,8 +99,13 @@ fn show_tooltip_for_response(
     let hover_started_id = response.id.with("tooltip_hover_started_at");
     let now = response.ctx.input(|input| input.time);
     let delay_secs = props.delay_ms as f64 / 1000.0;
+    let hovered = if response.enabled() {
+        response.hovered()
+    } else {
+        response.contains_pointer()
+    };
 
-    let show_tooltip = if response.enabled() && response.hovered() {
+    let show_tooltip = if hovered {
         let hover_started_at = response.ctx.data_mut(|data: &mut IdTypeMap| {
             if let Some(hover_started_at) = data.get_temp::<f64>(hover_started_id) {
                 hover_started_at

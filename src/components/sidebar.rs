@@ -21,6 +21,7 @@ pub struct Sidebar<'a> {
     pub width: f32,
     pub fill: Option<Color32>,
     pub stroke: Option<Stroke>,
+    pub corner_radius: Option<CornerRadius>,
     pub padding_x: i8,
     pub padding_y: i8,
     pub shadow: Option<egui::Shadow>,
@@ -38,6 +39,7 @@ impl<'a> Sidebar<'a> {
             width: 280.0,
             fill: None,
             stroke: None,
+            corner_radius: None,
             padding_x: 12,
             padding_y: 12,
             shadow: None,
@@ -69,6 +71,11 @@ impl<'a> Sidebar<'a> {
 
     pub fn stroke(mut self, stroke: Stroke) -> Self {
         self.stroke = Some(stroke);
+        self
+    }
+
+    pub fn corner_radius(mut self, corner_radius: CornerRadius) -> Self {
+        self.corner_radius = Some(corner_radius);
         self
     }
 
@@ -155,7 +162,9 @@ fn draw_sidebar_in(
     ));
     let shadow = props.shadow.unwrap_or(tokens::tailwind_shadow_lg(runtime));
     let panel_rect = sidebar_panel_rect(host_rect, props.side, props.width, openness);
-    let corner_radius = sidebar_corner_radius(props.side, tokens::radius_lg(runtime));
+    let corner_radius = props
+        .corner_radius
+        .unwrap_or_else(|| sidebar_corner_radius(props.side, tokens::radius_lg(runtime)));
     let mut close_requested = false;
 
     if props.backdrop && openness > 0.0 {

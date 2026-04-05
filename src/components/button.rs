@@ -419,14 +419,6 @@ fn resolve_button_style(
         },
     };
 
-    if let Some(icon_tint) = icon_tint_override {
-        resolved.icon_tint = icon_tint;
-    }
-
-    if let Some(label_color) = label_color_override {
-        resolved.label_color = Some(label_color);
-    }
-
     if let Some(color) = color_override {
         if variant == ButtonVariant::Primary {
             let fill = color.fill;
@@ -437,6 +429,14 @@ fn resolve_button_style(
             resolved.label_color = Some(tokens::button_primary_fill_fg(runtime));
             resolved.icon_tint = tokens::button_primary_fill_fg(runtime);
         }
+    }
+
+    if let Some(icon_tint) = icon_tint_override {
+        resolved.icon_tint = icon_tint;
+    }
+
+    if let Some(label_color) = label_color_override {
+        resolved.label_color = Some(label_color);
     }
 
     resolved
