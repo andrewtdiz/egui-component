@@ -2318,7 +2318,7 @@ pub fn schema_json_pretty() -> serde_json::Result<String> {
 
 pub fn reference_markdown() -> String {
     let mut markdown = String::from(
-        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nThe declarative contract schema is exported from Rust via:\n\n```bash\ncargo run --example contract-schema\n```\n\nThe human-readable reference below can be regenerated with:\n\n```bash\ncargo run --example contract-reference\n```\n\n## Shared Node Fields\n\nEvery contract node includes:\n\n- `node_id`\n- `visible`\n- `enabled`\n\n## Supported Families\n\n| Family | Child Policy | Primary Events | Summary |\n| --- | --- | --- | --- |\n",
+        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Shared Node Fields\n\nEvery contract node includes:\n\n- `node_id`\n- `visible`\n- `enabled`\n\n## Supported Families\n\n| Family | Child Policy | Primary Events | Summary |\n| --- | --- | --- | --- |\n",
     );
 
     for family in registry() {

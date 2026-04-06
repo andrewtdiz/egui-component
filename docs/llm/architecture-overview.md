@@ -9,6 +9,8 @@
 - `ui.components()` exposes typed widget methods for the current `egui::Ui`.
 - Each public widget lives in `src/components/*.rs` as a small builder plus a `ComponentUi` entry point.
 - `contract::*` owns serializable node trees, semantic events, schema export, and the host renderer that translates declarative nodes into the typed builders.
+- `contract::*` is the egui-side declarative contract layer, not a Luau VM embedding core.
+- Any portable Luau runtime core should live behind a host adapter and feed this layer from outside the crate.
 
 ## Styling Layers
 
@@ -28,6 +30,7 @@
 
 - `src/catalog.rs` is the public component registry used by the showcase and parser helpers.
 - `src/contract/registry.rs` is the declarative source of truth for supported families, props, variants, events, and generated reference output.
+- The Luau embedding core is intentionally separate from this registry; it should not be folded into the declarative contract surface.
 - `src/example_apps/showcase.rs` is the canonical live preview surface for typed components.
 - `src/example_apps/contract_demo.rs` is the declarative contract demo surface and should visibly exercise every registered contract family.
 - Every public component must also have a matching doc stub in `docs/llm/components/`.

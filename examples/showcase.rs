@@ -25,7 +25,7 @@ struct StaticShowcaseApp {
 }
 
 impl eframe::App for StaticShowcaseApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        showcase::update(&mut self.state, ui.ctx());
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        showcase::update(&mut self.state, ctx);
     }
 }

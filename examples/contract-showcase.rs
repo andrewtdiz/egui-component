@@ -25,7 +25,7 @@ struct ContractDemoWrapper {
 }
 
 impl eframe::App for ContractDemoWrapper {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        contract_demo::update(&mut self.state, ui.ctx());
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        contract_demo::update(&mut self.state, ctx);
     }
 }

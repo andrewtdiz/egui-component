@@ -32,6 +32,8 @@ const TWEMOJI_SEQUENCE_SAMPLES: [(&str, &str); 5] = [
     ("🇺🇸", "Flag"),
 ];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
+const OPEN_WITH_ENTRIES: [DropdownMenuEntry<'static>; 1] =
+    [DropdownMenuEntry::action_with_icon(0, "Codex", "codex")];
 const COMBOBOX_OPTIONS: [&str; 6] = [
     "Material 1",
     "Material Glass",
@@ -558,6 +560,7 @@ pub struct ShowcaseApp {
     pagination_page: usize,
     collapsible_open: bool,
     dropdown_action: Option<usize>,
+    open_with_action: Option<usize>,
     context_menu_action: Option<usize>,
     combobox_query: String,
     combobox_indices: Vec<usize>,
@@ -636,6 +639,7 @@ impl Default for ShowcaseApp {
             pagination_page: 2,
             collapsible_open: true,
             dropdown_action: None,
+            open_with_action: Some(0),
             context_menu_action: None,
             combobox_query: "mat".to_owned(),
             combobox_indices: vec![0, 2],

@@ -41,6 +41,9 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::DragBoard => {
             app.drag_board_regions = DRAG_BOARD_DEFAULT_REGIONS;
         }
+        ComponentKind::OpenWith => {
+            app.open_with_action = Some(0);
+        }
         ComponentKind::FileTree => {
             app.file_tree_nodes = default_file_tree_nodes();
             app.file_tree_selected_id = Some(FILE_TREE_DEFAULT_SELECTED_ID);
@@ -235,6 +238,7 @@ impl ShowcaseApp {
             ComponentKind::Popover => self.render_popover_preview(ui),
             ComponentKind::Tooltip => self.render_tooltip_preview(ui),
             ComponentKind::DropdownMenu => self.render_dropdown_menu_preview(ui),
+            ComponentKind::OpenWith => self.render_open_with_preview(ui),
             ComponentKind::Collapsible => self.render_collapsible_preview(ui),
             ComponentKind::AudioPlayback => self.render_audio_playback_preview(ui),
             ComponentKind::Combobox => self.render_combobox_preview(ui),

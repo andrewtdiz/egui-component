@@ -21,6 +21,7 @@ fn snapshot_surface_renders_representative_components_without_panic() {
         ComponentKind::EmojiSelector,
         ComponentKind::FileTree,
         ComponentKind::IconToolbar,
+        ComponentKind::OpenWith,
         ComponentKind::Sidebar,
         ComponentKind::Toast,
     ] {

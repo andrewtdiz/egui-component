@@ -285,6 +285,7 @@ fn draw_entries(
                     submenu.icon,
                     row_width,
                     None,
+                    false,
                     true,
                     true,
                 );
@@ -333,6 +334,7 @@ fn draw_action_row(
         action.icon,
         row_width,
         action.shortcut,
+        action.selected,
         action.enabled,
         false,
     );
@@ -351,6 +353,7 @@ fn draw_menu_row(
     icon: Option<&str>,
     menu_width: f32,
     shortcut: Option<&str>,
+    selected: bool,
     enabled: bool,
     submenu: bool,
 ) -> (Response, Option<Rect>) {
@@ -361,7 +364,7 @@ fn draw_menu_row(
         RowChrome::new(desired_size).stroke(egui::Stroke::NONE),
         |response| {
             tokens::row_bg(
-                false,
+                selected,
                 response.is_pointer_button_down_on(),
                 response.hovered(),
                 runtime,
@@ -369,7 +372,9 @@ fn draw_menu_row(
         },
     );
 
-    let label_color = if !enabled {
+    let label_color = if selected {
+        tokens::row_selected_text(runtime)
+    } else if !enabled {
         tokens::text_muted(runtime)
     } else if response.hovered() || response.is_pointer_button_down_on() {
         tokens::text_primary(runtime)

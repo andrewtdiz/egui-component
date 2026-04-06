@@ -1,6 +1,6 @@
 use crate::components::{
-    ButtonVariant, DialogueIntent, HierarchyItemKind, LabelTone, LabelWeight, SelectVariant,
-    ToastIntent, ToastPlacement,
+    ButtonVariant, Card, ComponentUiExt, DialogueIntent, HierarchyItemKind, Label, LabelTone,
+    LabelWeight, SelectVariant, ToastIntent, ToastPlacement,
 };
 use crate::contract::{
     registry, render_tree, ActionId, ContractAnchor, ContractButton, ContractButtonGroup,
@@ -13,8 +13,13 @@ use crate::contract::{
     ContractTabsStyle, ContractToastItem, ContractToastViewport, ContractToolbar, ContractTree,
     EventKind, EventValue,
 };
+use crate::internal_taffy::{
+    taffy,
+    taffy::prelude::{auto, length, percent},
+    tui, TuiBuilderLogic,
+};
 use crate::theme::{self, BaseColor, ThemeMode, ThemeSpec};
-use egui::{CentralPanel, ScrollArea};
+use egui::{CentralPanel, ScrollArea, Ui};
 use std::collections::BTreeSet;
 
 pub const WINDOW_TITLE: &str = "egui-component Contract Demo";
@@ -90,11 +95,7 @@ pub fn update(app: &mut ContractDemoApp, ctx: &egui::Context) {
     )]
     {
         CentralPanel::default().show(ctx, |ui| {
-            ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    events = render_tree(ui, &tree);
-                });
+            render_demo_shell(app, ui, &tree, &mut events);
         });
     }
 
@@ -104,6 +105,210 @@ pub fn update(app: &mut ContractDemoApp, ctx: &egui::Context) {
         }
         ctx.request_repaint();
     }
+}
+
+fn render_demo_shell(
+    app: &ContractDemoApp,
+    ui: &mut Ui,
+    tree: &ContractTree,
+    events: &mut Vec<ContractEvent>,
+) {
+    let shell_height = ui.available_height().max(1.0);
+    let body_height = (shell_height - 132.0).max(420.0);
+
+    tui(ui, ui.auto_id_with("contract_demo_shell"))
+        .reserve_available_space()
+        .style(taffy::Style {
+            flex_direction: taffy::FlexDirection::Column,
+            align_items: Some(taffy::AlignItems::Stretch),
+            gap: length(16.0),
+            size: taffy::Size {
+                width: percent(1.0),
+                height: length(shell_height),
+            },
+            ..Default::default()
+        })
+        .show(|tui| {
+            tui.id("header")
+                .style(taffy::Style {
+                    size: taffy::Size {
+                        width: percent(1.0),
+                        height: auto(),
+                    },
+                    ..Default::default()
+                })
+                .ui(|ui| render_demo_header(app, ui));
+
+            tui.id("body")
+                .style(taffy::Style {
+                    flex_direction: taffy::FlexDirection::Row,
+                    align_items: Some(taffy::AlignItems::Stretch),
+                    gap: length(16.0),
+                    size: taffy::Size {
+                        width: percent(1.0),
+                        height: length(body_height),
+                    },
+                    ..Default::default()
+                })
+                .add(|tui| {
+                    tui.id("main")
+                        .style(taffy::Style {
+                            flex_grow: 1.0,
+                            flex_basis: length(0.0),
+                            size: taffy::Size {
+                                width: percent(1.0),
+                                height: length(body_height),
+                            },
+                            min_size: taffy::Size {
+                                width: length(0.0),
+                                height: length(body_height),
+                            },
+                            ..Default::default()
+                        })
+                        .ui(|ui| render_demo_main(ui, tree, events));
+
+                    tui.id("sidebar")
+                        .style(taffy::Style {
+                            min_size: taffy::Size {
+                                width: length(280.0),
+                                height: length(body_height),
+                            },
+                            size: taffy::Size {
+                                width: length(320.0),
+                                height: length(body_height),
+                            },
+                            ..Default::default()
+                        })
+                        .ui(|ui| render_demo_sidebar(app, ui));
+                });
+        });
+}
+
+fn render_demo_header(app: &ContractDemoApp, ui: &mut Ui) {
+    ui.set_width(ui.available_width().max(1.0));
+    ui.components().card(Card::new().padding(18, 16), |ui| {
+        ui.vertical(|ui| {
+            let _ = ui.components().label(
+                Label::new("Luau Contract Layer")
+                    .weight(LabelWeight::Bold)
+                    .size(20.0),
+            );
+            ui.add_space(4.0);
+            let _ = ui.components().label(
+                Label::new("A simple host shell around the contract tree, laid out with Taffy.")
+                    .tone(LabelTone::Muted),
+            );
+
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                render_state_row(ui, "Project", &app.project_name);
+                ui.add_space(18.0);
+                render_state_row(ui, "Owner", &app.owner);
+                ui.add_space(18.0);
+                render_state_row(
+                    ui,
+                    "Sidebar",
+                    if app.sidebar_open { "open" } else { "closed" },
+                );
+            });
+        });
+    });
+}
+
+fn render_demo_main(ui: &mut Ui, tree: &ContractTree, events: &mut Vec<ContractEvent>) {
+    ui.set_width(ui.available_width().max(1.0));
+    ui.components().card(Card::new().padding(16, 16), |ui| {
+        ui.vertical(|ui| {
+            let _ = ui.components().label(
+                Label::new("Contract Surface")
+                    .weight(LabelWeight::Semibold)
+                    .size(14.0),
+            );
+            let _ = ui.components().label(
+                Label::new("The renderer below stays host-owned and returns semantic events only.")
+                    .tone(LabelTone::Muted),
+            );
+
+            ui.add_space(12.0);
+            ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    *events = render_tree(ui, tree);
+                });
+        });
+    });
+}
+
+fn render_demo_sidebar(app: &ContractDemoApp, ui: &mut Ui) {
+    ui.set_width(ui.available_width().max(1.0));
+    ui.components().card(Card::new().padding(16, 16), |ui| {
+        ui.vertical(|ui| {
+            let _ = ui.components().label(
+                Label::new("Workspace Summary")
+                    .weight(LabelWeight::Semibold)
+                    .size(14.0),
+            );
+            let _ = ui
+                .components()
+                .label(Label::new("Live host state and recent events.").tone(LabelTone::Muted));
+
+            ui.add_space(12.0);
+            render_state_row(ui, "Project", &app.project_name);
+            render_state_row(ui, "Owner", &app.owner);
+            render_state_row(
+                ui,
+                "Active tab",
+                app.active_tab.as_deref().unwrap_or("overview"),
+            );
+            render_state_row(
+                ui,
+                "Selected item",
+                app.hierarchy_selected.as_deref().unwrap_or("none"),
+            );
+            render_state_row(ui, "Toasts", app.toasts.len().to_string());
+            render_state_row(ui, "Families", registry().len().to_string());
+
+            ui.add_space(12.0);
+            let _ = ui.components().separator();
+            ui.add_space(12.0);
+            let _ = ui.components().label(
+                Label::new("Recent events")
+                    .weight(LabelWeight::Semibold)
+                    .size(13.0),
+            );
+
+            ui.add_space(6.0);
+            if app.event_log.is_empty() {
+                let _ = ui.components().label(
+                    Label::new("No events yet.")
+                        .tone(LabelTone::Muted)
+                        .size(12.0),
+                );
+            } else {
+                for entry in app.event_log.iter().take(6) {
+                    let _ = ui.components().label(
+                        Label::new(entry)
+                            .tone(LabelTone::Secondary)
+                            .size(12.0)
+                            .truncate(),
+                    );
+                }
+            }
+        });
+    });
+}
+
+fn render_state_row(ui: &mut Ui, label: &str, value: impl AsRef<str>) {
+    let value = value.as_ref();
+    ui.horizontal(|ui| {
+        let _ = ui
+            .components()
+            .label(Label::new(label).tone(LabelTone::Muted).size(12.0));
+        ui.add_space(8.0);
+        let _ = ui
+            .components()
+            .label(Label::new(value).weight(LabelWeight::Semibold).size(12.0));
+    });
 }
 
 impl ContractDemoApp {
@@ -385,19 +590,13 @@ impl ContractDemoApp {
                                 }),
                             ],
                         }),
-                        row_node(
-                            "contract-demo.foundation-row",
-                            12.0,
-                            vec![
-                                card_node(
-                                    "contract-demo.layout-primitives",
-                                    self.layout_primitives_nodes(),
-                                ),
-                                card_node(
-                                    "contract-demo.registry-card",
-                                    self.supported_family_nodes(),
-                                ),
-                            ],
+                        card_node(
+                            "contract-demo.layout-primitives",
+                            self.layout_primitives_nodes(),
+                        ),
+                        card_node(
+                            "contract-demo.registry-card",
+                            self.supported_family_nodes(),
                         ),
                     ],
                 ),
@@ -481,7 +680,6 @@ impl ContractDemoApp {
                     max_visible: 4,
                     toasts: self.toasts.clone(),
                 }),
-                card_node("contract-demo.events", self.event_nodes()),
             ],
         ))
     }
@@ -545,7 +743,7 @@ impl ContractDemoApp {
             muted_node(
                 "contract-demo.registry.subtitle",
                 format!(
-                    "{} families rendered from the same registry that powers schema export and docs.",
+                    "{} families in the shared contract registry.",
                     registry().len()
                 ),
             ),
@@ -553,61 +751,14 @@ impl ContractDemoApp {
         ];
 
         for family in registry() {
-            let events = if family.events.is_empty() {
-                "none".to_owned()
-            } else {
-                family
-                    .events
-                    .iter()
-                    .map(|event| event_kind_name(event.kind).to_owned())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-
             children.push(ContractNode::Label(ContractLabel {
                 common: common(format!("contract-demo.registry.{}", family.id.as_str())),
-                text: format!(
-                    "{} | {} | events: {}",
-                    family.id.as_str(),
-                    family.summary,
-                    events
-                ),
+                text: format!("{} | {}", family.id.as_str(), family.summary),
                 tone: Some(LabelTone::Muted),
                 weight: None,
                 size: Some(11.0),
                 truncate: false,
             }));
-        }
-
-        children
-    }
-
-    fn event_nodes(&self) -> Vec<ContractNode> {
-        let mut children = vec![
-            subheading_node("contract-demo.events.title", "Semantic Event Log"),
-            muted_node(
-                "contract-demo.events.subtitle",
-                "Recent events returned by the renderer this frame boundary.".to_owned(),
-            ),
-            separator_node("contract-demo.events.sep"),
-        ];
-
-        if self.event_log.is_empty() {
-            children.push(muted_node(
-                "contract-demo.events.empty",
-                "Interact with the contract surface to populate the log.".to_owned(),
-            ));
-        } else {
-            for (index, entry) in self.event_log.iter().enumerate() {
-                children.push(ContractNode::Label(ContractLabel {
-                    common: common(format!("contract-demo.events.item.{index}")),
-                    text: entry.clone(),
-                    tone: Some(LabelTone::Secondary),
-                    weight: None,
-                    size: Some(12.0),
-                    truncate: false,
-                }));
-            }
         }
 
         children
@@ -1000,21 +1151,6 @@ fn format_event(event: &ContractEvent) -> String {
         "{:?} | node={} | action={} | item={} | value={}",
         event.kind, event.node_id, action, item, value
     )
-}
-
-fn event_kind_name(kind: EventKind) -> &'static str {
-    match kind {
-        EventKind::Clicked => "clicked",
-        EventKind::Changed => "changed",
-        EventKind::Submitted => "submitted",
-        EventKind::Selected => "selected",
-        EventKind::Toggled => "toggled",
-        EventKind::Confirmed => "confirmed",
-        EventKind::Cancelled => "cancelled",
-        EventKind::Opened => "opened",
-        EventKind::Closed => "closed",
-        EventKind::CommandInvoked => "command_invoked",
-    }
 }
 
 #[cfg(test)]

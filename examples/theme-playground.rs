@@ -77,10 +77,10 @@ impl Default for ThemePlaygroundApp {
 }
 
 impl eframe::App for ThemePlaygroundApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.sync_theme(ui.ctx());
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.sync_theme(ctx);
 
-        CentralPanel::default().show_inside(ui, |ui| {
+        CentralPanel::default().show(ctx, |ui| {
             let ctx = ui.ctx().clone();
             ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_min_width(1180.0);

@@ -100,6 +100,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
         ComponentKind::FileTree => available_width.min(360.0),
         ComponentKind::Hierarchy => available_width.min(440.0),
         ComponentKind::IconToolbar => available_width.min(560.0),
+        ComponentKind::OpenWith => available_width.min(320.0),
         ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
         ComponentKind::Sidebar => available_width.min(820.0),
@@ -155,6 +156,9 @@ fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Popover => "Click-triggered interactive popup surface.",
         ComponentKind::Tooltip => "Hover-triggered helper content.",
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
+        ComponentKind::OpenWith => {
+            "Split editor picker with the current app on the left and a caret dropdown on the right."
+        }
         ComponentKind::ContextMenu => {
             "Right-click menu surface built on egui's built-in context popup behavior."
         }
@@ -235,7 +239,6 @@ fn sidebar_preview_toggle_icon(side_index: usize, open: bool) -> &'static str {
         (_, false) => "panel-right-open",
     }
 }
-
 
 fn clamp_state(state: &mut ShowcaseApp) {
     state.canva_background_color_index = state

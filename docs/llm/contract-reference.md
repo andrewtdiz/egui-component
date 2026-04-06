@@ -2,16 +2,11 @@
 
 Generated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.
 
-The declarative contract schema is exported from Rust via:
+Export the schema and human-readable reference from Rust with:
 
-```bash
-cargo run --example contract-schema
-```
-
-The human-readable reference below can be regenerated with:
-
-```bash
-cargo run --example contract-reference
+```rust
+egui_component::contract::schema_json_pretty()
+egui_component::contract::reference_markdown()
 ```
 
 ## Shared Node Fields

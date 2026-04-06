@@ -1204,6 +1204,19 @@ impl ShowcaseApp {
         );
     }
 
+    fn render_open_with_preview(&mut self, ui: &mut Ui) {
+        let _ = ui.components().label(
+            Label::new("Detected editors")
+                .tone(LabelTone::Muted)
+                .size(SMALL_TEXT),
+        );
+        ui.add_space(6.0);
+        let _ = ui.components().open_with(
+            &mut self.open_with_action,
+            OpenWith::new(Id::new("component_showcase_open_with"), &OPEN_WITH_ENTRIES).width(240.0),
+        );
+    }
+
     fn render_context_menu_preview(&mut self, ui: &mut Ui) {
         let preview_width = 420.0f32.min(ui.available_width());
         let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {

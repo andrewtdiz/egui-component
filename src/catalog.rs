@@ -49,6 +49,7 @@ pub enum ComponentKind {
     Toolbar,
     Tooltip,
     Twemoji,
+    OpenWith,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -275,6 +276,12 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
+        kind: ComponentKind::OpenWith,
+        id: "open-with",
+        label: "Open With",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
         kind: ComponentKind::EmojiSelector,
         id: "emoji-selector",
         label: "Emoji Selector",
@@ -431,6 +438,7 @@ mod tests {
         assert!(ids.contains(&"number-input"));
         assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
+        assert!(ids.contains(&"open-with"));
         assert!(ids.contains(&"context-menu"));
         assert!(ids.contains(&"menu-bar"));
         assert!(ids.contains(&"emoji-selector"));
@@ -498,6 +506,10 @@ mod tests {
         assert_eq!(
             parse_component_kind("menu_bar"),
             Some(ComponentKind::MenuBar)
+        );
+        assert_eq!(
+            parse_component_kind("open_with"),
+            Some(ComponentKind::OpenWith)
         );
         assert_eq!(parse_component_kind("alertdialogue"), None);
         assert_eq!(parse_component_kind("agentchat"), None);

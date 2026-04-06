@@ -9,12 +9,19 @@
 - Preserve `egui-component` as the rendering substrate instead of exposing raw `egui`.
 - Return normalized semantic events so the host can stay authoritative for state.
 
+## Relationship To The Portable Luau Core
+
+- `egui_component::contract::*` is the egui-side declarative surface that a host can drive from any runtime, including Luau.
+- The portable Luau embedding core owns VM lifetime, module loading, reload orchestration, and scheduling.
+- This layer only renders host-authored trees and returns semantic events; it does not own Luau state or script dispatch.
+
 ## Runtime Shape
 
 - `ContractTree` and `ContractNode` are serde-friendly owned data structures.
 - Every node carries a stable `node_id`, plus shared `visible` and `enabled` state.
 - Interactive nodes expose stable string `action_id`s rather than callback handles.
 - `render_tree` and `render_component_tree` translate the declarative tree into the existing typed builders and return `Vec<ContractEvent>` for the current frame.
+- These functions are host adapter entry points, not scripting runtime entry points.
 
 ## State Ownership
 
@@ -56,3 +63,4 @@
 - No authoritative state ownership in the renderer
 - No `combobox` in the first declarative release
 - No hierarchy drag-reorder event contract in v1
+- No Luau VM ownership, script loading, or reload orchestration in this layer

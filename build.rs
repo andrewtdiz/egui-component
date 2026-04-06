@@ -3,7 +3,11 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const ICON_FAMILIES: [(&str, &str); 2] = [("Lucide", "lucide"), ("Bootstrap", "bootstrap")];
+const ICON_FAMILIES: [(&str, &str); 3] = [
+    ("Lucide", "lucide"),
+    ("Bootstrap", "bootstrap"),
+    ("Local", "local"),
+];
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=build.rs");

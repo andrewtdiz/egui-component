@@ -124,14 +124,14 @@ It provides:
 
 Export the schema as JSON with:
 
-```bash
-cargo run --example contract-schema
+```rust
+egui_component::contract::schema_json_pretty()
 ```
 
 Export the generated reference with:
 
-```bash
-cargo run --example contract-reference
+```rust
+egui_component::contract::reference_markdown()
 ```
 
 ## Basic Usage
@@ -215,10 +215,6 @@ The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
 - `contract-showcase`: declarative editor surface driven entirely through `egui_component::contract::*`
-- `contract-schema`: prints the machine-readable contract schema JSON
-- `contract-reference`: prints the generated human-readable contract reference
-- `content-composition`: reusable layout composition with cards, labels, buttons, kbd, and scoped overrides
-- `popup-patterns`: focused popup interactions with `Tooltip`, `Popover`, `DropdownMenu`, and `Dialogue`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
 
 Run the main showcase:
@@ -252,7 +248,7 @@ Run any focused example:
 cargo run --example theme-playground
 ```
 
-Replace `theme-playground` with `content-composition`, `popup-patterns`, or `contract-showcase`.
+Replace `theme-playground` with `contract-showcase`.
 
 In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
 The window is restarted on each rebuild rather than patched in place.
