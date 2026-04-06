@@ -30,7 +30,7 @@ The public runtime surface is built around three ideas:
 - `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
 - `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
 - `contract::*` exposes the declarative scripting boundary, semantic event model, and schema export.
-- The portable Luau embedding core is separate from `egui-component`; see `../../defold_luau_gui_runtime_architecture.md` for the host-agnostic core/adapter split.
+- The portable Luau embedding core is packaged separately as `luau-runtime-core`; see `../../defold_luau_gui_runtime_architecture.md` for the host-agnostic core/adapter split. File-backed providers can surface filesystem hot-reload events through the core API.
 - Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
 ## Non-Negotiable Design Contract

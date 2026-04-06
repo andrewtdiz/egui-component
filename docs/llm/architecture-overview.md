@@ -10,7 +10,7 @@
 - Each public widget lives in `src/components/*.rs` as a small builder plus a `ComponentUi` entry point.
 - `contract::*` owns serializable node trees, semantic events, schema export, and the host renderer that translates declarative nodes into the typed builders.
 - `contract::*` is the egui-side declarative contract layer, not a Luau VM embedding core.
-- Any portable Luau runtime core should live behind a host adapter and feed this layer from outside the crate.
+- The reusable Luau runtime core lives in the separate `luau-runtime-core` crate and should feed this layer only through a host adapter.
 
 ## Styling Layers
 

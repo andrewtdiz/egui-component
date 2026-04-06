@@ -12,7 +12,7 @@
 ## Relationship To The Portable Luau Core
 
 - `egui_component::contract::*` is the egui-side declarative surface that a host can drive from any runtime, including Luau.
-- The portable Luau embedding core owns VM lifetime, module loading, reload orchestration, and scheduling.
+- The portable Luau embedding core is packaged separately in `luau-runtime-core` and owns VM lifetime, module loading, reload orchestration, and scheduling.
 - This layer only renders host-authored trees and returns semantic events; it does not own Luau state or script dispatch.
 
 ## Runtime Shape

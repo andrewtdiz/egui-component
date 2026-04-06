@@ -12,6 +12,8 @@ The crate also ships a host-owned declarative layer for editor scripting:
 
 - `egui_component::contract::*` for serializable UI trees, semantic events, renderer entry points, and schema export
 
+The portable Luau embedding core lives in the reusable `luau-runtime-core` crate. `egui-component` does not expose that runtime surface; new hosts should depend on `luau-runtime-core` directly. The core includes filesystem hot-reload support for file-backed script providers.
+
 ## Install
 
 ```toml
