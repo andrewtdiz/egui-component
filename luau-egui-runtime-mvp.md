@@ -1,6 +1,57 @@
 
 # MVP architecture: Luau + egui UI runtime with hot reload
 
+## Current Status
+
+As of 2026-04-06, the repository has shipped the single-root-file MVP:
+
+- one main-thread Luau VM
+- frame-bound host bindings for `app.*` runtime control and direct typed `ui.*` rendering calls
+- persistent root state across reloads
+- `notify`-driven hot reload for one watched root script file
+- compile/runtime error overlay with last-known-good rollback
+
+As of the Phase 4 landing on 2026-04-06, the repository now also ships:
+
+- custom `require` rooted to the Luau project directory
+- a private module cache with dependency and reverse-dependency tracking
+- dependency-aware reload that rebuilds dirty modules and their dependents before commit
+- rollback to the last known-good graph when any module in the reload batch fails
+
+As of the immediate-mode pivot on 2026-04-06, the repository now also ships the intended runtime boundary:
+
+- `luau-runtime-core` stays backend-agnostic at the crate boundary, but its canonical host path is a direct typed `ui.*` bridge
+- `runtime-egui-host` executes Luau inside the current `egui` frame instead of transporting a per-frame UI document
+- Luau owns composition, reusable view helpers, and styling choices in script modules
+- Rust owns actual widget rendering, hot reload, reload metrics, and frame timing
+- the old generic `RuntimeValue` transport path has been removed from the runtime surface
+
+The remaining architecture in this document is now mostly hardening and future-expansion guidance rather than a statement of missing core functionality.
+
+## Product Boundary
+
+For this repository, the correct long-term boundary is:
+
+- keep `luau-runtime-core` generic
+- keep `egui-component` integration out of the runtime crate to avoid a dependency cycle
+- expose a narrow typed `ui.*` host surface to Luau instead of a generic document channel
+- keep the Rust-side component internals and frame execution authoritative
+- do not bind the entire `components::*` surface directly into Luau
+
+This boundary is the right fit for the current `src/` surface because:
+
+- `components::*` is a Rust-first immediate builder API with borrowed data and rich closures
+- `egui` itself is frame-scoped and immediate-mode, so the host should expose immediate operations instead of shipping trees around
+- Luau can still build reusable "shadcn-like" helpers by composing typed `ui.*` calls in normal modules
+- Rust keeps the frame-hot widget path and component internals authoritative
+
+The current repository now demonstrates that boundary in `runtime-egui-host`:
+
+1. Rust opens the `egui` frame and installs scoped `app.*` and `ui.*` bindings.
+2. Luau executes `render(state)` directly inside that frame.
+3. Widget results such as button clicks and text edits return immediately to Luau.
+4. Hot reload continues to operate at the Luau module-graph level without exposing `mlua`.
+
 ## Goal
 
 Build the smallest architecture that is still structurally correct for an in-process **Luau-driven egui UI runtime** with **fast edit / save / reload iteration**.
@@ -971,6 +1022,182 @@ Avoid these until the MVP is stable:
 ## The one-sentence design rule
 
 For the MVP, **keep Luau and egui on the same UI thread, expose a tiny typed widget API, preserve only plain state across reloads, and swap code only at frame boundaries**.
+
+---
+
+## Expansion Path For `egui-component`
+
+The MVP runtime is now far enough along that the next step should not be "bind more Rust APIs into Luau".
+
+The correct next step is to keep the current embedding boundary, but expand the runtime document that crosses it.
+
+For this repository, the right long-term balance is:
+
+- Luau owns component composition, reusable modules, class-like styling choices, and action routing.
+- Rust owns rendering, theme/token resolution, `internal_taffy` layout execution, semantic event emission, and hot reload orchestration.
+
+That keeps Luau expressive in a `shadcn` + Tailwind sense without making the scripting layer responsible for frame-critical engine internals.
+
+### What this means for the examples
+
+Do not replace the current Rust-authored `showcase` in one move.
+
+Instead:
+
+1. keep `runtime-egui-host` as the narrow canonical runtime harness
+2. keep `showcase` as the regression/snapshot harness
+3. add a runtime-backed showcase surface that reuses the outer shell but renders scripted content inside it
+
+This gives the repository two complementary example paths:
+
+- static showcase for confidence and visual regression coverage
+- scripted showcase for validating the authoring model, hot reload, and runtime composition patterns
+
+---
+
+## Data Model Needed For Tailwind-Like Luau Authoring
+
+The current typed `ContractTree` should remain the semantic rendering contract, but scripted authoring needs a richer common node surface.
+
+### 1. Class-like styling tokens
+
+Each node should be allowed to carry:
+
+- `class: Option<String>`
+- `class_list: Vec<String>`
+- `slot_classes: BTreeMap<String, String>`
+- `variant: Option<String>`
+
+Recommended rule:
+
+- Luau chooses the classes.
+- Rust parses and resolves them.
+- Rust remains the only place that understands actual theme/token/layout semantics.
+
+This keeps the runtime fast and lets the Rust parser evolve independently.
+
+### 2. Generic action bindings
+
+Instead of growing a separate callback shape per widget family, move toward common action slots:
+
+- `actions.click`
+- `actions.change`
+- `actions.submit`
+- `actions.select`
+- `actions.open`
+- `actions.close`
+- `actions.confirm`
+- `actions.cancel`
+
+Rust should continue emitting semantic events. Luau should dispatch them to local reducers or action handlers using these ids.
+
+### 3. Layout intent as serializable data
+
+To support `internal_taffy`, add a serializable layout block instead of exposing raw `taffy::Style`.
+
+Recommended shape:
+
+```rust
+pub struct ContractLayout {
+    pub display: Option<ContractDisplay>,
+    pub direction: Option<ContractDirection>,
+    pub grow: Option<f32>,
+    pub shrink: Option<f32>,
+    pub basis: Option<ContractLength>,
+    pub width: Option<ContractLength>,
+    pub height: Option<ContractLength>,
+    pub min_width: Option<ContractLength>,
+    pub min_height: Option<ContractLength>,
+    pub max_width: Option<ContractLength>,
+    pub max_height: Option<ContractLength>,
+    pub gap_x: Option<f32>,
+    pub gap_y: Option<f32>,
+    pub padding: Option<ContractEdges>,
+    pub margin: Option<ContractEdges>,
+    pub align: Option<ContractAlign>,
+    pub justify: Option<ContractJustify>,
+    pub wrap: Option<bool>,
+    pub columns: Vec<ContractTrack>,
+    pub rows: Vec<ContractTrack>,
+    pub col_span: Option<u16>,
+    pub row_span: Option<u16>,
+    pub overflow_x: Option<ContractOverflow>,
+    pub overflow_y: Option<ContractOverflow>,
+}
+```
+
+Use this as a document model, not as a 1:1 dump of every taffy option.
+
+The renderer should interpret it in Rust and route supported subtrees through `internal_taffy`.
+
+### How this should coexist with the current contract
+
+- Keep ergonomic typed nodes like `Row`, `Column`, `Card`, `Input`, `Button`.
+- Add optional common `class` / `actions` / `layout` fields to those nodes.
+- Keep today's simple renderer path as the default when `layout` is absent.
+- Use the `internal_taffy` path only when the node or subtree opts into it.
+
+That avoids breaking the existing contract demo and keeps migration incremental.
+
+---
+
+## The Right Authoring Pattern
+
+The desired Luau surface should look like composable view modules with nearby style strings and plain-data props:
+
+```lua
+local ui = require("./ui")
+local cx = require("./cx")
+
+local M = {}
+
+function M.profile_card(props)
+    return ui.card({
+        id = props.id,
+        class = cx("gap-4 rounded-lg border bg-panel p-5", {
+            "ring-2 ring-brand-9": props.selected,
+        }),
+        layout = {
+            display = "flex",
+            direction = "column",
+            gap_y = 16,
+        },
+    }, {
+        ui.label({
+            id = props.id .. ".title",
+            class = "text-xl font-semibold",
+            text = props.title,
+        }),
+        ui.input({
+            id = props.id .. ".name",
+            class = "w-72",
+            value = props.name,
+            actions = {
+                change = "profile.name.changed",
+            },
+        }),
+        ui.button({
+            id = props.id .. ".save",
+            class = "btn-primary",
+            label = "Save",
+            actions = {
+                click = "profile.save",
+            },
+        }),
+    })
+end
+
+return M
+```
+
+The important part is the division of responsibilities:
+
+- Luau builds the tree.
+- Rust resolves classes and layout.
+- Rust emits semantic events.
+- Luau updates its plain state and builds the next frame's tree.
+
+That is the correct balance for this repository.
 
 ---
 

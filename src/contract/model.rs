@@ -3,7 +3,7 @@ use crate::components::{
     HierarchyStyle, LabelTone, LabelWeight, NumberInputAxis, SelectVariant, SidebarSide,
     ToastIntent, ToastPlacement,
 };
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 pub const CONTRACT_MODEL_VERSION: u32 = 1;
 
@@ -205,6 +205,132 @@ pub enum ContractTabsStyle {
     Rail,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractActions {
+    #[serde(default)]
+    pub click: Option<ActionId>,
+    #[serde(default)]
+    pub change: Option<ActionId>,
+    #[serde(default)]
+    pub submit: Option<ActionId>,
+    #[serde(default)]
+    pub select: Option<ActionId>,
+    #[serde(default)]
+    pub open: Option<ActionId>,
+    #[serde(default)]
+    pub close: Option<ActionId>,
+    #[serde(default)]
+    pub confirm: Option<ActionId>,
+    #[serde(default)]
+    pub cancel: Option<ActionId>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContractDisplay {
+    Flow,
+    Flex,
+    Grid,
+    Overlay,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContractDirection {
+    Row,
+    Column,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContractOverflow {
+    #[default]
+    Visible,
+    Hidden,
+    Scroll,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractEdges {
+    #[serde(default)]
+    pub top: f32,
+    #[serde(default)]
+    pub right: f32,
+    #[serde(default)]
+    pub bottom: f32,
+    #[serde(default)]
+    pub left: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ContractLength {
+    Auto,
+    Px { value: f32 },
+    Percent { value: f32 },
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ContractTrack {
+    Auto,
+    Fr { value: f32 },
+    Px { value: f32 },
+    Percent { value: f32 },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractLayout {
+    #[serde(default)]
+    pub display: Option<ContractDisplay>,
+    #[serde(default)]
+    pub direction: Option<ContractDirection>,
+    #[serde(default)]
+    pub grow: Option<f32>,
+    #[serde(default)]
+    pub shrink: Option<f32>,
+    #[serde(default)]
+    pub basis: Option<ContractLength>,
+    #[serde(default)]
+    pub width: Option<ContractLength>,
+    #[serde(default)]
+    pub height: Option<ContractLength>,
+    #[serde(default)]
+    pub min_width: Option<ContractLength>,
+    #[serde(default)]
+    pub min_height: Option<ContractLength>,
+    #[serde(default)]
+    pub max_width: Option<ContractLength>,
+    #[serde(default)]
+    pub max_height: Option<ContractLength>,
+    #[serde(default)]
+    pub gap_x: Option<f32>,
+    #[serde(default)]
+    pub gap_y: Option<f32>,
+    #[serde(default)]
+    pub padding: Option<ContractEdges>,
+    #[serde(default)]
+    pub margin: Option<ContractEdges>,
+    #[serde(default)]
+    pub align: Option<ContractAlign>,
+    #[serde(default)]
+    pub justify: Option<ContractJustify>,
+    #[serde(default)]
+    pub wrap: Option<bool>,
+    #[serde(default)]
+    pub columns: Vec<ContractTrack>,
+    #[serde(default)]
+    pub rows: Vec<ContractTrack>,
+    #[serde(default)]
+    pub col_span: Option<u16>,
+    #[serde(default)]
+    pub row_span: Option<u16>,
+    #[serde(default)]
+    pub overflow_x: Option<ContractOverflow>,
+    #[serde(default)]
+    pub overflow_y: Option<ContractOverflow>,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ContractTree {
     #[serde(default = "contract_model_version")]
@@ -228,6 +354,16 @@ pub struct ContractCommon {
     pub visible: bool,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default)]
+    pub class: Option<String>,
+    #[serde(default)]
+    pub class_list: Vec<String>,
+    #[serde(default)]
+    pub slot_classes: BTreeMap<String, String>,
+    #[serde(default)]
+    pub actions: ContractActions,
+    #[serde(default)]
+    pub layout: Option<ContractLayout>,
 }
 
 impl ContractCommon {
@@ -236,6 +372,11 @@ impl ContractCommon {
             node_id: node_id.into(),
             visible: true,
             enabled: true,
+            class: None,
+            class_list: Vec::new(),
+            slot_classes: BTreeMap::new(),
+            actions: ContractActions::default(),
+            layout: None,
         }
     }
 }
@@ -1011,8 +1152,8 @@ fn default_toast_duration_secs() -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContractButton, ContractCommon, ContractEvent, ContractNode, ContractTree, EventKind,
-        EventValue,
+        ContractButton, ContractCommon, ContractDirection, ContractDisplay, ContractEvent,
+        ContractLength, ContractNode, ContractTree, EventKind, EventValue,
     };
 
     #[test]
@@ -1047,5 +1188,65 @@ mod tests {
         assert!(json.contains("\"clicked\""));
         assert!(json.contains("\"button.save\""));
         assert!(json.contains("\"Save\""));
+    }
+
+    #[test]
+    fn contract_common_scaffolding_round_trips_class_actions_and_layout() {
+        let json = r#"
+        {
+            "version": 1,
+            "root": {
+                "family": "label",
+                "node_id": "contract.label",
+                "text": "Hello",
+                "class": "text-lg font-semibold",
+                "class_list": ["text-lg", "font-semibold"],
+                "slot_classes": {
+                    "icon": "text-muted"
+                },
+                "actions": {
+                    "click": "label.clicked"
+                },
+                "layout": {
+                    "display": "flex",
+                    "direction": "column",
+                    "gap_y": 12.0,
+                    "width": {
+                        "kind": "px",
+                        "value": 320.0
+                    }
+                }
+            }
+        }
+        "#;
+
+        let decoded: ContractTree = serde_json::from_str(json).expect("deserialize contract tree");
+
+        match decoded.root {
+            ContractNode::Label(label) => {
+                assert_eq!(label.common.class.as_deref(), Some("text-lg font-semibold"));
+                assert_eq!(
+                    label.common.class_list,
+                    vec!["text-lg".to_owned(), "font-semibold".to_owned()]
+                );
+                assert_eq!(
+                    label.common.slot_classes.get("icon").map(String::as_str),
+                    Some("text-muted")
+                );
+                assert_eq!(
+                    label.common.actions.click.as_ref().map(|action| action.as_str()),
+                    Some("label.clicked")
+                );
+                let layout = label.common.layout.expect("layout scaffolding");
+                assert_eq!(layout.display, Some(ContractDisplay::Flex));
+                assert_eq!(layout.direction, Some(ContractDirection::Column));
+                assert_eq!(layout.gap_y, Some(12.0));
+                assert_eq!(
+                    layout.width,
+                    Some(ContractLength::Px { value: 320.0 })
+                );
+            }
+            node => panic!("expected label node, got {node:?}"),
+        }
     }
 }

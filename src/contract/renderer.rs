@@ -1,11 +1,12 @@
 use super::{
     ActionId, ContractAlign, ContractAnchor, ContractButton, ContractButtonGroup, ContractCheckbox,
-    ContractCollapsible, ContractColumn, ContractDialogueModal, ContractEvent, ContractField,
-    ContractHierarchy, ContractHierarchyItem, ContractInput, ContractInset, ContractJustify,
-    ContractMenuBar, ContractMenuEntry, ContractNode, ContractNumberInput, ContractRow,
-    ContractSelect, ContractSidebar, ContractSizedBox, ContractSpacer, ContractSwitch,
-    ContractTabs, ContractTabsStyle, ContractToastItem, ContractToastViewport, ContractToolbar,
-    ContractTree, EventKind, EventMetadata, EventValue,
+    ContractCollapsible, ContractColumn, ContractCommon, ContractDialogueModal, ContractDirection,
+    ContractEvent, ContractField, ContractHierarchy, ContractHierarchyItem, ContractInput,
+    ContractInset, ContractJustify, ContractLayout, ContractLength, ContractMenuBar,
+    ContractMenuEntry, ContractNode, ContractNumberInput, ContractRow, ContractSelect,
+    ContractSidebar, ContractSizedBox, ContractSpacer, ContractSwitch, ContractTabs,
+    ContractTabsStyle, ContractToastItem, ContractToastViewport, ContractToolbar, ContractTree,
+    EventKind, EventMetadata, EventValue,
 };
 use crate::components::{
     Button, ButtonGroup, ButtonVariant, Card, Checkbox, Collapsible, ComponentUi, ComponentUiExt,
@@ -14,6 +15,7 @@ use crate::components::{
     LabelWeight, MenuBar, MenuBarItem, NumberInput, Progress, Select, Sidebar, Spinner, Switch,
     TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar,
 };
+use crate::layout::{column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify};
 use crate::primitives::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
 use crate::ui::tokens;
@@ -74,11 +76,15 @@ impl FrameRenderer {
         }
 
         if node.common().enabled {
-            self.render_node_inner(ui, node);
+            with_layout_scope(ui, node.common().layout.as_ref(), |ui| {
+                self.render_node_inner(ui, node);
+            });
         } else {
             ui.ui_mut().add_enabled_ui(false, |ui| {
                 let mut ui = ui.components();
-                self.render_node_inner(&mut ui, node);
+                with_layout_scope(&mut ui, node.common().layout.as_ref(), |ui| {
+                    self.render_node_inner(ui, node);
+                });
             });
         }
     }
@@ -131,22 +137,30 @@ impl FrameRenderer {
     }
 
     fn render_row(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRow) {
-        let layout = Layout::left_to_right(map_align(props.align))
-            .with_main_align(map_justify(props.justify))
-            .with_cross_align(map_align(props.align));
         let _ = ui.ui_mut().scope(|ui| {
-            ui.spacing_mut().item_spacing.x = props.gap;
-            let _ = ui.with_layout(layout, |ui| self.render_children(ui, &props.children));
+            render_container_children(
+                ui,
+                &props.common,
+                ContractDirection::Row,
+                props.gap,
+                props.justify,
+                props.align,
+                |ui| self.render_children(ui, &props.children),
+            );
         });
     }
 
     fn render_column(&mut self, ui: &mut ComponentUi<'_>, props: &ContractColumn) {
-        let layout = Layout::top_down(map_align(props.align))
-            .with_main_align(map_justify(props.justify))
-            .with_cross_align(map_align(props.align));
         let _ = ui.ui_mut().scope(|ui| {
-            ui.spacing_mut().item_spacing.y = props.gap;
-            let _ = ui.with_layout(layout, |ui| self.render_children(ui, &props.children));
+            render_container_children(
+                ui,
+                &props.common,
+                ContractDirection::Column,
+                props.gap,
+                props.justify,
+                props.align,
+                |ui| self.render_children(ui, &props.children),
+            );
         });
     }
 
@@ -156,7 +170,17 @@ impl FrameRenderer {
                 props.padding_x as i8,
                 props.padding_y as i8,
             ))
-            .show(ui.ui_mut(), |ui| self.render_children(ui, &props.children));
+            .show(ui.ui_mut(), |ui| {
+                render_container_children(
+                    ui,
+                    &props.common,
+                    ContractDirection::Column,
+                    0.0,
+                    ContractJustify::Start,
+                    ContractAlign::Start,
+                    |ui| self.render_children(ui, &props.children),
+                );
+            });
     }
 
     fn render_sized_box(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSizedBox) {
@@ -193,7 +217,17 @@ impl FrameRenderer {
     fn render_card(&mut self, ui: &mut ComponentUi<'_>, props: &crate::contract::ContractCard) {
         let _ = ui.card(
             Card::new().padding(props.padding_x as i8, props.padding_y as i8),
-            |ui| self.render_children(ui, &props.children),
+            |ui| {
+                render_container_children(
+                    ui,
+                    &props.common,
+                    ContractDirection::Column,
+                    0.0,
+                    ContractJustify::Start,
+                    ContractAlign::Start,
+                    |ui| self.render_children(ui, &props.children),
+                );
+            },
         );
     }
 
@@ -982,19 +1016,125 @@ impl FrameRenderer {
     }
 }
 
-fn map_justify(value: ContractJustify) -> Align {
-    match value {
-        ContractJustify::Start => Align::Min,
-        ContractJustify::Center => Align::Center,
-        ContractJustify::End => Align::Max,
+fn with_layout_scope<R>(
+    ui: &mut ComponentUi<'_>,
+    layout: Option<&ContractLayout>,
+    add: impl FnOnce(&mut ComponentUi<'_>) -> R,
+) -> R {
+    if layout.is_none() {
+        return add(ui);
+    }
+
+    ui.ui_mut().scope(|ui| {
+        apply_layout_sizing(ui, layout);
+        let mut components = ui.components();
+        add(&mut components)
+    }).inner
+}
+
+fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>) {
+    let Some(layout) = layout else {
+        return;
+    };
+
+    if let Some(width) = resolve_contract_length(layout.width.as_ref(), ui.available_width()) {
+        ui.set_min_width(width);
+        ui.set_max_width(width);
+    }
+    if let Some(height) = resolve_contract_length(layout.height.as_ref(), ui.available_height()) {
+        ui.set_min_height(height);
+        ui.set_max_height(height);
+    }
+    if let Some(min_width) =
+        resolve_contract_length(layout.min_width.as_ref(), ui.available_width())
+    {
+        ui.set_min_width(min_width);
+    }
+    if let Some(max_width) =
+        resolve_contract_length(layout.max_width.as_ref(), ui.available_width())
+    {
+        ui.set_max_width(max_width);
+    }
+    if let Some(min_height) =
+        resolve_contract_length(layout.min_height.as_ref(), ui.available_height())
+    {
+        ui.set_min_height(min_height);
+    }
+    if let Some(max_height) =
+        resolve_contract_length(layout.max_height.as_ref(), ui.available_height())
+    {
+        ui.set_max_height(max_height);
     }
 }
 
-fn map_align(value: ContractAlign) -> Align {
+fn render_container_children(
+    ui: &mut egui::Ui,
+    common: &ContractCommon,
+    default_direction: ContractDirection,
+    default_gap: f32,
+    default_justify: ContractJustify,
+    default_align: ContractAlign,
+    add: impl FnOnce(&mut egui::Ui),
+) {
+    let layout = common.layout.as_ref();
+    let direction = layout
+        .and_then(|layout| layout.direction)
+        .unwrap_or(default_direction);
+    let justify = layout
+        .and_then(|layout| layout.justify)
+        .unwrap_or(default_justify);
+    let align = layout.and_then(|layout| layout.align).unwrap_or(default_align);
+    let gap = match direction {
+        ContractDirection::Row => layout
+            .and_then(|layout| layout.gap_x.or(layout.gap_y))
+            .unwrap_or(default_gap),
+        ContractDirection::Column => layout
+            .and_then(|layout| layout.gap_y.or(layout.gap_x))
+            .unwrap_or(default_gap),
+    };
+
+    match direction {
+        ContractDirection::Row => {
+            let _ = layout_row()
+                .gap(gap)
+                .justify(map_flow_justify(justify))
+                .align(map_flow_align(align))
+                .show(ui, add);
+        }
+        ContractDirection::Column => {
+            let _ = layout_column()
+                .gap(gap)
+                .justify(map_flow_justify(justify))
+                .align(map_flow_align(align))
+                .show(ui, add);
+        }
+    }
+}
+
+fn resolve_contract_length(length: Option<&ContractLength>, available: f32) -> Option<f32> {
+    match length? {
+        ContractLength::Auto => None,
+        ContractLength::Px { value } => Some(value.max(0.0)),
+        ContractLength::Percent { value } => {
+            let ratio = if *value > 1.0 { *value / 100.0 } else { *value };
+            Some((available.max(0.0) * ratio.max(0.0)).max(0.0))
+        }
+    }
+}
+
+fn map_flow_justify(value: ContractJustify) -> FlowJustify {
     match value {
-        ContractAlign::Start => Align::Min,
-        ContractAlign::Center => Align::Center,
-        ContractAlign::End => Align::Max,
+        ContractJustify::Start => FlowJustify::Start,
+        ContractJustify::Center => FlowJustify::Center,
+        ContractJustify::End => FlowJustify::End,
+    }
+}
+
+fn map_flow_align(value: ContractAlign) -> FlowAlign {
+    match value {
+        ContractAlign::Start => FlowAlign::Start,
+        ContractAlign::Center => FlowAlign::Center,
+        ContractAlign::End => FlowAlign::End,
     }
 }
 

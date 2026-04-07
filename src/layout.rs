@@ -5,7 +5,7 @@ pub use crate::internal_taffy::{
 };
 
 use crate::ui::tokens;
-use egui::{InnerResponse, Layout as EguiLayout, Response, Sense, Ui};
+use egui::{InnerResponse, Layout as EguiLayout, Response, Ui};
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub enum Justify {

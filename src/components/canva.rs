@@ -1,7 +1,4 @@
-use super::{
-    api::ComponentUi, Button, ButtonVariant, Card, ComponentUiExt, Label, LabelTone, LabelWeight,
-    NumberInput,
-};
+use super::{api::ComponentUi, Card, ComponentUiExt, Label, LabelTone, LabelWeight, NumberInput};
 use crate::layout;
 use crate::ui::{tokens, typography};
 use egui::{
@@ -667,9 +664,7 @@ fn point_offset(value: CanvaNinePoint, side: f32) -> egui::Vec2 {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        draw_canva_choice_chips, point_from_grid, sample_color, CanvaColorStop, CanvaNinePoint,
-    };
+    use super::{point_from_grid, sample_color, CanvaColorStop, CanvaNinePoint};
     use crate::components::ComponentUiExt;
     use crate::theme::{self, ThemeMode};
     use egui::{CentralPanel, Context, Id, RawInput};

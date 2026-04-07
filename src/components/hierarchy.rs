@@ -994,6 +994,7 @@ fn released_hierarchy_payload(
         .map(|payload| *payload)
 }
 
+#[cfg(test)]
 pub(crate) fn apply_hierarchy_move(
     nodes: &mut Vec<HierarchyNode>,
     request: HierarchyMoveRequest,
@@ -1043,6 +1044,7 @@ pub(crate) fn apply_hierarchy_move(
     true
 }
 
+#[cfg(test)]
 fn take_hierarchy_node<'nodes>(
     nodes: &'nodes mut Vec<HierarchyNode>,
     parent_id: Option<usize>,
@@ -1061,6 +1063,7 @@ fn take_hierarchy_node<'nodes>(
     None
 }
 
+#[cfg(test)]
 fn find_hierarchy_siblings_mut<'nodes>(
     nodes: &'nodes mut Vec<HierarchyNode>,
     parent_id: Option<usize>,
@@ -1081,6 +1084,7 @@ fn find_hierarchy_siblings_mut<'nodes>(
     None
 }
 
+#[cfg(test)]
 fn find_hierarchy_node<'nodes>(
     nodes: &'nodes [HierarchyNode],
     node_id: usize,
@@ -1097,6 +1101,7 @@ fn find_hierarchy_node<'nodes>(
     None
 }
 
+#[cfg(test)]
 fn find_hierarchy_node_mut<'nodes>(
     nodes: &'nodes mut Vec<HierarchyNode>,
     node_id: usize,
@@ -1113,6 +1118,7 @@ fn find_hierarchy_node_mut<'nodes>(
     None
 }
 
+#[cfg(test)]
 fn hierarchy_node_contains(
     nodes: &[HierarchyNode],
     ancestor_id: usize,
@@ -1122,6 +1128,7 @@ fn hierarchy_node_contains(
         .is_some_and(|ancestor| hierarchy_subtree_contains(ancestor, candidate_id))
 }
 
+#[cfg(test)]
 fn hierarchy_subtree_contains(node: &HierarchyNode, candidate_id: usize) -> bool {
     node.id == candidate_id
         || node

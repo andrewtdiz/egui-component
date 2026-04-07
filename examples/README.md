@@ -34,11 +34,8 @@ Available examples:
   Host-driven declarative demo rendered entirely through `egui_component::contract::*`.
 - `theme-playground`
   Live controls for `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`.
-- `runtime-core-demo`
-  Standalone Luau runtime core demo with init, update, deferred callbacks, reload, and final.
-  Uses the reusable `luau-runtime-core` crate directly.
 - `runtime-egui-host`
-  Tiny egui adapter that drives the shared `luau-runtime-core` package and hot-reloads `examples/runtime-luau/demo.luau` from filesystem events.
+  Canonical Luau runtime example. Luau renders directly through a typed immediate `ui.*` bridge from `examples/runtime-luau/`, while Rust owns the `egui` frame, hot reload, and rollback.
 
 Example commands:
 
@@ -46,7 +43,6 @@ Example commands:
 cargo run --example showcase
 cargo run --example contract-showcase
 cargo run --example theme-playground
-cargo run --example runtime-core-demo
 cargo run --example runtime-egui-host
 cargo example showcase
 cargo example showcase --hot
@@ -60,4 +56,4 @@ The window restarts on each rebuild instead of reloading code into the running p
 
 Snapshot mode is headless and crops the PNG to the component preview itself, without the outer showcase title/subtext/card wrapper.
 
-For live Luau edits, run `runtime-egui-host` and change `examples/runtime-luau/demo.luau` while the window is open.
+For live Luau edits, run `runtime-egui-host`, edit `examples/runtime-luau/demo.luau` or `examples/runtime-luau/panel.luau`, and save. Luau owns composition, styling, and view logic through the direct `ui.*` layer, while Rust owns `egui` frame execution, widget dispatch, and the hot reload boundary.

@@ -157,7 +157,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
                     .weak(),
             );
         }
-        let desired_size = egui::vec2(props.width, ui.spacing().interact_size.y);
+        let desired_size = egui::vec2(width, ui.spacing().interact_size.y);
         let (outer_rect, outer_response) =
             ui.allocate_exact_size(desired_size, egui::Sense::click());
         let text_row_height = ui.fonts_mut(|fonts| fonts.row_height(&text_font)).max(1.0);
