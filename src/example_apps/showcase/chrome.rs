@@ -164,7 +164,7 @@ impl ShowcaseApp {
 
     fn render_topbar(&mut self, ui: &mut Ui) {
         let _ = show_inset(ui, 16, 10, |ui| {
-            show_showcase_topbar_row(ui, &mut self.theme_mode);
+            show_showcase_topbar_row(ui, "egui-component Showcase", &mut self.theme_mode);
         });
         let _ = ui.components().separator();
     }
@@ -278,7 +278,7 @@ pub fn render_snapshot_surface(app: &mut ShowcaseApp, ui: &mut Ui) {
     let _ = render_snapshot_component(app, ui);
 }
 
-fn show_showcase_topbar_row(ui: &mut Ui, theme_mode: &mut ThemeMode) {
+pub(crate) fn show_showcase_topbar_row(ui: &mut Ui, title: &str, theme_mode: &mut ThemeMode) {
     let _ = show_leading_trailing(
         ui,
         12.0,
@@ -287,7 +287,7 @@ fn show_showcase_topbar_row(ui: &mut Ui, theme_mode: &mut ThemeMode) {
         |ui| {
             let mut components = ui.components();
             let _ = components.label(
-                Label::new("egui-component Showcase")
+                Label::new(title)
                     .weight(LabelWeight::Semibold)
                     .tone(LabelTone::Primary),
             );
@@ -401,7 +401,11 @@ fn show_section_link_row(ui: &mut Ui, icon: &str, label: &str) -> egui::Response
     )
 }
 
-fn draw_showcase_sidebar_item(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
+pub(crate) fn draw_showcase_sidebar_item(
+    ui: &mut Ui,
+    label: &str,
+    selected: bool,
+) -> egui::Response {
     let runtime = crate::theme::runtime_for_ui(ui);
     let hover_fill = crate::ui::tokens::button_secondary_hover_bg(runtime).linear_multiply(0.78);
     let label_font = crate::ui::typography::label_font();

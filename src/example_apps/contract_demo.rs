@@ -76,7 +76,7 @@ impl Default for ContractDemoApp {
                 duration_secs: 0.0,
                 action_id: None,
             }],
-            event_log: vec!["Host bootstrapped the contract demo.".to_owned()],
+            event_log: vec!["Host bootstrapped the optional contract demo.".to_owned()],
         }
     }
 }
@@ -189,13 +189,15 @@ fn render_demo_header(app: &ContractDemoApp, ui: &mut Ui) {
     ui.components().card(Card::new().padding(18, 16), |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
-                Label::new("Luau Contract Layer")
+                Label::new("Optional Contract Layer")
                     .weight(LabelWeight::Bold)
                     .size(20.0),
             );
             ui.add_space(4.0);
             let _ = ui.components().label(
-                Label::new("A simple host shell around the contract tree, laid out with Taffy.")
+                Label::new(
+                    "A host-authored `ContractTree` rendered by Rust. The direct Luau runtime path lives in `runtime-egui-host`.",
+                )
                     .tone(LabelTone::Muted),
             );
 
@@ -220,12 +222,14 @@ fn render_demo_main(ui: &mut Ui, tree: &ContractTree, events: &mut Vec<ContractE
     ui.components().card(Card::new().padding(16, 16), |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
-                Label::new("Contract Surface")
+                Label::new("Optional Contract Surface")
                     .weight(LabelWeight::Semibold)
                     .size(14.0),
             );
             let _ = ui.components().label(
-                Label::new("The renderer below stays host-owned and returns semantic events only.")
+                Label::new(
+                    "This alternate contract-mode renderer stays host-owned and returns semantic events only.",
+                )
                     .tone(LabelTone::Muted),
             );
 
@@ -244,13 +248,16 @@ fn render_demo_sidebar(app: &ContractDemoApp, ui: &mut Ui) {
     ui.components().card(Card::new().padding(16, 16), |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
-                Label::new("Workspace Summary")
+                Label::new("Contract Mode Summary")
                     .weight(LabelWeight::Semibold)
                     .size(14.0),
             );
-            let _ = ui
-                .components()
-                .label(Label::new("Live host state and recent events.").tone(LabelTone::Muted));
+            let _ = ui.components().label(
+                Label::new(
+                    "Live host state and recent events for the optional contract-layer example.",
+                )
+                .tone(LabelTone::Muted),
+            );
 
             ui.add_space(12.0);
             render_state_row(ui, "Project", &app.project_name);
@@ -394,11 +401,11 @@ impl ContractDemoApp {
                 card_node(
                     "contract-demo.canvas",
                     vec![
-                        heading_node("contract-demo.heading", "Luau Contract Layer"),
+                        heading_node("contract-demo.heading", "Optional Contract Layer"),
                         muted_node(
                             "contract-demo.subtitle",
                             format!(
-                                "Host-owned state, one declarative tree in, semantic events out. Active tab: {}",
+                                "Host-owned state, one contract tree in, semantic events out. Direct Luau runtime path: runtime-egui-host. Active tab: {}",
                                 self.active_tab.as_deref().unwrap_or("overview")
                             ),
                         ),

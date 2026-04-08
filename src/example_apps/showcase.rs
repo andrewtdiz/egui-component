@@ -1,4 +1,3 @@
-use crate::catalog::{self, ComponentDefinition, ComponentGroup, ComponentKind};
 use crate::internal_taffy::{
     taffy,
     taffy::prelude::{auto, fr, length, percent},
@@ -7,12 +6,17 @@ use crate::internal_taffy::{
 use crate::prelude::*;
 use crate::theme::{self, BaseColor, ColorRole, RadiusRole, ThemeMode, ThemeSpec};
 use crate::ui::tokens;
+use crate::{component_definitions, ComponentDefinition, ComponentGroup, ComponentKind};
 use egui::{
     vec2, Align2, CentralPanel, Color32, CornerRadius, CursorIcon, Id, InnerResponse, Layout, Rect,
     Response, ScrollArea, Sense, SidePanel, Stroke, TopBottomPanel, Ui, UiBuilder,
 };
 
-fn show_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+pub(crate) fn show_row<R>(
+    ui: &mut Ui,
+    gap: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = gap.max(0.0);
         ui.horizontal(add)
@@ -20,7 +24,11 @@ fn show_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> InnerRe
     .inner
 }
 
-fn show_column<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+pub(crate) fn show_column<R>(
+    ui: &mut Ui,
+    gap: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap.max(0.0);
         ui.vertical(add)
@@ -28,7 +36,7 @@ fn show_column<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> Inne
     .inner
 }
 
-fn show_inset<R>(
+pub(crate) fn show_inset<R>(
     ui: &mut Ui,
     padding_x: i8,
     padding_y: i8,
@@ -39,7 +47,11 @@ fn show_inset<R>(
         .show(ui, add)
 }
 
-fn show_width<R>(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+pub(crate) fn show_width<R>(
+    ui: &mut Ui,
+    width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
     let scoped = ui.scope(|ui| {
         ui.set_width(width.max(0.0));
         let inner = add(ui);

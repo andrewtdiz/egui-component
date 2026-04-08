@@ -4,7 +4,7 @@ use super::{
     common::ControlSize,
 };
 use crate::ui::{icons, tokens, typography};
-use egui::{pos2, Color32, CursorIcon, FontId, Rect, RichText, Stroke, Ui, Vec2};
+use egui::{pos2, Color32, CursorIcon, FontId, Id, Rect, RichText, Stroke, Ui, Vec2};
 
 const BUTTON_ICON_LABEL_GAP: f32 = 6.0;
 const BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION: i8 = 2;
@@ -26,6 +26,7 @@ pub enum ButtonLabelWeight {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Button<'a> {
+    pub id: Option<Id>,
     pub label: &'a str,
     pub variant: ButtonVariant,
     pub size: ControlSize,
@@ -46,6 +47,7 @@ pub struct Button<'a> {
 impl<'a> Button<'a> {
     pub fn new(label: &'a str) -> Self {
         Self {
+            id: None,
             label,
             variant: ButtonVariant::Primary,
             size: ControlSize::Md,
@@ -66,6 +68,7 @@ impl<'a> Button<'a> {
 
     pub fn icon_only(icon: &'a str) -> Self {
         Self {
+            id: None,
             label: "",
             variant: ButtonVariant::Primary,
             size: ControlSize::Md,
@@ -86,6 +89,7 @@ impl<'a> Button<'a> {
 
     pub fn color_only(color: Color) -> Self {
         Self {
+            id: None,
             label: "",
             variant: ButtonVariant::Ghost,
             size: ControlSize::Md,
@@ -106,6 +110,11 @@ impl<'a> Button<'a> {
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
+        self
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
         self
     }
 
@@ -533,6 +542,14 @@ fn draw_icon_label_button(
 }
 
 fn draw_button(ui: &mut Ui, props: Button<'_>) -> egui::Response {
+    if let Some(id) = props.id {
+        return ui.push_id(id, |ui| draw_button_inner(ui, props)).inner;
+    }
+
+    draw_button_inner(ui, props)
+}
+
+fn draw_button_inner(ui: &mut Ui, props: Button<'_>) -> egui::Response {
     ui.scope(|ui| {
         let runtime = crate::theme::runtime_for_ui(ui);
         let resolved = resolve_button_style(

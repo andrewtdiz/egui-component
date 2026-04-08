@@ -24,7 +24,7 @@ include = [
 ]
 
 [workspace]
-members = [".", "luau-runtime"]
+members = [".", "luau-runtime", "tools/example-runner"]
 resolver = "2"
 
 [lib]

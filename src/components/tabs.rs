@@ -73,6 +73,8 @@ pub enum TabsVariant {
     #[default]
     Underline,
     Segmented,
+    Stacked,
+    Rail,
     BlenderTopbar,
 }
 
@@ -92,6 +94,12 @@ impl ComponentUi<'_> {
             TabsVariant::Underline => draw_tabs(self.ui_mut(), id, current, options),
             TabsVariant::Segmented => {
                 let _ = draw_segmented_tabs(self.ui_mut(), id, current, options);
+            }
+            TabsVariant::Stacked => {
+                let _ = draw_stacked_tabs(self.ui_mut(), id, current, options);
+            }
+            TabsVariant::Rail => {
+                let _ = draw_rail_tabs(self.ui_mut(), id, current, options);
             }
             TabsVariant::BlenderTopbar => {
                 let _ = draw_blender_topbar_tabs(self.ui_mut(), id, current, options);

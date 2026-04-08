@@ -13,6 +13,8 @@ pub enum ContractChildPolicy {
 #[serde(rename_all = "snake_case")]
 pub enum ContractPropTypeKind {
     String,
+    StringList,
+    StringMap,
     Boolean,
     Number,
     Enum,
@@ -23,11 +25,21 @@ pub enum ContractPropTypeKind {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContractSupportStatus {
+    Supported,
+    Partial,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize)]
 pub struct ContractPropSpec {
     pub name: &'static str,
     pub kind: ContractPropTypeKind,
     pub type_name: Option<&'static str>,
     pub required: bool,
+    pub support: ContractSupportStatus,
+    pub support_summary: &'static str,
     pub summary: &'static str,
 }
 
@@ -74,6 +86,8 @@ pub struct ContractSharedTypeSpec {
     pub name: &'static str,
     pub display_name: &'static str,
     pub kind: ContractSharedTypeKind,
+    pub support: ContractSupportStatus,
+    pub support_summary: &'static str,
     pub summary: &'static str,
     pub fields: &'static [ContractPropSpec],
     pub variants: &'static [ContractVariantSpec],
@@ -91,274 +105,856 @@ const EMPTY_VARIANTS: [ContractVariantSpec; 0] = [];
 const EMPTY_VARIANT_REFS: [ContractVariantRef; 0] = [];
 const EMPTY_EVENTS: [ContractEventSpec; 0] = [];
 
-const NODE_COMMON_FIELDS: [ContractPropSpec; 3] = [
+const fn supported_prop(
+    name: &'static str,
+    kind: ContractPropTypeKind,
+    type_name: Option<&'static str>,
+    required: bool,
+    summary: &'static str,
+) -> ContractPropSpec {
     ContractPropSpec {
-        name: "node_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable host-owned node identifier.",
-    },
+        name,
+        kind,
+        type_name,
+        required,
+        support: ContractSupportStatus::Supported,
+        support_summary: "",
+        summary,
+    }
+}
+
+const fn partial_prop(
+    name: &'static str,
+    kind: ContractPropTypeKind,
+    type_name: Option<&'static str>,
+    required: bool,
+    summary: &'static str,
+    support_summary: &'static str,
+) -> ContractPropSpec {
     ContractPropSpec {
-        name: "visible",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the node renders at all. Defaults to true.",
-    },
+        name,
+        kind,
+        type_name,
+        required,
+        support: ContractSupportStatus::Partial,
+        support_summary,
+        summary,
+    }
+}
+
+const fn unsupported_prop(
+    name: &'static str,
+    kind: ContractPropTypeKind,
+    type_name: Option<&'static str>,
+    required: bool,
+    summary: &'static str,
+    support_summary: &'static str,
+) -> ContractPropSpec {
     ContractPropSpec {
-        name: "enabled",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether interaction is enabled. Defaults to true.",
-    },
+        name,
+        kind,
+        type_name,
+        required,
+        support: ContractSupportStatus::Unsupported,
+        support_summary,
+        summary,
+    }
+}
+
+const fn supported_shared_type(
+    name: &'static str,
+    display_name: &'static str,
+    kind: ContractSharedTypeKind,
+    summary: &'static str,
+    fields: &'static [ContractPropSpec],
+    variants: &'static [ContractVariantSpec],
+) -> ContractSharedTypeSpec {
+    ContractSharedTypeSpec {
+        name,
+        display_name,
+        kind,
+        support: ContractSupportStatus::Supported,
+        support_summary: "",
+        summary,
+        fields,
+        variants,
+    }
+}
+
+const fn partial_shared_type(
+    name: &'static str,
+    display_name: &'static str,
+    kind: ContractSharedTypeKind,
+    summary: &'static str,
+    support_summary: &'static str,
+    fields: &'static [ContractPropSpec],
+    variants: &'static [ContractVariantSpec],
+) -> ContractSharedTypeSpec {
+    ContractSharedTypeSpec {
+        name,
+        display_name,
+        kind,
+        support: ContractSupportStatus::Partial,
+        support_summary,
+        summary,
+        fields,
+        variants,
+    }
+}
+
+const fn unsupported_shared_type(
+    name: &'static str,
+    display_name: &'static str,
+    kind: ContractSharedTypeKind,
+    summary: &'static str,
+    support_summary: &'static str,
+    fields: &'static [ContractPropSpec],
+    variants: &'static [ContractVariantSpec],
+) -> ContractSharedTypeSpec {
+    ContractSharedTypeSpec {
+        name,
+        display_name,
+        kind,
+        support: ContractSupportStatus::Unsupported,
+        support_summary,
+        summary,
+        fields,
+        variants,
+    }
+}
+
+const NODE_COMMON_FIELDS: [ContractPropSpec; 8] = [
+    supported_prop(
+        "node_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable host-owned node identifier.",
+    ),
+    supported_prop(
+        "visible",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the node renders at all. Defaults to true.",
+    ),
+    supported_prop(
+        "enabled",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether interaction is enabled. Defaults to true.",
+    ),
+    unsupported_prop(
+        "class",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional primary class string.",
+        "Declared in the model and schema only. The current Rust renderer ignores class strings.",
+    ),
+    unsupported_prop(
+        "class_list",
+        ContractPropTypeKind::StringList,
+        None,
+        false,
+        "Optional expanded class token list.",
+        "Declared in the model and schema only. The current Rust renderer ignores class lists.",
+    ),
+    unsupported_prop(
+        "slot_classes",
+        ContractPropTypeKind::StringMap,
+        None,
+        false,
+        "Optional slot-name to class-string overrides.",
+        "Declared in the model and schema only. The current Rust renderer does not apply slot-specific class behavior.",
+    ),
+    unsupported_prop(
+        "actions",
+        ContractPropTypeKind::Object,
+        Some("actions"),
+        false,
+        "Optional common semantic action bindings.",
+        "Declared in the model and schema only. The current renderer uses family-specific action fields instead.",
+    ),
+    partial_prop(
+        "layout",
+        ContractPropTypeKind::Object,
+        Some("layout"),
+        false,
+        "Optional shared layout hints.",
+        "The renderer applies sizing on every node and container direction/justify/align/gap overrides on flow containers only.",
+    ),
+];
+
+const ACTIONS_FIELDS: [ContractPropSpec; 8] = [
+    unsupported_prop(
+        "click",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional click action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "change",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional change action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "submit",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional submit action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "select",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional select action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "open",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional open action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "close",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional close action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "confirm",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional confirm action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "cancel",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional cancel action id.",
+        "Common action bindings are declared but not executed by the current renderer.",
+    ),
+];
+
+const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
+    unsupported_prop(
+        "display",
+        ContractPropTypeKind::Enum,
+        Some("layout_display"),
+        false,
+        "Optional layout mode override.",
+        "Declared in the schema only. The current renderer does not execute display-mode switching.",
+    ),
+    partial_prop(
+        "direction",
+        ContractPropTypeKind::Enum,
+        Some("layout_direction"),
+        false,
+        "Optional row or column direction override.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card.",
+    ),
+    unsupported_prop(
+        "grow",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional flex grow factor.",
+        "Declared in the schema only. Flex growth is not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "shrink",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional flex shrink factor.",
+        "Declared in the schema only. Flex shrink is not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "basis",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional flex basis length.",
+        "Declared in the schema only. Flex basis is not executed by the current renderer.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional width override.",
+    ),
+    supported_prop(
+        "height",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional height override.",
+    ),
+    supported_prop(
+        "min_width",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional minimum width override.",
+    ),
+    supported_prop(
+        "min_height",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional minimum height override.",
+    ),
+    supported_prop(
+        "max_width",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional maximum width override.",
+    ),
+    supported_prop(
+        "max_height",
+        ContractPropTypeKind::Object,
+        Some("layout_length"),
+        false,
+        "Optional maximum height override.",
+    ),
+    partial_prop(
+        "gap_x",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional horizontal gap override.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card.",
+    ),
+    partial_prop(
+        "gap_y",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional vertical gap override.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card.",
+    ),
+    unsupported_prop(
+        "padding",
+        ContractPropTypeKind::Object,
+        Some("layout_edges"),
+        false,
+        "Optional padding edges.",
+        "Declared in the schema only. Shared layout padding is not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "margin",
+        ContractPropTypeKind::Object,
+        Some("layout_edges"),
+        false,
+        "Optional margin edges.",
+        "Declared in the schema only. Shared layout margins are not executed by the current renderer.",
+    ),
+    partial_prop(
+        "align",
+        ContractPropTypeKind::Enum,
+        Some("align"),
+        false,
+        "Optional cross-axis alignment override.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card.",
+    ),
+    partial_prop(
+        "justify",
+        ContractPropTypeKind::Enum,
+        Some("justify"),
+        false,
+        "Optional main-axis alignment override.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card.",
+    ),
+    unsupported_prop(
+        "wrap",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Optional wrap hint.",
+        "Declared in the schema only. Wrapping is not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "columns",
+        ContractPropTypeKind::ObjectList,
+        Some("layout_track"),
+        false,
+        "Optional grid column tracks.",
+        "Declared in the schema only. Grid tracks are not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "rows",
+        ContractPropTypeKind::ObjectList,
+        Some("layout_track"),
+        false,
+        "Optional grid row tracks.",
+        "Declared in the schema only. Grid tracks are not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "col_span",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional grid column span.",
+        "Declared in the schema only. Grid spans are not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "row_span",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional grid row span.",
+        "Declared in the schema only. Grid spans are not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "overflow_x",
+        ContractPropTypeKind::Enum,
+        Some("layout_overflow"),
+        false,
+        "Optional horizontal overflow mode.",
+        "Declared in the schema only. Overflow handling is not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "overflow_y",
+        ContractPropTypeKind::Enum,
+        Some("layout_overflow"),
+        false,
+        "Optional vertical overflow mode.",
+        "Declared in the schema only. Overflow handling is not executed by the current renderer.",
+    ),
+];
+
+const LAYOUT_EDGES_FIELDS: [ContractPropSpec; 4] = [
+    unsupported_prop(
+        "top",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Top edge value.",
+        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "right",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Right edge value.",
+        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "bottom",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Bottom edge value.",
+        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "left",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Left edge value.",
+        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+    ),
+];
+
+const LAYOUT_LENGTH_FIELDS: [ContractPropSpec; 2] = [
+    partial_prop(
+        "kind",
+        ContractPropTypeKind::Enum,
+        Some("layout_length_kind"),
+        true,
+        "Length representation kind.",
+        "The value shape is supported when referenced by width, height, min, and max layout fields. Other consumers such as basis are still unsupported.",
+    ),
+    partial_prop(
+        "value",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Numeric payload for px and percent lengths.",
+        "The value shape is supported when referenced by width, height, min, and max layout fields. Other consumers such as basis are still unsupported.",
+    ),
+];
+
+const LAYOUT_TRACK_FIELDS: [ContractPropSpec; 2] = [
+    unsupported_prop(
+        "kind",
+        ContractPropTypeKind::Enum,
+        Some("layout_track_kind"),
+        true,
+        "Track representation kind.",
+        "Grid tracks are declared in the schema only and are not executed by the current renderer.",
+    ),
+    unsupported_prop(
+        "value",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Numeric payload for fr, px, and percent tracks.",
+        "Grid tracks are declared in the schema only and are not executed by the current renderer.",
+    ),
 ];
 
 const ACTION_ITEM_FIELDS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable item identifier.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible item label.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional item-level action id.",
-    },
+    supported_prop(
+        "item_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable item identifier.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible item label.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional item-level action id.",
+    ),
 ];
 
 const CHOICE_ITEM_FIELDS: [ContractPropSpec; 3] = ACTION_ITEM_FIELDS;
 
 const TAB_ITEM_FIELDS: [ContractPropSpec; 5] = [
-    ContractPropSpec {
-        name: "item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable tab identifier.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible tab label.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional item-level action id.",
-    },
-    ContractPropSpec {
-        name: "icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional icon name.",
-    },
-    ContractPropSpec {
-        name: "icon_only",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the tab should render without text.",
-    },
+    supported_prop(
+        "item_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable tab identifier.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible tab label.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional item-level action id.",
+    ),
+    supported_prop(
+        "icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional icon name.",
+    ),
+    supported_prop(
+        "icon_only",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the tab should render without text.",
+    ),
 ];
 
 const MENU_ACTION_FIELDS: [ContractPropSpec; 5] = [
-    ContractPropSpec {
-        name: "item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable menu action identifier.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible action label.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional action id emitted back to the host.",
-    },
-    ContractPropSpec {
-        name: "leading_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading icon.",
-    },
-    ContractPropSpec {
-        name: "shortcut",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional shortcut label.",
-    },
+    supported_prop(
+        "item_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable menu action identifier.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible action label.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional action id emitted back to the host.",
+    ),
+    supported_prop(
+        "leading_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading icon.",
+    ),
+    supported_prop(
+        "shortcut",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional shortcut label.",
+    ),
 ];
 
 const MENU_ENTRY_FIELDS: [ContractPropSpec; 2] = [
-    ContractPropSpec {
-        name: "kind",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("menu_entry_kind"),
-        required: true,
-        summary: "Whether the entry is an action or separator.",
-    },
-    ContractPropSpec {
-        name: "action",
-        kind: ContractPropTypeKind::Object,
-        type_name: Some("menu_action"),
-        required: false,
-        summary: "Action payload when kind is action.",
-    },
+    supported_prop(
+        "kind",
+        ContractPropTypeKind::Enum,
+        Some("menu_entry_kind"),
+        true,
+        "Whether the entry is an action or separator.",
+    ),
+    supported_prop(
+        "action",
+        ContractPropTypeKind::Object,
+        Some("menu_action"),
+        false,
+        "Action payload when kind is action.",
+    ),
 ];
 
 const MENU_FIELDS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "menu_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable top-level menu identifier.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible top-level menu label.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Popup width for the menu surface.",
-    },
-    ContractPropSpec {
-        name: "entries",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("menu_entry"),
-        required: true,
-        summary: "Action and separator rows for the menu.",
-    },
+    supported_prop(
+        "menu_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable top-level menu identifier.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible top-level menu label.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Popup width for the menu surface.",
+    ),
+    supported_prop(
+        "entries",
+        ContractPropTypeKind::ObjectList,
+        Some("menu_entry"),
+        true,
+        "Action and separator rows for the menu.",
+    ),
 ];
 
 const HIERARCHY_ITEM_FIELDS: [ContractPropSpec; 7] = [
-    ContractPropSpec {
-        name: "item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable hierarchy item identifier.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible hierarchy label.",
-    },
-    ContractPropSpec {
-        name: "kind",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("hierarchy_item_kind"),
-        required: true,
-        summary: "Semantic item kind.",
-    },
-    ContractPropSpec {
-        name: "open",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether children are expanded.",
-    },
-    ContractPropSpec {
-        name: "locked",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the row renders as locked.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional item-level action id.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("hierarchy_item"),
-        required: false,
-        summary: "Nested hierarchy children.",
-    },
+    supported_prop(
+        "item_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable hierarchy item identifier.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible hierarchy label.",
+    ),
+    supported_prop(
+        "kind",
+        ContractPropTypeKind::Enum,
+        Some("hierarchy_item_kind"),
+        true,
+        "Semantic item kind.",
+    ),
+    supported_prop(
+        "open",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether children are expanded.",
+    ),
+    supported_prop(
+        "locked",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the row renders as locked.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional item-level action id.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::ObjectList,
+        Some("hierarchy_item"),
+        false,
+        "Nested hierarchy children.",
+    ),
 ];
 
 const TOAST_ITEM_FIELDS: [ContractPropSpec; 6] = [
-    ContractPropSpec {
-        name: "item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Stable toast item identifier.",
+    supported_prop(
+        "item_id",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Stable toast item identifier.",
+    ),
+    supported_prop(
+        "title",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible toast title.",
+    ),
+    supported_prop(
+        "description",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional supporting copy.",
+    ),
+    supported_prop(
+        "intent",
+        ContractPropTypeKind::Enum,
+        Some("toast_intent"),
+        false,
+        "Toast semantic intent.",
+    ),
+    supported_prop(
+        "duration_secs",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Auto-dismiss duration in seconds. Zero keeps the toast open until dismissed.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional toast lifecycle action id.",
+    ),
+];
+
+const LAYOUT_LENGTH_KIND_VARIANTS: [ContractVariantSpec; 3] = [
+    ContractVariantSpec {
+        id: "auto",
+        label: "Auto",
+        summary: "Automatic size chosen by the renderer.",
     },
-    ContractPropSpec {
-        name: "title",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible toast title.",
+    ContractVariantSpec {
+        id: "px",
+        label: "Px",
+        summary: "Absolute pixel size.",
     },
-    ContractPropSpec {
-        name: "description",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional supporting copy.",
+    ContractVariantSpec {
+        id: "percent",
+        label: "Percent",
+        summary: "Percentage of the available size.",
     },
-    ContractPropSpec {
-        name: "intent",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("toast_intent"),
-        required: false,
-        summary: "Toast semantic intent.",
+];
+
+const LAYOUT_TRACK_KIND_VARIANTS: [ContractVariantSpec; 4] = [
+    ContractVariantSpec {
+        id: "auto",
+        label: "Auto",
+        summary: "Automatic track size.",
     },
-    ContractPropSpec {
-        name: "duration_secs",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Auto-dismiss duration in seconds. Zero keeps the toast open until dismissed.",
+    ContractVariantSpec {
+        id: "fr",
+        label: "Fr",
+        summary: "Fractional grid track size.",
     },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional toast lifecycle action id.",
+    ContractVariantSpec {
+        id: "px",
+        label: "Px",
+        summary: "Absolute pixel track size.",
+    },
+    ContractVariantSpec {
+        id: "percent",
+        label: "Percent",
+        summary: "Percentage-based track size.",
+    },
+];
+
+const LAYOUT_DISPLAY_VARIANTS: [ContractVariantSpec; 4] = [
+    ContractVariantSpec {
+        id: "flow",
+        label: "Flow",
+        summary: "Default flow layout.",
+    },
+    ContractVariantSpec {
+        id: "flex",
+        label: "Flex",
+        summary: "Flex-style layout hint.",
+    },
+    ContractVariantSpec {
+        id: "grid",
+        label: "Grid",
+        summary: "Grid-style layout hint.",
+    },
+    ContractVariantSpec {
+        id: "overlay",
+        label: "Overlay",
+        summary: "Overlay-style layout hint.",
+    },
+];
+
+const LAYOUT_DIRECTION_VARIANTS: [ContractVariantSpec; 2] = [
+    ContractVariantSpec {
+        id: "row",
+        label: "Row",
+        summary: "Lay out children horizontally.",
+    },
+    ContractVariantSpec {
+        id: "column",
+        label: "Column",
+        summary: "Lay out children vertically.",
+    },
+];
+
+const LAYOUT_OVERFLOW_VARIANTS: [ContractVariantSpec; 3] = [
+    ContractVariantSpec {
+        id: "visible",
+        label: "Visible",
+        summary: "Allow content to remain visible outside the box.",
+    },
+    ContractVariantSpec {
+        id: "hidden",
+        label: "Hidden",
+        summary: "Clip overflowing content.",
+    },
+    ContractVariantSpec {
+        id: "scroll",
+        label: "Scroll",
+        summary: "Show scrollable overflow behavior.",
     },
 ];
 
@@ -839,891 +1435,891 @@ const TOAST_EVENTS: [ContractEventSpec; 2] = [
 ];
 
 const ROW_PROPS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "gap",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Horizontal gap between child nodes.",
-    },
-    ContractPropSpec {
-        name: "justify",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("justify"),
-        required: false,
-        summary: "Main-axis alignment.",
-    },
-    ContractPropSpec {
-        name: "align",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("align"),
-        required: false,
-        summary: "Cross-axis alignment.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Nested contract child nodes.",
-    },
+    supported_prop(
+        "gap",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Horizontal gap between child nodes.",
+    ),
+    supported_prop(
+        "justify",
+        ContractPropTypeKind::Enum,
+        Some("justify"),
+        false,
+        "Main-axis alignment.",
+    ),
+    supported_prop(
+        "align",
+        ContractPropTypeKind::Enum,
+        Some("align"),
+        false,
+        "Cross-axis alignment.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Nested contract child nodes.",
+    ),
 ];
 
 const COLUMN_PROPS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "gap",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Vertical gap between child nodes.",
-    },
-    ContractPropSpec {
-        name: "justify",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("justify"),
-        required: false,
-        summary: "Main-axis alignment.",
-    },
-    ContractPropSpec {
-        name: "align",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("align"),
-        required: false,
-        summary: "Cross-axis alignment.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Nested contract child nodes.",
-    },
+    supported_prop(
+        "gap",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Vertical gap between child nodes.",
+    ),
+    supported_prop(
+        "justify",
+        ContractPropTypeKind::Enum,
+        Some("justify"),
+        false,
+        "Main-axis alignment.",
+    ),
+    supported_prop(
+        "align",
+        ContractPropTypeKind::Enum,
+        Some("align"),
+        false,
+        "Cross-axis alignment.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Nested contract child nodes.",
+    ),
 ];
 
 const INSET_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "padding_x",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Horizontal inset padding.",
-    },
-    ContractPropSpec {
-        name: "padding_y",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Vertical inset padding.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Nested contract child nodes.",
-    },
+    supported_prop(
+        "padding_x",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Horizontal inset padding.",
+    ),
+    supported_prop(
+        "padding_y",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Vertical inset padding.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Nested contract child nodes.",
+    ),
 ];
 
 const SIZED_BOX_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional explicit width.",
-    },
-    ContractPropSpec {
-        name: "height",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional explicit height.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Nested contract child nodes.",
-    },
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional explicit width.",
+    ),
+    supported_prop(
+        "height",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional explicit height.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Nested contract child nodes.",
+    ),
 ];
 
 const SPACER_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional fixed spacer width.",
-    },
-    ContractPropSpec {
-        name: "height",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional fixed spacer height.",
-    },
-    ContractPropSpec {
-        name: "flex",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the spacer should fill remaining space.",
-    },
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional fixed spacer width.",
+    ),
+    supported_prop(
+        "height",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional fixed spacer height.",
+    ),
+    supported_prop(
+        "flex",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the spacer should fill remaining space.",
+    ),
 ];
 
 const CARD_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "padding_x",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Horizontal card padding.",
-    },
-    ContractPropSpec {
-        name: "padding_y",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Vertical card padding.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Nested contract child nodes.",
-    },
+    supported_prop(
+        "padding_x",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Horizontal card padding.",
+    ),
+    supported_prop(
+        "padding_y",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Vertical card padding.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Nested contract child nodes.",
+    ),
 ];
 
 const SIDEBAR_PROPS: [ContractPropSpec; 5] = [
-    ContractPropSpec {
-        name: "title",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional sidebar title.",
-    },
-    ContractPropSpec {
-        name: "side",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("sidebar_side"),
-        required: false,
-        summary: "Docking side.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Sidebar width.",
-    },
-    ContractPropSpec {
-        name: "open",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the sidebar is currently open.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Sidebar body children.",
-    },
+    supported_prop(
+        "title",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional sidebar title.",
+    ),
+    supported_prop(
+        "side",
+        ContractPropTypeKind::Enum,
+        Some("sidebar_side"),
+        false,
+        "Docking side.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Sidebar width.",
+    ),
+    supported_prop(
+        "open",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the sidebar is currently open.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Sidebar body children.",
+    ),
 ];
 
 const TOOLBAR_PROPS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "anchor",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("toolbar_anchor"),
-        required: false,
-        summary: "Toolbar anchor point.",
-    },
-    ContractPropSpec {
-        name: "offset_x",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Horizontal anchor offset.",
-    },
-    ContractPropSpec {
-        name: "offset_y",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Vertical anchor offset.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Toolbar child nodes.",
-    },
+    supported_prop(
+        "anchor",
+        ContractPropTypeKind::Enum,
+        Some("toolbar_anchor"),
+        false,
+        "Toolbar anchor point.",
+    ),
+    supported_prop(
+        "offset_x",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Horizontal anchor offset.",
+    ),
+    supported_prop(
+        "offset_y",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Vertical anchor offset.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Toolbar child nodes.",
+    ),
 ];
 
-const MENU_BAR_PROPS: [ContractPropSpec; 1] = [ContractPropSpec {
-    name: "menus",
-    kind: ContractPropTypeKind::ObjectList,
-    type_name: Some("menu"),
-    required: true,
-    summary: "Top-level menus and entries.",
-}];
+const MENU_BAR_PROPS: [ContractPropSpec; 1] = [supported_prop(
+    "menus",
+    ContractPropTypeKind::ObjectList,
+    Some("menu"),
+    true,
+    "Top-level menus and entries.",
+)];
 
 const TABS_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "style",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("tabs_style"),
-        required: false,
-        summary: "Visual tab presentation.",
-    },
-    ContractPropSpec {
-        name: "selected_item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Currently selected tab id.",
-    },
-    ContractPropSpec {
-        name: "items",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("tab_item"),
-        required: true,
-        summary: "Tab items.",
-    },
+    supported_prop(
+        "style",
+        ContractPropTypeKind::Enum,
+        Some("tabs_style"),
+        false,
+        "Visual tab presentation.",
+    ),
+    supported_prop(
+        "selected_item_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Currently selected tab id.",
+    ),
+    supported_prop(
+        "items",
+        ContractPropTypeKind::ObjectList,
+        Some("tab_item"),
+        true,
+        "Tab items.",
+    ),
 ];
 
 const LABEL_PROPS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "text",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible label text.",
-    },
-    ContractPropSpec {
-        name: "tone",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("label_tone"),
-        required: false,
-        summary: "Semantic text tone.",
-    },
-    ContractPropSpec {
-        name: "weight",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("label_weight"),
-        required: false,
-        summary: "Semantic text weight.",
-    },
-    ContractPropSpec {
-        name: "size",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional text size override.",
-    },
+    supported_prop(
+        "text",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible label text.",
+    ),
+    supported_prop(
+        "tone",
+        ContractPropTypeKind::Enum,
+        Some("label_tone"),
+        false,
+        "Semantic text tone.",
+    ),
+    supported_prop(
+        "weight",
+        ContractPropTypeKind::Enum,
+        Some("label_weight"),
+        false,
+        "Semantic text weight.",
+    ),
+    supported_prop(
+        "size",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional text size override.",
+    ),
 ];
 
 const BUTTON_PROPS: [ContractPropSpec; 9] = [
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Visible button label.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional action id emitted on click.",
-    },
-    ContractPropSpec {
-        name: "variant",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("button_variant"),
-        required: false,
-        summary: "Button visual variant.",
-    },
-    ContractPropSpec {
-        name: "size",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("control_size"),
-        required: false,
-        summary: "Button size token.",
-    },
-    ContractPropSpec {
-        name: "leading_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading icon.",
-    },
-    ContractPropSpec {
-        name: "trailing_text",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional trailing helper text.",
-    },
-    ContractPropSpec {
-        name: "trailing_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional trailing icon.",
-    },
-    ContractPropSpec {
-        name: "icon_only",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the button should render as icon-only.",
-    },
-    ContractPropSpec {
-        name: "selected",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the button should render in a selected state.",
-    },
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Visible button label.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional action id emitted on click.",
+    ),
+    supported_prop(
+        "variant",
+        ContractPropTypeKind::Enum,
+        Some("button_variant"),
+        false,
+        "Button visual variant.",
+    ),
+    supported_prop(
+        "size",
+        ContractPropTypeKind::Enum,
+        Some("control_size"),
+        false,
+        "Button size token.",
+    ),
+    supported_prop(
+        "leading_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading icon.",
+    ),
+    supported_prop(
+        "trailing_text",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional trailing helper text.",
+    ),
+    supported_prop(
+        "trailing_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional trailing icon.",
+    ),
+    supported_prop(
+        "icon_only",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the button should render as icon-only.",
+    ),
+    supported_prop(
+        "selected",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the button should render in a selected state.",
+    ),
 ];
 
-const BUTTON_GROUP_PROPS: [ContractPropSpec; 1] = [ContractPropSpec {
-    name: "items",
-    kind: ContractPropTypeKind::ObjectList,
-    type_name: Some("action_item"),
-    required: true,
-    summary: "Action items for the group.",
-}];
+const BUTTON_GROUP_PROPS: [ContractPropSpec; 1] = [supported_prop(
+    "items",
+    ContractPropTypeKind::ObjectList,
+    Some("action_item"),
+    true,
+    "Action items for the group.",
+)];
 
 const INPUT_PROPS: [ContractPropSpec; 5] = [
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Current text value.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional input action id.",
-    },
-    ContractPropSpec {
-        name: "placeholder",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Placeholder copy.",
-    },
-    ContractPropSpec {
-        name: "leading_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading icon.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested control width.",
-    },
+    supported_prop(
+        "value",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Current text value.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional input action id.",
+    ),
+    supported_prop(
+        "placeholder",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Placeholder copy.",
+    ),
+    supported_prop(
+        "leading_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading icon.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested control width.",
+    ),
 ];
 
 const NUMBER_INPUT_PROPS: [ContractPropSpec; 10] = [
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: true,
-        summary: "Current numeric value.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional action id.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested control width.",
-    },
-    ContractPropSpec {
-        name: "min",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Inclusive numeric minimum.",
-    },
-    ContractPropSpec {
-        name: "max",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Inclusive numeric maximum.",
-    },
-    ContractPropSpec {
-        name: "speed",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Drag speed.",
-    },
-    ContractPropSpec {
-        name: "decimals",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Displayed decimal precision.",
-    },
-    ContractPropSpec {
-        name: "prefix",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading unit text.",
-    },
-    ContractPropSpec {
-        name: "suffix",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional trailing unit text.",
-    },
-    ContractPropSpec {
-        name: "axis",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("number_input_axis"),
-        required: false,
-        summary: "Primary drag axis.",
-    },
+    supported_prop(
+        "value",
+        ContractPropTypeKind::Number,
+        None,
+        true,
+        "Current numeric value.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional action id.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested control width.",
+    ),
+    supported_prop(
+        "min",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Inclusive numeric minimum.",
+    ),
+    supported_prop(
+        "max",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Inclusive numeric maximum.",
+    ),
+    supported_prop(
+        "speed",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Drag speed.",
+    ),
+    supported_prop(
+        "decimals",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Displayed decimal precision.",
+    ),
+    supported_prop(
+        "prefix",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading unit text.",
+    ),
+    supported_prop(
+        "suffix",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional trailing unit text.",
+    ),
+    supported_prop(
+        "axis",
+        ContractPropTypeKind::Enum,
+        Some("number_input_axis"),
+        false,
+        "Primary drag axis.",
+    ),
 ];
 
 const CHECKBOX_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: true,
-        summary: "Current checked value.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional action id.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional checkbox label.",
-    },
+    supported_prop(
+        "value",
+        ContractPropTypeKind::Boolean,
+        None,
+        true,
+        "Current checked value.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional action id.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional checkbox label.",
+    ),
 ];
 
 const SWITCH_PROPS: [ContractPropSpec; 4] = [
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: true,
-        summary: "Current switch value.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional action id.",
-    },
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional switch label.",
-    },
-    ContractPropSpec {
-        name: "size",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("control_size"),
-        required: false,
-        summary: "Switch size token.",
-    },
+    supported_prop(
+        "value",
+        ContractPropTypeKind::Boolean,
+        None,
+        true,
+        "Current switch value.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional action id.",
+    ),
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional switch label.",
+    ),
+    supported_prop(
+        "size",
+        ContractPropTypeKind::Enum,
+        Some("control_size"),
+        false,
+        "Switch size token.",
+    ),
 ];
 
 const SELECT_PROPS: [ContractPropSpec; 7] = [
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional select action id.",
-    },
-    ContractPropSpec {
-        name: "selected_item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Currently selected item id.",
-    },
-    ContractPropSpec {
-        name: "placeholder",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Placeholder copy.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested trigger width.",
-    },
-    ContractPropSpec {
-        name: "variant",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("select_variant"),
-        required: false,
-        summary: "Trigger styling variant.",
-    },
-    ContractPropSpec {
-        name: "leading_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading icon.",
-    },
-    ContractPropSpec {
-        name: "items",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("choice_item"),
-        required: true,
-        summary: "Selectable items.",
-    },
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional select action id.",
+    ),
+    supported_prop(
+        "selected_item_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Currently selected item id.",
+    ),
+    supported_prop(
+        "placeholder",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Placeholder copy.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested trigger width.",
+    ),
+    supported_prop(
+        "variant",
+        ContractPropTypeKind::Enum,
+        Some("select_variant"),
+        false,
+        "Trigger styling variant.",
+    ),
+    supported_prop(
+        "leading_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading icon.",
+    ),
+    supported_prop(
+        "items",
+        ContractPropTypeKind::ObjectList,
+        Some("choice_item"),
+        true,
+        "Selectable items.",
+    ),
 ];
 
 const FIELD_PROPS: [ContractPropSpec; 6] = [
-    ContractPropSpec {
-        name: "label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Field label.",
-    },
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Current text value.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional field action id.",
-    },
-    ContractPropSpec {
-        name: "helper_text",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional helper copy.",
-    },
-    ContractPropSpec {
-        name: "placeholder",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional placeholder copy.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested input width.",
-    },
+    supported_prop(
+        "label",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Field label.",
+    ),
+    supported_prop(
+        "value",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Current text value.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional field action id.",
+    ),
+    supported_prop(
+        "helper_text",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional helper copy.",
+    ),
+    supported_prop(
+        "placeholder",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional placeholder copy.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested input width.",
+    ),
 ];
 
 const COLLAPSIBLE_PROPS: [ContractPropSpec; 5] = [
-    ContractPropSpec {
-        name: "title",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Section title.",
-    },
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional section action id.",
-    },
-    ContractPropSpec {
-        name: "open",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the body is currently expanded.",
-    },
-    ContractPropSpec {
-        name: "leading_icon",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional leading icon.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Expandable body children.",
-    },
+    supported_prop(
+        "title",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Section title.",
+    ),
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional section action id.",
+    ),
+    supported_prop(
+        "open",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the body is currently expanded.",
+    ),
+    supported_prop(
+        "leading_icon",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional leading icon.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Expandable body children.",
+    ),
 ];
 
 const DIALOGUE_PROPS: [ContractPropSpec; 10] = [
-    ContractPropSpec {
-        name: "open",
-        kind: ContractPropTypeKind::Boolean,
-        type_name: None,
-        required: false,
-        summary: "Whether the modal is currently open.",
-    },
-    ContractPropSpec {
-        name: "title",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: true,
-        summary: "Modal title.",
-    },
-    ContractPropSpec {
-        name: "description",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional modal description.",
-    },
-    ContractPropSpec {
-        name: "confirm_label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Confirm button label.",
-    },
-    ContractPropSpec {
-        name: "cancel_label",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Cancel button label.",
-    },
-    ContractPropSpec {
-        name: "intent",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("dialogue_intent"),
-        required: false,
-        summary: "Modal semantic intent.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Modal width.",
-    },
-    ContractPropSpec {
-        name: "confirm_action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Confirm action id.",
-    },
-    ContractPropSpec {
-        name: "cancel_action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Cancel action id.",
-    },
-    ContractPropSpec {
-        name: "children",
-        kind: ContractPropTypeKind::NodeList,
-        type_name: None,
-        required: true,
-        summary: "Modal body children.",
-    },
+    supported_prop(
+        "open",
+        ContractPropTypeKind::Boolean,
+        None,
+        false,
+        "Whether the modal is currently open.",
+    ),
+    supported_prop(
+        "title",
+        ContractPropTypeKind::String,
+        None,
+        true,
+        "Modal title.",
+    ),
+    supported_prop(
+        "description",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional modal description.",
+    ),
+    supported_prop(
+        "confirm_label",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Confirm button label.",
+    ),
+    supported_prop(
+        "cancel_label",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Cancel button label.",
+    ),
+    supported_prop(
+        "intent",
+        ContractPropTypeKind::Enum,
+        Some("dialogue_intent"),
+        false,
+        "Modal semantic intent.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Modal width.",
+    ),
+    supported_prop(
+        "confirm_action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Confirm action id.",
+    ),
+    supported_prop(
+        "cancel_action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Cancel action id.",
+    ),
+    supported_prop(
+        "children",
+        ContractPropTypeKind::NodeList,
+        None,
+        true,
+        "Modal body children.",
+    ),
 ];
 
 const HIERARCHY_PROPS: [ContractPropSpec; 8] = [
-    ContractPropSpec {
-        name: "action_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Optional hierarchy-level action id.",
-    },
-    ContractPropSpec {
-        name: "selected_item_id",
-        kind: ContractPropTypeKind::String,
-        type_name: None,
-        required: false,
-        summary: "Currently selected item id.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested hierarchy width.",
-    },
-    ContractPropSpec {
-        name: "row_height",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Row height override.",
-    },
-    ContractPropSpec {
-        name: "indent_width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Indent width override.",
-    },
-    ContractPropSpec {
-        name: "icon_style",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("hierarchy_icon_style"),
-        required: false,
-        summary: "Icon rendering style.",
-    },
-    ContractPropSpec {
-        name: "style",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("hierarchy_style"),
-        required: false,
-        summary: "Hierarchy surface style.",
-    },
-    ContractPropSpec {
-        name: "items",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("hierarchy_item"),
-        required: true,
-        summary: "Hierarchy tree items.",
-    },
+    supported_prop(
+        "action_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Optional hierarchy-level action id.",
+    ),
+    supported_prop(
+        "selected_item_id",
+        ContractPropTypeKind::String,
+        None,
+        false,
+        "Currently selected item id.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested hierarchy width.",
+    ),
+    supported_prop(
+        "row_height",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Row height override.",
+    ),
+    supported_prop(
+        "indent_width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Indent width override.",
+    ),
+    supported_prop(
+        "icon_style",
+        ContractPropTypeKind::Enum,
+        Some("hierarchy_icon_style"),
+        false,
+        "Icon rendering style.",
+    ),
+    supported_prop(
+        "style",
+        ContractPropTypeKind::Enum,
+        Some("hierarchy_style"),
+        false,
+        "Hierarchy surface style.",
+    ),
+    supported_prop(
+        "items",
+        ContractPropTypeKind::ObjectList,
+        Some("hierarchy_item"),
+        true,
+        "Hierarchy tree items.",
+    ),
 ];
 
-const SPINNER_PROPS: [ContractPropSpec; 1] = [ContractPropSpec {
-    name: "size",
-    kind: ContractPropTypeKind::Number,
-    type_name: None,
-    required: false,
-    summary: "Spinner diameter.",
-}];
+const SPINNER_PROPS: [ContractPropSpec; 1] = [supported_prop(
+    "size",
+    ContractPropTypeKind::Number,
+    None,
+    false,
+    "Spinner diameter.",
+)];
 
 const PROGRESS_PROPS: [ContractPropSpec; 3] = [
-    ContractPropSpec {
-        name: "value",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: true,
-        summary: "Determinate progress value in the 0..=1 range.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Progress bar width.",
-    },
-    ContractPropSpec {
-        name: "height",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Progress bar height.",
-    },
+    supported_prop(
+        "value",
+        ContractPropTypeKind::Number,
+        None,
+        true,
+        "Determinate progress value in the 0..=1 range.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Progress bar width.",
+    ),
+    supported_prop(
+        "height",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Progress bar height.",
+    ),
 ];
 
 const TOAST_VIEWPORT_PROPS: [ContractPropSpec; 8] = [
-    ContractPropSpec {
-        name: "placement",
-        kind: ContractPropTypeKind::Enum,
-        type_name: Some("toast_placement"),
-        required: false,
-        summary: "Viewport anchor placement.",
-    },
-    ContractPropSpec {
-        name: "width",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Requested toast width.",
-    },
-    ContractPropSpec {
-        name: "margin_x",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Horizontal viewport margin.",
-    },
-    ContractPropSpec {
-        name: "margin_y",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Vertical viewport margin.",
-    },
-    ContractPropSpec {
-        name: "gap",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Gap between toast rows.",
-    },
-    ContractPropSpec {
-        name: "overlap",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Optional stacked overlap between visible toasts.",
-    },
-    ContractPropSpec {
-        name: "max_visible",
-        kind: ContractPropTypeKind::Number,
-        type_name: None,
-        required: false,
-        summary: "Maximum number of visible toasts at once.",
-    },
-    ContractPropSpec {
-        name: "toasts",
-        kind: ContractPropTypeKind::ObjectList,
-        type_name: Some("toast_item"),
-        required: true,
-        summary: "Host-owned toast items.",
-    },
+    supported_prop(
+        "placement",
+        ContractPropTypeKind::Enum,
+        Some("toast_placement"),
+        false,
+        "Viewport anchor placement.",
+    ),
+    supported_prop(
+        "width",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Requested toast width.",
+    ),
+    supported_prop(
+        "margin_x",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Horizontal viewport margin.",
+    ),
+    supported_prop(
+        "margin_y",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Vertical viewport margin.",
+    ),
+    supported_prop(
+        "gap",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Gap between toast rows.",
+    ),
+    supported_prop(
+        "overlap",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Optional stacked overlap between visible toasts.",
+    ),
+    supported_prop(
+        "max_visible",
+        ContractPropTypeKind::Number,
+        None,
+        false,
+        "Maximum number of visible toasts at once.",
+    ),
+    supported_prop(
+        "toasts",
+        ContractPropTypeKind::ObjectList,
+        Some("toast_item"),
+        true,
+        "Host-owned toast items.",
+    ),
 ];
 
 const FAMILY_VARIANT_LAYOUT: [ContractVariantRef; 2] = [
@@ -2073,223 +2669,130 @@ const FAMILIES: [ContractFamilySpec; 26] = [
     },
 ];
 
-const SHARED_TYPES: [ContractSharedTypeSpec; 27] = [
-    ContractSharedTypeSpec {
-        name: "node_common",
-        display_name: "Node Common",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Common fields flattened into every node.",
-        fields: &NODE_COMMON_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "justify",
-        display_name: "Justify",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Main-axis alignment values.",
-        fields: &EMPTY_PROPS,
-        variants: &JUSTIFY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "align",
-        display_name: "Align",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Cross-axis alignment values.",
-        fields: &EMPTY_PROPS,
-        variants: &ALIGN_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "toolbar_anchor",
-        display_name: "Toolbar Anchor",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported toolbar anchor points.",
-        fields: &EMPTY_PROPS,
-        variants: &TOOLBAR_ANCHOR_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "tabs_style",
-        display_name: "Tabs Style",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported tab presentations.",
-        fields: &EMPTY_PROPS,
-        variants: &TABS_STYLE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "button_variant",
-        display_name: "Button Variant",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported button variants.",
-        fields: &EMPTY_PROPS,
-        variants: &BUTTON_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "control_size",
-        display_name: "Control Size",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported control sizes.",
-        fields: &EMPTY_PROPS,
-        variants: &CONTROL_SIZE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "label_tone",
-        display_name: "Label Tone",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported text tones.",
-        fields: &EMPTY_PROPS,
-        variants: &LABEL_TONE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "label_weight",
-        display_name: "Label Weight",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported text weights.",
-        fields: &EMPTY_PROPS,
-        variants: &LABEL_WEIGHT_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "select_variant",
-        display_name: "Select Variant",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported select trigger variants.",
-        fields: &EMPTY_PROPS,
-        variants: &SELECT_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "sidebar_side",
-        display_name: "Sidebar Side",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported sidebar docking sides.",
-        fields: &EMPTY_PROPS,
-        variants: &SIDEBAR_SIDE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "dialogue_intent",
-        display_name: "Dialogue Intent",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported dialogue intents.",
-        fields: &EMPTY_PROPS,
-        variants: &DIALOGUE_INTENT_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "toast_intent",
-        display_name: "Toast Intent",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported toast intents.",
-        fields: &EMPTY_PROPS,
-        variants: &TOAST_INTENT_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "toast_placement",
-        display_name: "Toast Placement",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported toast viewport placements.",
-        fields: &EMPTY_PROPS,
-        variants: &TOAST_PLACEMENT_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "number_input_axis",
-        display_name: "Number Input Axis",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported drag axes for number input.",
-        fields: &EMPTY_PROPS,
-        variants: &NUMBER_INPUT_AXIS_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "hierarchy_item_kind",
-        display_name: "Hierarchy Item Kind",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported hierarchy semantic item kinds.",
-        fields: &EMPTY_PROPS,
-        variants: &HIERARCHY_KIND_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "menu_entry_kind",
-        display_name: "Menu Entry Kind",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported menu entry kinds.",
-        fields: &EMPTY_PROPS,
-        variants: &MENU_ENTRY_KIND_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "hierarchy_icon_style",
-        display_name: "Hierarchy Icon Style",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported hierarchy icon styles.",
-        fields: &EMPTY_PROPS,
-        variants: &HIERARCHY_ICON_STYLE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "hierarchy_style",
-        display_name: "Hierarchy Style",
-        kind: ContractSharedTypeKind::Enum,
-        summary: "Supported hierarchy surface styles.",
-        fields: &EMPTY_PROPS,
-        variants: &HIERARCHY_STYLE_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "action_item",
-        display_name: "Action Item",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Button-group style action item.",
-        fields: &ACTION_ITEM_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "choice_item",
-        display_name: "Choice Item",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Select choice item.",
-        fields: &CHOICE_ITEM_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "tab_item",
-        display_name: "Tab Item",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Tab navigation item.",
-        fields: &TAB_ITEM_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "menu_action",
-        display_name: "Menu Action",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Clickable menu action row.",
-        fields: &MENU_ACTION_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "menu_entry",
-        display_name: "Menu Entry",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Action-or-separator menu entry union.",
-        fields: &MENU_ENTRY_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "menu",
-        display_name: "Menu",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Top-level menu bar menu.",
-        fields: &MENU_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "hierarchy_item",
-        display_name: "Hierarchy Item",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Recursive hierarchy tree item.",
-        fields: &HIERARCHY_ITEM_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
-    ContractSharedTypeSpec {
-        name: "toast_item",
-        display_name: "Toast Item",
-        kind: ContractSharedTypeKind::Object,
-        summary: "Toast lifecycle item.",
-        fields: &TOAST_ITEM_FIELDS,
-        variants: &EMPTY_VARIANTS,
-    },
+const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
+    partial_shared_type(
+        "node_common",
+        "Node Common",
+        ContractSharedTypeKind::Object,
+        "Common fields flattened into every node.",
+        "Visible, enabled, and part of layout are executed today. Class, slot, and common action fields are metadata-only.",
+        &NODE_COMMON_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    unsupported_shared_type(
+        "actions",
+        "Actions",
+        ContractSharedTypeKind::Object,
+        "Optional common semantic action bindings.",
+        "Declared in the schema only. The current renderer uses family-specific action fields instead.",
+        &ACTIONS_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    partial_shared_type(
+        "layout",
+        "Layout",
+        ContractSharedTypeKind::Object,
+        "Shared layout hints available on every node.",
+        "Sizing is executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers.",
+        &LAYOUT_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    unsupported_shared_type(
+        "layout_edges",
+        "Layout Edges",
+        ContractSharedTypeKind::Object,
+        "Top, right, bottom, and left edge values for shared layout padding and margin.",
+        "Edge-based shared padding and margin are not executed by the current renderer.",
+        &LAYOUT_EDGES_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    partial_shared_type(
+        "layout_length",
+        "Layout Length",
+        ContractSharedTypeKind::Object,
+        "Tagged length value used by shared layout sizing fields.",
+        "Supported when referenced from width, height, min, and max layout fields. Other consumers such as basis remain unsupported.",
+        &LAYOUT_LENGTH_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    supported_shared_type(
+        "layout_length_kind",
+        "Layout Length Kind",
+        ContractSharedTypeKind::Enum,
+        "Supported layout length kinds.",
+        &EMPTY_PROPS,
+        &LAYOUT_LENGTH_KIND_VARIANTS,
+    ),
+    unsupported_shared_type(
+        "layout_track",
+        "Layout Track",
+        ContractSharedTypeKind::Object,
+        "Tagged grid track value for declared column and row tracks.",
+        "Grid tracks are declared in the schema only and are not executed by the current renderer.",
+        &LAYOUT_TRACK_FIELDS,
+        &EMPTY_VARIANTS,
+    ),
+    supported_shared_type(
+        "layout_track_kind",
+        "Layout Track Kind",
+        ContractSharedTypeKind::Enum,
+        "Declared layout track kinds.",
+        &EMPTY_PROPS,
+        &LAYOUT_TRACK_KIND_VARIANTS,
+    ),
+    unsupported_shared_type(
+        "layout_display",
+        "Layout Display",
+        ContractSharedTypeKind::Enum,
+        "Declared layout display modes.",
+        "Display-mode switching is declared in the schema only and is not executed by the current renderer.",
+        &EMPTY_PROPS,
+        &LAYOUT_DISPLAY_VARIANTS,
+    ),
+    partial_shared_type(
+        "layout_direction",
+        "Layout Direction",
+        ContractSharedTypeKind::Enum,
+        "Row and column direction values for shared layout hints.",
+        "Only executed by the current flow-container helpers used by row, column, inset, and card.",
+        &EMPTY_PROPS,
+        &LAYOUT_DIRECTION_VARIANTS,
+    ),
+    unsupported_shared_type(
+        "layout_overflow",
+        "Layout Overflow",
+        ContractSharedTypeKind::Enum,
+        "Declared overflow modes for shared layout hints.",
+        "Overflow handling is declared in the schema only and is not executed by the current renderer.",
+        &EMPTY_PROPS,
+        &LAYOUT_OVERFLOW_VARIANTS,
+    ),
+    supported_shared_type("justify", "Justify", ContractSharedTypeKind::Enum, "Main-axis alignment values.", &EMPTY_PROPS, &JUSTIFY_VARIANTS),
+    supported_shared_type("align", "Align", ContractSharedTypeKind::Enum, "Cross-axis alignment values.", &EMPTY_PROPS, &ALIGN_VARIANTS),
+    supported_shared_type("toolbar_anchor", "Toolbar Anchor", ContractSharedTypeKind::Enum, "Supported toolbar anchor points.", &EMPTY_PROPS, &TOOLBAR_ANCHOR_VARIANTS),
+    supported_shared_type("tabs_style", "Tabs Style", ContractSharedTypeKind::Enum, "Supported tab presentations.", &EMPTY_PROPS, &TABS_STYLE_VARIANTS),
+    supported_shared_type("button_variant", "Button Variant", ContractSharedTypeKind::Enum, "Supported button variants.", &EMPTY_PROPS, &BUTTON_VARIANTS),
+    supported_shared_type("control_size", "Control Size", ContractSharedTypeKind::Enum, "Supported control sizes.", &EMPTY_PROPS, &CONTROL_SIZE_VARIANTS),
+    supported_shared_type("label_tone", "Label Tone", ContractSharedTypeKind::Enum, "Supported text tones.", &EMPTY_PROPS, &LABEL_TONE_VARIANTS),
+    supported_shared_type("label_weight", "Label Weight", ContractSharedTypeKind::Enum, "Supported text weights.", &EMPTY_PROPS, &LABEL_WEIGHT_VARIANTS),
+    supported_shared_type("select_variant", "Select Variant", ContractSharedTypeKind::Enum, "Supported select trigger variants.", &EMPTY_PROPS, &SELECT_VARIANTS),
+    supported_shared_type("sidebar_side", "Sidebar Side", ContractSharedTypeKind::Enum, "Supported sidebar docking sides.", &EMPTY_PROPS, &SIDEBAR_SIDE_VARIANTS),
+    supported_shared_type("dialogue_intent", "Dialogue Intent", ContractSharedTypeKind::Enum, "Supported dialogue intents.", &EMPTY_PROPS, &DIALOGUE_INTENT_VARIANTS),
+    supported_shared_type("toast_intent", "Toast Intent", ContractSharedTypeKind::Enum, "Supported toast intents.", &EMPTY_PROPS, &TOAST_INTENT_VARIANTS),
+    supported_shared_type("toast_placement", "Toast Placement", ContractSharedTypeKind::Enum, "Supported toast viewport placements.", &EMPTY_PROPS, &TOAST_PLACEMENT_VARIANTS),
+    supported_shared_type("number_input_axis", "Number Input Axis", ContractSharedTypeKind::Enum, "Supported drag axes for number input.", &EMPTY_PROPS, &NUMBER_INPUT_AXIS_VARIANTS),
+    supported_shared_type("hierarchy_item_kind", "Hierarchy Item Kind", ContractSharedTypeKind::Enum, "Supported hierarchy semantic item kinds.", &EMPTY_PROPS, &HIERARCHY_KIND_VARIANTS),
+    supported_shared_type("menu_entry_kind", "Menu Entry Kind", ContractSharedTypeKind::Enum, "Supported menu entry kinds.", &EMPTY_PROPS, &MENU_ENTRY_KIND_VARIANTS),
+    supported_shared_type("hierarchy_icon_style", "Hierarchy Icon Style", ContractSharedTypeKind::Enum, "Supported hierarchy icon styles.", &EMPTY_PROPS, &HIERARCHY_ICON_STYLE_VARIANTS),
+    supported_shared_type("hierarchy_style", "Hierarchy Style", ContractSharedTypeKind::Enum, "Supported hierarchy surface styles.", &EMPTY_PROPS, &HIERARCHY_STYLE_VARIANTS),
+    supported_shared_type("action_item", "Action Item", ContractSharedTypeKind::Object, "Button-group style action item.", &ACTION_ITEM_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("choice_item", "Choice Item", ContractSharedTypeKind::Object, "Select choice item.", &CHOICE_ITEM_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("tab_item", "Tab Item", ContractSharedTypeKind::Object, "Tab navigation item.", &TAB_ITEM_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("menu_action", "Menu Action", ContractSharedTypeKind::Object, "Clickable menu action row.", &MENU_ACTION_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("menu_entry", "Menu Entry", ContractSharedTypeKind::Object, "Action-or-separator menu entry union.", &MENU_ENTRY_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("menu", "Menu", ContractSharedTypeKind::Object, "Top-level menu bar menu.", &MENU_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("hierarchy_item", "Hierarchy Item", ContractSharedTypeKind::Object, "Recursive hierarchy tree item.", &HIERARCHY_ITEM_FIELDS, &EMPTY_VARIANTS),
+    supported_shared_type("toast_item", "Toast Item", ContractSharedTypeKind::Object, "Toast lifecycle item.", &TOAST_ITEM_FIELDS, &EMPTY_VARIANTS),
 ];
 
 pub fn registry() -> &'static [ContractFamilySpec] {
@@ -2317,10 +2820,37 @@ pub fn schema_json_pretty() -> serde_json::Result<String> {
 }
 
 pub fn reference_markdown() -> String {
+    let node_common = shared_type("node_common").expect("node_common shared type");
+    let layout = shared_type("layout").expect("layout shared type");
+
     let mut markdown = String::from(
-        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Shared Node Fields\n\nEvery contract node includes:\n\n- `node_id`\n- `visible`\n- `enabled`\n\n## Supported Families\n\n| Family | Child Policy | Primary Events | Summary |\n| --- | --- | --- | --- |\n",
+        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Position In The Runtime\n\n`contract::*` is an optional host-driven declarative layer.\n\n- The direct embedded Luau runtime path is the typed frame-local `app.*` / `ui.*` bridge shown by `runtime-egui-host`.\n- `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.\n- Renderer ownership stays in Rust. `contract::*` is not the default render boundary for the Luau runtime hot path.\n\n## Shared Node Fields\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
     );
 
+    for field in node_common.fields {
+        markdown.push_str(&format!(
+            "| `{}` | `{}` | `{}` | {} |\n",
+            field.name,
+            prop_type_label(field),
+            support_status_id(field.support),
+            doc_summary(field.summary, field.support_summary),
+        ));
+    }
+
+    markdown.push_str(
+        "\n## Layout Support\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
+    );
+    for field in layout.fields {
+        markdown.push_str(&format!(
+            "| `{}` | `{}` | `{}` | {} |\n",
+            field.name,
+            prop_type_label(field),
+            support_status_id(field.support),
+            doc_summary(field.summary, field.support_summary),
+        ));
+    }
+
+    markdown.push_str("\n## Supported Families\n\n| Family | Child Policy | Primary Events | Summary |\n| --- | --- | --- | --- |\n");
     for family in registry() {
         let events = if family.events.is_empty() {
             String::from("none")
@@ -2341,21 +2871,30 @@ pub fn reference_markdown() -> String {
         ));
     }
 
-    markdown.push_str("\n## Shared Types\n\n");
+    markdown.push_str(
+        "\n## Shared Types\n\n| Type | Kind | Support | Summary |\n| --- | --- | --- | --- |\n",
+    );
     for shared_type in shared_types() {
         markdown.push_str(&format!(
-            "- `{}` (`{}`): {}\n",
+            "| `{}` | `{}` | `{}` | {} |\n",
             shared_type.name,
             shared_type_kind_id(shared_type.kind),
-            shared_type.summary
+            support_status_id(shared_type.support),
+            doc_summary(shared_type.summary, shared_type.support_summary),
         ));
     }
 
     markdown.push_str(
-        "\n## Host Integration Pattern\n\n1. Build a `ContractTree` from host state.\n2. Render it with `render_tree` or `render_component_tree`.\n3. Apply the returned `ContractEvent`s to host state.\n4. Rebuild the next frame's tree from the updated authoritative host state.\n",
+        "\n## Contract Mode Integration Pattern\n\n1. Build a `ContractTree` from authoritative host state.\n2. Render it with `render_tree` or `render_component_tree`.\n3. Apply the returned `ContractEvent`s to host state.\n4. Rebuild the next frame's tree from the updated authoritative host state.\n",
     );
 
     markdown
+}
+
+fn shared_type(name: &str) -> Option<&'static ContractSharedTypeSpec> {
+    shared_types()
+        .iter()
+        .find(|shared_type| shared_type.name == name)
 }
 
 fn child_policy_id(policy: ContractChildPolicy) -> &'static str {
@@ -2363,6 +2902,39 @@ fn child_policy_id(policy: ContractChildPolicy) -> &'static str {
         ContractChildPolicy::None => "none",
         ContractChildPolicy::Children => "children",
         ContractChildPolicy::Body => "body",
+    }
+}
+
+fn prop_type_label(prop: &ContractPropSpec) -> String {
+    match prop.kind {
+        ContractPropTypeKind::String => String::from("string"),
+        ContractPropTypeKind::StringList => String::from("list<string>"),
+        ContractPropTypeKind::StringMap => String::from("map<string, string>"),
+        ContractPropTypeKind::Boolean => String::from("boolean"),
+        ContractPropTypeKind::Number => String::from("number"),
+        ContractPropTypeKind::Enum => format!("enum:{}", prop.type_name.unwrap_or("unknown")),
+        ContractPropTypeKind::Object => format!("object:{}", prop.type_name.unwrap_or("unknown")),
+        ContractPropTypeKind::ObjectList => {
+            format!("list<object:{}>", prop.type_name.unwrap_or("unknown"))
+        }
+        ContractPropTypeKind::Node => String::from("node"),
+        ContractPropTypeKind::NodeList => String::from("list<node>"),
+    }
+}
+
+fn support_status_id(status: ContractSupportStatus) -> &'static str {
+    match status {
+        ContractSupportStatus::Supported => "supported",
+        ContractSupportStatus::Partial => "partial",
+        ContractSupportStatus::Unsupported => "unsupported",
+    }
+}
+
+fn doc_summary(summary: &str, support_summary: &str) -> String {
+    if support_summary.is_empty() {
+        summary.to_owned()
+    } else {
+        format!("{summary} {support_summary}")
     }
 }
 
@@ -2390,7 +2962,9 @@ fn event_kind_id(kind: EventKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{reference_markdown, registry, schema_json_pretty, shared_types};
+    use super::{
+        reference_markdown, registry, schema_json_pretty, shared_types, ContractSupportStatus,
+    };
 
     #[test]
     fn registry_has_unique_family_ids() {
@@ -2411,9 +2985,14 @@ mod tests {
         assert!(json.contains("\"dialogue-modal\""));
         assert!(json.contains("\"toast-viewport\""));
         assert!(json.contains("\"node_common\""));
+        assert!(json.contains("\"actions\""));
+        assert!(json.contains("\"layout\""));
+        assert!(json.contains("\"layout_overflow\""));
         assert!(json.contains("\"menu\""));
         assert!(json.contains("\"hierarchy_item\""));
         assert!(json.contains("\"toast_item\""));
+        assert!(json.contains("\"support\""));
+        assert!(json.contains("\"support_summary\""));
         assert!(!shared_types().is_empty());
     }
 
@@ -2460,5 +3039,94 @@ mod tests {
             assert!(markdown.contains(&format!("`{}`", family.id.as_str())));
         }
         assert!(markdown.contains("toast_item"));
+        assert!(markdown.contains("Position In The Runtime"));
+        assert!(markdown.contains("Layout Support"));
+        assert!(markdown.contains("`unsupported`"));
+    }
+
+    #[test]
+    fn node_common_includes_contract_scaffolding_fields() {
+        let node_common = shared_types()
+            .iter()
+            .find(|shared_type| shared_type.name == "node_common")
+            .expect("node_common shared type");
+        let fields = node_common
+            .fields
+            .iter()
+            .map(|field| field.name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            fields,
+            vec![
+                "node_id",
+                "visible",
+                "enabled",
+                "class",
+                "class_list",
+                "slot_classes",
+                "actions",
+                "layout",
+            ]
+        );
+        assert_eq!(node_common.support, ContractSupportStatus::Partial);
+    }
+
+    #[test]
+    fn layout_support_matrix_matches_current_renderer_truth() {
+        let layout = shared_types()
+            .iter()
+            .find(|shared_type| shared_type.name == "layout")
+            .expect("layout shared type");
+
+        let width = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "width")
+            .expect("width field");
+        assert_eq!(width.support, ContractSupportStatus::Supported);
+
+        let direction = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "direction")
+            .expect("direction field");
+        assert_eq!(direction.support, ContractSupportStatus::Partial);
+
+        let display = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "display")
+            .expect("display field");
+        assert_eq!(display.support, ContractSupportStatus::Unsupported);
+
+        let padding = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "padding")
+            .expect("padding field");
+        assert_eq!(padding.support, ContractSupportStatus::Unsupported);
+
+        let columns = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "columns")
+            .expect("columns field");
+        assert_eq!(columns.support, ContractSupportStatus::Unsupported);
+
+        let overflow = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "overflow_y")
+            .expect("overflow_y field");
+        assert_eq!(overflow.support, ContractSupportStatus::Unsupported);
+    }
+
+    #[test]
+    fn checked_in_contract_reference_is_current() {
+        assert_eq!(
+            reference_markdown(),
+            include_str!("../../docs/llm/contract-reference.md")
+        );
     }
 }

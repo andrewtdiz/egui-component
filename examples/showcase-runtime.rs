@@ -1,5 +1,5 @@
 use egui::ViewportBuilder;
-use egui_component::example_apps::showcase_runtime;
+use egui_component::demos::showcase_runtime;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

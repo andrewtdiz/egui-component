@@ -1,5 +1,5 @@
 use egui::{self, CentralPanel, Pos2, RawInput, Rect, ViewportId};
-use egui_component::example_apps::showcase;
+use egui_component::demos::showcase;
 use egui_component::{
     component_definitions, parse_component_kind, supported_component_ids_csv, ComponentKind,
     ThemeMode,
@@ -286,12 +286,12 @@ fn render_snapshot_frame(
     raw_input: RawInput,
 ) -> (egui::FullOutput, Rect, Rect) {
     let mut snapshot_rect = Rect::NOTHING;
-    let output = context.run_ui(raw_input, |ui| {
+    let output = context.run(raw_input, |ctx| {
         showcase::configure_snapshot(state, component, theme_mode);
-        showcase::prepare_frame(state, ui.ctx());
+        showcase::prepare_frame(state, ctx);
         snapshot_rect = CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show_inside(ui, |ui| showcase::render_snapshot_component(state, ui))
+            .show(ctx, |ui| showcase::render_snapshot_component(state, ui))
             .inner
             .rect;
     });

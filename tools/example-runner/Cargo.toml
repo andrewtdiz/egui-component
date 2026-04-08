@@ -6,8 +6,8 @@ publish = false
 
 [dependencies]
 ctrlc = "3.4.8"
-egui = "0.34.1"
+egui = "0.33.3"
 egui-component = { path = "../.." }
-egui_kittest = { version = "0.34.1", features = ["wgpu"] }
+egui_kittest = { version = "0.33.3", features = ["wgpu"] }
 image = { version = "0.25.8", default-features = false, features = ["png"] }
 notify-debouncer-mini = "0.7.0"

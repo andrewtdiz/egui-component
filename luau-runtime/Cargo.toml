@@ -8,6 +8,14 @@ description = "Portable Luau runtime core for Rust hosts."
 [lib]
 path = "src/lib.rs"
 
+[[bench]]
+name = "runtime_scale"
+harness = false
+
+[[bin]]
+name = "generate-runtime-api"
+path = "src/bin/generate_runtime_api.rs"
+
 [dependencies]
 notify = "6"
 log = { version = "0.4.28", default-features = false }
@@ -15,4 +23,5 @@ mlua = { version = "0.11.6", default-features = false, features = ["luau"] }
 parking_lot = { version = "0.12.5", features = ["arc_lock"] }
 
 [dev-dependencies]
+criterion = "0.5.1"
 tempfile = "3.16.0"

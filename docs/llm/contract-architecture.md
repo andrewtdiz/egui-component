@@ -1,6 +1,6 @@
 # Contract Architecture
 
-`egui_component::contract::*` is the host-owned declarative layer for scripting-facing editor UX.
+`egui_component::contract::*` is the optional host-owned declarative layer for serialized and host-driven UI surfaces.
 
 ## Design Goals
 
@@ -11,17 +11,18 @@
 
 ## Relationship To The Portable Luau Core
 
-- `egui_component::contract::*` is the egui-side declarative surface that a host can drive from any runtime, including Luau.
+- `egui_component::contract::*` is an egui-side declarative surface that a host can drive from any runtime, including Luau.
 - The portable Luau embedding core is packaged separately in `luau-runtime-core` and owns VM lifetime, module loading, reload orchestration, and scheduling.
 - This layer only renders host-authored trees and returns semantic events; it does not own Luau state or script dispatch.
+- The direct embedded Luau path is the typed frame-local `app.*` / `ui.*` bridge used by `runtime-egui-host`, not `ContractTree`.
 
 ## Runtime Shape
 
 - `ContractTree` and `ContractNode` are serde-friendly owned data structures.
-- Every node carries a stable `node_id`, plus shared `visible` and `enabled` state.
+- Every node carries a stable `node_id`, plus shared `visible`, `enabled`, `class`, `class_list`, `slot_classes`, `actions`, and `layout` scaffolding.
 - Interactive nodes expose stable string `action_id`s rather than callback handles.
 - `render_tree` and `render_component_tree` translate the declarative tree into the existing typed builders and return `Vec<ContractEvent>` for the current frame.
-- These functions are host adapter entry points, not scripting runtime entry points.
+- These functions are host adapter entry points, not scripting runtime entry points or the default Luau hot path.
 
 ## State Ownership
 

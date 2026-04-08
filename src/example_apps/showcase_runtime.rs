@@ -14,7 +14,7 @@ pub struct ShowcaseRuntimeApp {
 impl Default for ShowcaseRuntimeApp {
     fn default() -> Self {
         Self {
-            host: runtime_egui_host::RuntimeEguiHostApp::new(default_script_path()),
+            host: runtime_egui_host::RuntimeEguiHostApp::new_presentational(default_script_path()),
         }
     }
 }
@@ -31,5 +31,6 @@ fn default_script_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
         .join("runtime-luau")
-        .join("showcase.luau")
+        .join("showcase")
+        .join("main.luau")
 }

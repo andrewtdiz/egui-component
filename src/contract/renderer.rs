@@ -15,7 +15,9 @@ use crate::components::{
     LabelWeight, MenuBar, MenuBarItem, NumberInput, Progress, Select, Sidebar, Spinner, Switch,
     TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar,
 };
-use crate::layout::{column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify};
+use crate::layout::{
+    column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify,
+};
 use crate::primitives::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
 use crate::ui::tokens;
@@ -69,20 +71,34 @@ struct ToastPalette {
     stroke: Stroke,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ContainerLayoutPlan {
+    direction: ContractDirection,
+    justify: ContractJustify,
+    align: ContractAlign,
+    gap: f32,
+}
+
 impl FrameRenderer {
     fn render_node(&mut self, ui: &mut ComponentUi<'_>, node: &ContractNode) {
-        if !node.common().visible {
+        let common = node.common();
+        if !common.visible {
             return;
         }
 
-        if node.common().enabled {
-            with_layout_scope(ui, node.common().layout.as_ref(), |ui| {
+        // Common-field execution truth for Phase 9:
+        // - visible, enabled, and the supported subset of layout are executed here
+        // - class, class_list, slot_classes, and common.actions remain metadata-only
+        ignore_metadata_only_common_fields(common);
+
+        if common.enabled {
+            with_layout_scope(ui, common.layout.as_ref(), |ui| {
                 self.render_node_inner(ui, node);
             });
         } else {
             ui.ui_mut().add_enabled_ui(false, |ui| {
                 let mut ui = ui.components();
-                with_layout_scope(&mut ui, node.common().layout.as_ref(), |ui| {
+                with_layout_scope(&mut ui, common.layout.as_ref(), |ui| {
                     self.render_node_inner(ui, node);
                 });
             });
@@ -1025,11 +1041,13 @@ fn with_layout_scope<R>(
         return add(ui);
     }
 
-    ui.ui_mut().scope(|ui| {
-        apply_layout_sizing(ui, layout);
-        let mut components = ui.components();
-        add(&mut components)
-    }).inner
+    ui.ui_mut()
+        .scope(|ui| {
+            apply_layout_sizing(ui, layout);
+            let mut components = ui.components();
+            add(&mut components)
+        })
+        .inner
 }
 
 fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>) {
@@ -1076,6 +1094,48 @@ fn render_container_children(
     default_align: ContractAlign,
     add: impl FnOnce(&mut egui::Ui),
 ) {
+    let plan = container_layout_plan(
+        common,
+        default_direction,
+        default_gap,
+        default_justify,
+        default_align,
+    );
+
+    match plan.direction {
+        ContractDirection::Row => {
+            let _ = layout_row()
+                .gap(plan.gap)
+                .justify(map_flow_justify(plan.justify))
+                .align(map_flow_align(plan.align))
+                .show(ui, add);
+        }
+        ContractDirection::Column => {
+            let _ = layout_column()
+                .gap(plan.gap)
+                .justify(map_flow_justify(plan.justify))
+                .align(map_flow_align(plan.align))
+                .show(ui, add);
+        }
+    }
+}
+
+fn ignore_metadata_only_common_fields(common: &ContractCommon) {
+    let _ = (
+        &common.class,
+        &common.class_list,
+        &common.slot_classes,
+        &common.actions,
+    );
+}
+
+fn container_layout_plan(
+    common: &ContractCommon,
+    default_direction: ContractDirection,
+    default_gap: f32,
+    default_justify: ContractJustify,
+    default_align: ContractAlign,
+) -> ContainerLayoutPlan {
     let layout = common.layout.as_ref();
     let direction = layout
         .and_then(|layout| layout.direction)
@@ -1083,7 +1143,9 @@ fn render_container_children(
     let justify = layout
         .and_then(|layout| layout.justify)
         .unwrap_or(default_justify);
-    let align = layout.and_then(|layout| layout.align).unwrap_or(default_align);
+    let align = layout
+        .and_then(|layout| layout.align)
+        .unwrap_or(default_align);
     let gap = match direction {
         ContractDirection::Row => layout
             .and_then(|layout| layout.gap_x.or(layout.gap_y))
@@ -1093,21 +1155,11 @@ fn render_container_children(
             .unwrap_or(default_gap),
     };
 
-    match direction {
-        ContractDirection::Row => {
-            let _ = layout_row()
-                .gap(gap)
-                .justify(map_flow_justify(justify))
-                .align(map_flow_align(align))
-                .show(ui, add);
-        }
-        ContractDirection::Column => {
-            let _ = layout_column()
-                .gap(gap)
-                .justify(map_flow_justify(justify))
-                .align(map_flow_align(align))
-                .show(ui, add);
-        }
+    ContainerLayoutPlan {
+        direction,
+        justify,
+        align,
+        gap,
     }
 }
 
@@ -1396,15 +1448,20 @@ fn contract_toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> e
 
 #[cfg(test)]
 mod tests {
-    use super::{contract_toast_shadow, render_tree, should_emit_dialogue_closed};
+    use super::{
+        container_layout_plan, contract_toast_shadow, render_tree, should_emit_dialogue_closed,
+    };
     use crate::components::ToastIntent;
     use crate::contract::{
-        ContractButton, ContractCommon, ContractNode, ContractToastItem, ContractToastViewport,
-        ContractTree, EventKind,
+        ContractActions, ContractAlign, ContractButton, ContractCommon, ContractDirection,
+        ContractDisplay, ContractEdges, ContractJustify, ContractLayout, ContractLength,
+        ContractNode, ContractToastItem, ContractToastViewport, ContractTrack, ContractTree,
+        EventKind,
     };
     use crate::theme::{self, ThemeMode, ThemeSpec};
     use crate::ui::tokens;
     use egui::{pos2, CentralPanel, Context, Event, Modifiers, PointerButton, RawInput};
+    use std::collections::BTreeMap;
 
     fn run_frame(
         context: &Context,
@@ -1585,5 +1642,191 @@ mod tests {
         );
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::Opened);
+    }
+
+    #[test]
+    fn common_actions_and_classes_remain_metadata_only() {
+        let context = Context::default();
+        let mut slot_classes = BTreeMap::new();
+        slot_classes.insert(String::from("icon"), String::from("text-lg"));
+
+        let tree = ContractTree::new(ContractNode::Button(ContractButton {
+            common: ContractCommon {
+                node_id: "save".into(),
+                visible: true,
+                enabled: true,
+                class: Some(String::from("font-semibold")),
+                class_list: vec![String::from("font-semibold"), String::from("text-lg")],
+                slot_classes,
+                actions: ContractActions {
+                    click: Some("common.click".into()),
+                    ..ContractActions::default()
+                },
+                layout: None,
+            },
+            label: "Save".to_owned(),
+            action_id: Some("button.click".into()),
+            variant: None,
+            size: None,
+            leading_icon: None,
+            trailing_text: None,
+            trailing_icon: None,
+            icon_only: false,
+            selected: false,
+        }));
+
+        let _ = run_frame(&context, RawInput::default(), &tree);
+        let _ = run_frame(
+            &context,
+            RawInput {
+                events: vec![
+                    Event::PointerMoved(pos2(20.0, 20.0)),
+                    Event::PointerButton {
+                        pos: pos2(20.0, 20.0),
+                        button: PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                ..RawInput::default()
+            },
+            &tree,
+        );
+        let events = run_frame(
+            &context,
+            RawInput {
+                events: vec![
+                    Event::PointerMoved(pos2(20.0, 20.0)),
+                    Event::PointerButton {
+                        pos: pos2(20.0, 20.0),
+                        button: PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                ..RawInput::default()
+            },
+            &tree,
+        );
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, EventKind::Clicked);
+        assert_eq!(
+            events[0].action_id.as_ref().map(|id| id.as_str()),
+            Some("button.click")
+        );
+    }
+
+    #[test]
+    fn partial_layout_plan_applies_flow_container_overrides() {
+        let mut common = ContractCommon::new("layout.node");
+        common.layout = Some(ContractLayout {
+            direction: Some(ContractDirection::Column),
+            gap_y: Some(14.0),
+            align: Some(ContractAlign::End),
+            justify: Some(ContractJustify::Center),
+            ..ContractLayout::default()
+        });
+
+        let plan = container_layout_plan(
+            &common,
+            ContractDirection::Row,
+            8.0,
+            ContractJustify::Start,
+            ContractAlign::Start,
+        );
+
+        assert_eq!(plan.direction, ContractDirection::Column);
+        assert_eq!(plan.gap, 14.0);
+        assert_eq!(plan.align, ContractAlign::End);
+        assert_eq!(plan.justify, ContractJustify::Center);
+    }
+
+    #[test]
+    fn unsupported_layout_fields_are_ignored_without_breaking_interaction() {
+        let context = Context::default();
+        let tree = ContractTree::new(ContractNode::Button(ContractButton {
+            common: ContractCommon {
+                node_id: "gridy".into(),
+                visible: true,
+                enabled: true,
+                class: None,
+                class_list: Vec::new(),
+                slot_classes: BTreeMap::new(),
+                actions: ContractActions::default(),
+                layout: Some(ContractLayout {
+                    display: Some(ContractDisplay::Grid),
+                    grow: Some(1.0),
+                    shrink: Some(1.0),
+                    basis: Some(ContractLength::Px { value: 120.0 }),
+                    padding: Some(ContractEdges {
+                        top: 4.0,
+                        right: 8.0,
+                        bottom: 4.0,
+                        left: 8.0,
+                    }),
+                    margin: Some(ContractEdges {
+                        top: 3.0,
+                        right: 3.0,
+                        bottom: 3.0,
+                        left: 3.0,
+                    }),
+                    wrap: Some(true),
+                    columns: vec![ContractTrack::Fr { value: 1.0 }],
+                    rows: vec![ContractTrack::Auto],
+                    col_span: Some(2),
+                    row_span: Some(2),
+                    overflow_x: Some(crate::contract::ContractOverflow::Scroll),
+                    overflow_y: Some(crate::contract::ContractOverflow::Hidden),
+                    ..ContractLayout::default()
+                }),
+            },
+            label: "Save".to_owned(),
+            action_id: Some("button.click".into()),
+            variant: None,
+            size: None,
+            leading_icon: None,
+            trailing_text: None,
+            trailing_icon: None,
+            icon_only: false,
+            selected: false,
+        }));
+
+        let _ = run_frame(&context, RawInput::default(), &tree);
+        let _ = run_frame(
+            &context,
+            RawInput {
+                events: vec![
+                    Event::PointerMoved(pos2(20.0, 20.0)),
+                    Event::PointerButton {
+                        pos: pos2(20.0, 20.0),
+                        button: PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                ..RawInput::default()
+            },
+            &tree,
+        );
+        let events = run_frame(
+            &context,
+            RawInput {
+                events: vec![
+                    Event::PointerMoved(pos2(20.0, 20.0)),
+                    Event::PointerButton {
+                        pos: pos2(20.0, 20.0),
+                        button: PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                ..RawInput::default()
+            },
+            &tree,
+        );
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, EventKind::Clicked);
     }
 }

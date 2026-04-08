@@ -29,7 +29,7 @@ The public runtime surface is built around three ideas:
 - `theme::set_theme`, `theme::set_mode`, and `theme::with_theme` are the only supported theme mutation paths.
 - `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
 - `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
-- `contract::*` exposes the declarative scripting boundary, semantic event model, and schema export.
+- `contract::*` exposes an optional host-driven declarative contract layer, semantic event model, and schema export.
 - The portable Luau embedding core is packaged separately as `luau-runtime-core`; see `../../defold_luau_gui_runtime_architecture.md` for the host-agnostic core/adapter split. File-backed providers can surface filesystem hot-reload events through the core API.
 - Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
@@ -79,7 +79,7 @@ Use these files as the source of truth:
 - `src/example_apps/showcase.rs`
   Canonical typed-component examples.
 - `src/example_apps/contract_demo.rs`
-  Canonical declarative contract example that renders every registered family.
+  Canonical optional contract-layer example that renders every registered family from a host-authored tree.
 - `docs/llm/components/*.md`
   Per-component authoring stubs used to build the generated reference.
 - `docs/llm/contract-*.md`
@@ -185,4 +185,4 @@ Do all of this in the same change:
 
 - `authoring-rules.md` for implementation constraints.
 - `components-reference.md` for the exact API and defaults of every existing component.
-- `contract-reference.md` for the supported declarative families, events, and schema surface.
+- `contract-reference.md` for the supported contract families, events, schema surface, and current support matrix.

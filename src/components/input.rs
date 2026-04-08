@@ -6,11 +6,12 @@ use crate::primitives::control::with_input_chrome;
 use crate::ui::tokens;
 use crate::ui::typography;
 use egui::{
-    Align, Color32, CornerRadius, CursorIcon, Layout, Shape, Stroke, StrokeKind, Ui, UiBuilder,
+    Align, Color32, CornerRadius, CursorIcon, Id, Layout, Shape, Stroke, StrokeKind, Ui, UiBuilder,
 };
 
 #[derive(Debug, Clone, Copy)]
 pub struct TextInput<'a> {
+    pub id: Option<Id>,
     pub width: f32,
     pub width_is_custom: bool,
     pub width_preset: Option<InputWidth>,
@@ -23,6 +24,7 @@ pub struct TextInput<'a> {
 impl<'a> TextInput<'a> {
     pub fn new() -> Self {
         Self {
+            id: None,
             width: 220.0,
             width_is_custom: false,
             width_preset: None,
@@ -36,6 +38,11 @@ impl<'a> TextInput<'a> {
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
         self.width_is_custom = true;
+        self
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
         self
     }
 
@@ -142,7 +149,7 @@ fn draw_text_input(ui: &mut Ui, value: &mut String, props: TextInput<'_>) -> egu
             0
         };
         let text_font = typography::body_font();
-        let text_edit_id = ui.next_auto_id();
+        let text_edit_id = props.id.unwrap_or_else(|| ui.next_auto_id());
         let mut text_edit = egui::TextEdit::singleline(value)
             .horizontal_align(Align::Min)
             .vertical_align(Align::Center)

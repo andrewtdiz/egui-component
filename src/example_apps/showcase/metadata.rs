@@ -52,15 +52,15 @@ fn showcase_image(name: &str) -> Image<'static> {
 fn showcase_component_definitions_by_section(
     section: ShowcaseSection,
 ) -> impl Iterator<Item = &'static ComponentDefinition> {
-    let mut definitions = catalog::component_definitions()
+    let mut definitions = component_definitions()
         .filter(move |definition| showcase_section(definition.kind) == section)
         .collect::<Vec<_>>();
     definitions.sort_unstable_by(|left, right| left.label.cmp(right.label));
     definitions.into_iter()
 }
 
-fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefinition {
-    catalog::component_definitions()
+pub(crate) fn catalog_component_definition(kind: ComponentKind) -> &'static ComponentDefinition {
+    component_definitions()
         .find(|definition| definition.kind == kind)
         .expect("missing catalog component definition")
 }
@@ -88,7 +88,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
     }
 }
 
-fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
+pub(crate) fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
     match kind {
         ComponentKind::CanvaBackgrounds => available_width.min(460.0),
         ComponentKind::CanvaBrandKit => available_width.min(640.0),
@@ -109,7 +109,7 @@ fn preview_surface_width(kind: ComponentKind, available_width: f32) -> f32 {
     }
 }
 
-fn showcase_description(kind: ComponentKind) -> &'static str {
+pub(crate) fn showcase_description(kind: ComponentKind) -> &'static str {
     match kind {
         ComponentKind::Label => "Text styles and tones.",
         ComponentKind::Color => "Circular solid color swatches.",
@@ -191,7 +191,7 @@ fn app_background(ui: &Ui) -> Color32 {
     theme::color(ui, ColorRole::Background)
 }
 
-fn showcase_header_fill(runtime: theme::ThemeRuntime) -> Color32 {
+pub(crate) fn showcase_header_fill(runtime: theme::ThemeRuntime) -> Color32 {
     theme::resolved_color(runtime, ColorRole::Background).lerp_to_gamma(
         theme::resolved_color(runtime, ColorRole::Card),
         if runtime.mode.is_dark() { 0.84 } else { 0.92 },

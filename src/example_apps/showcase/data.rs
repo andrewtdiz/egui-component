@@ -176,7 +176,7 @@ const HIERARCHY_STYLE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Normal"), TabOption::new(1, "Component")];
 const HIERARCHY_ICON_STYLE_OPTIONS: [TabOption<'static>; 2] =
     [TabOption::new(0, "Emoji"), TabOption::new(1, "Icons")];
-const SHOWCASE_BASE_COLOR: BaseColor = BaseColor::Slate;
+pub(crate) const SHOWCASE_BASE_COLOR: BaseColor = BaseColor::Slate;
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
 const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
     TabOption::with_icon(0, "Home", "house"),
@@ -347,8 +347,8 @@ const MENU_BAR_ACTION_LABELS: [&str; 19] = [
     "Bring to Front",
 ];
 const PAGINATION_PAGE_COUNT: usize = 12;
-const SMALL_TEXT: f32 = 12.0;
-const SIDEBAR_WIDTH: f32 = 238.0;
+pub(crate) const SMALL_TEXT: f32 = 12.0;
+pub(crate) const SIDEBAR_WIDTH: f32 = 238.0;
 const TOOLBAR_PREVIEW_WIDTH: f32 = 820.0;
 const MENU_BAR_PREVIEW_WIDTH: f32 = 420.0;
 const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);

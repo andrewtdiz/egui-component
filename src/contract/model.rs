@@ -1234,17 +1234,19 @@ mod tests {
                     Some("text-muted")
                 );
                 assert_eq!(
-                    label.common.actions.click.as_ref().map(|action| action.as_str()),
+                    label
+                        .common
+                        .actions
+                        .click
+                        .as_ref()
+                        .map(|action| action.as_str()),
                     Some("label.clicked")
                 );
                 let layout = label.common.layout.expect("layout scaffolding");
                 assert_eq!(layout.display, Some(ContractDisplay::Flex));
                 assert_eq!(layout.direction, Some(ContractDirection::Column));
                 assert_eq!(layout.gap_y, Some(12.0));
-                assert_eq!(
-                    layout.width,
-                    Some(ContractLength::Px { value: 320.0 })
-                );
+                assert_eq!(layout.width, Some(ContractLength::Px { value: 320.0 }));
             }
             node => panic!("expected label node, got {node:?}"),
         }

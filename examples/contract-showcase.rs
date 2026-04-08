@@ -1,5 +1,5 @@
 use egui::ViewportBuilder;
-use egui_component::example_apps::contract_demo;
+use egui_component::demos::contract_demo;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

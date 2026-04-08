@@ -8,9 +8,12 @@ The crate is organized around three public layers:
 - `egui_component::layout::*` for vendored taffy flex/grid primitives
 - `egui_component::theme::*` for theme installation and scoped theme changes
 
-The crate also ships a host-owned declarative layer for editor scripting:
+The crate also ships an optional host-owned declarative layer for serialized or host-driven editor surfaces:
 
 - `egui_component::contract::*` for serializable UI trees, semantic events, renderer entry points, and schema export
+
+Repo-local demos and showcase helpers live under `egui_component::demos::*`. The older
+`egui_component::example_apps::*` and `egui_component::catalog::*` module paths are deprecated shims.
 
 The portable Luau embedding core lives in the reusable `luau-runtime-core` crate. `egui-component` does not expose that runtime surface; new hosts should depend on `luau-runtime-core` directly. The core includes filesystem hot-reload support for file-backed script providers.
 
@@ -18,8 +21,8 @@ The portable Luau embedding core lives in the reusable `luau-runtime-core` crate
 
 ```toml
 [dependencies]
-egui = "0.34.1"
-eframe = "0.34.1"
+egui = "0.33.3"
+eframe = "0.33.3"
 egui-component = { path = "../egui-component-mainline" }
 ```
 
@@ -38,8 +41,8 @@ Then add `egui`, `eframe`, and this component library to `Cargo.toml`:
 
 ```toml
 [dependencies]
-egui = "0.34.1"
-eframe = "0.34.1"
+egui = "0.33.3"
+eframe = "0.33.3"
 egui-component = { path = "../egui-component-mainline" }
 ```
 
@@ -111,11 +114,11 @@ From there, use:
 - `egui_component::theme::*` to install or scope themes
 - `egui_component::layout::*` for direct taffy layout via `tui`, `tid`, and `taffy`
 - `egui_component::prelude::*` for the typed component builders
-- `egui_component::contract::*` when the host needs to render a curated declarative surface from serialized data
+- `egui_component::contract::*` when the host needs an optional declarative surface with schema export and semantic events
 
 ## Declarative Contract
 
-The `contract` module is the stable scripting boundary for Clay-style host integration.
+The `contract` module is an optional host-driven declarative layer. It is not the default embedded Luau runtime boundary.
 
 It provides:
 
@@ -216,7 +219,10 @@ let _ = ui.components().twemoji(Twemoji::new("🧑🏽‍🚀").size(28.0));
 The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
-- `contract-showcase`: declarative editor surface driven entirely through `egui_component::contract::*`
+- `contract-showcase`: optional declarative editor surface driven entirely through `egui_component::contract::*`
+- `runtime-egui-host`: canonical embedded Luau runtime host using the direct typed `app.*` / `ui.*` bridge
+- `showcase-runtime`: convenience wrapper that boots the Luau showcase surface through the same direct runtime host
+- `component-gallery-runtime`: Luau primitive component catalog for the shadcn-like direct `ui.*` surface
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
 
 Run the main showcase:
@@ -230,6 +236,8 @@ Run the local wrapper command for the showcase:
 ```bash
 cargo example showcase
 ```
+
+The wrapper commands live in the workspace tool crate at `tools/example-runner`.
 
 Generate isolated showcase snapshots:
 
@@ -248,9 +256,14 @@ Run any focused example:
 
 ```bash
 cargo run --example theme-playground
+cargo run --example runtime-egui-host
+cargo run --example showcase-runtime
+cargo run --example component-gallery-runtime
 ```
 
 Replace `theme-playground` with `contract-showcase`.
+
+For live Luau edits, use `runtime-egui-host` for the main demo surface, `showcase-runtime` for the library-backed recipe showcase, and `component-gallery-runtime` for the primitive Luau component catalog. The component gallery now uses the same Rust-owned showcase shell pattern as the original catalog while each selected preview is rendered from a focused Luau root. The direct typed Luau path is the supported product-development model. The alternate `contract-showcase` path remains optional.
 
 In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
 The window is restarted on each rebuild rather than patched in place.

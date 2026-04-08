@@ -1,8 +1,9 @@
-pub mod catalog;
+#[path = "catalog.rs"]
+mod catalog_defs;
 pub mod components;
 pub mod contract;
-#[doc(hidden)]
-pub mod example_apps;
+#[path = "example_apps/mod.rs"]
+mod demo_apps_internal;
 mod internal_taffy;
 pub mod layout;
 pub mod icons {
@@ -12,12 +13,40 @@ pub mod primitives;
 pub mod theme;
 pub mod ui;
 
+/// Support modules used by the repository's local examples and demo tooling.
+///
+/// This is not part of the main component-library surface.
+pub mod demos {
+    pub use crate::demo_apps_internal::{
+        component_gallery_runtime, contract_demo, runtime_egui_host, showcase, showcase_runtime,
+    };
+}
+
+#[doc(hidden)]
+#[deprecated(
+    note = "use egui_component::demos::* for local demo support, or run the example binaries directly"
+)]
+pub mod example_apps {
+    pub use crate::demos::*;
+}
+
+#[doc(hidden)]
+#[deprecated(
+    note = "use the crate root re-exports like ComponentKind and component_definitions() instead"
+)]
+pub mod catalog {
+    pub use crate::catalog_defs::{
+        component_definitions, component_definitions_by_group, parse_component_kind,
+        supported_component_ids_csv, ComponentDefinition, ComponentGroup, ComponentKind,
+    };
+}
+
 pub(crate) use internal_taffy::{
     setup_tui_visuals, tid, AsTuiBuilder, TaffyContainerUi, Tui, TuiBuilder, TuiBuilderLogic,
     TuiBuilderParamsAccess, TuiContainerResponse, TuiId, TuiInnerResponse, TuiWidget,
 };
 
-pub use catalog::{
+pub use catalog_defs::{
     component_definitions, component_definitions_by_group, parse_component_kind,
     supported_component_ids_csv, ComponentDefinition, ComponentGroup, ComponentKind,
 };
