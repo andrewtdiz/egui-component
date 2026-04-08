@@ -10,7 +10,7 @@ cargo run -p luau-runtime-core --bin generate-runtime-api
 
 Generated artifacts:
 
-- [`examples/runtime-luau/ui/types.luau`](../examples/runtime-luau/ui/types.luau)
+- [`examples/runtime-luau/ui/core/types.luau`](../examples/runtime-luau/ui/core/types.luau)
 - [`docs/luau-runtime-api-reference.md`](./luau-runtime-api-reference.md)
 
 The host mounts frame-local `app` and `ui` globals for Luau scripts. This document covers that generated bridge surface only; lifecycle hooks such as `init`, `update`, `render`, `reload`, and `shutdown` remain documented in `examples/runtime-luau/README.md`.

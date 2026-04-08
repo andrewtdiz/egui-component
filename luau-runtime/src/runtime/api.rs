@@ -1900,7 +1900,7 @@ pub(super) fn parse_skeleton_shape(value: &str) -> Option<UiSkeletonShape> {
 
 pub fn runtime_api_reference_markdown() -> String {
     let mut markdown = String::from(
-        "# Luau Runtime API Reference\n\nGenerated from `luau_runtime_core::runtime_api_reference_markdown()` and `luau_runtime_core::runtime_api_luau_typings()`.\n\nRefresh with:\n\n```bash\ncargo run -p luau-runtime-core --bin generate-runtime-api\n```\n\nGenerated artifacts:\n\n- [`examples/runtime-luau/ui/types.luau`](../examples/runtime-luau/ui/types.luau)\n- [`docs/luau-runtime-api-reference.md`](./luau-runtime-api-reference.md)\n\nThe host mounts frame-local `app` and `ui` globals for Luau scripts. This document covers that generated bridge surface only; lifecycle hooks such as `init`, `update`, `render`, `reload`, and `shutdown` remain documented in `examples/runtime-luau/README.md`.\n\n## Functions\n\n",
+        "# Luau Runtime API Reference\n\nGenerated from `luau_runtime_core::runtime_api_reference_markdown()` and `luau_runtime_core::runtime_api_luau_typings()`.\n\nRefresh with:\n\n```bash\ncargo run -p luau-runtime-core --bin generate-runtime-api\n```\n\nGenerated artifacts:\n\n- [`examples/runtime-luau/ui/core/types.luau`](../examples/runtime-luau/ui/core/types.luau)\n- [`docs/luau-runtime-api-reference.md`](./luau-runtime-api-reference.md)\n\nThe host mounts frame-local `app` and `ui` globals for Luau scripts. This document covers that generated bridge surface only; lifecycle hooks such as `init`, `update`, `render`, `reload`, and `shutdown` remain documented in `examples/runtime-luau/README.md`.\n\n## Functions\n\n",
     );
 
     for namespace in ["app", "ui"] {

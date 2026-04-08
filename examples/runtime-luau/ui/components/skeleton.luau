@@ -1,9 +1,9 @@
 --!strict
 
-local text = require("../text")
-local scope = require("../scope")
-local loading = require("../loading")
-local state_store = require("./state")
+local text = require("../core/text")
+local scope = require("../core/layout")
+local loading = require("../core/loading")
+local state_store = require("./catalog_state")
 local button = require("./button").api
 local card = require("./card").api
 
@@ -22,17 +22,17 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local toggle_label = if gallery.skeleton_loading then "Show Loaded State" else "Show Loading State"
+    local catalog = state.catalog
+    local toggle_label = if catalog.skeleton_loading then "Show Loaded State" else "Show Loading State"
     if button.render("skeleton_toggle", toggle_label, {
         variant = "secondary",
     }) then
-        gallery.skeleton_loading = not gallery.skeleton_loading
+        catalog.skeleton_loading = not catalog.skeleton_loading
     end
 
     card.surface(function()
         scope.row({ gap = 12 }, function()
-            if gallery.skeleton_loading then
+            if catalog.skeleton_loading then
                 api.render({
                     width = 44,
                     height = 44,
@@ -48,7 +48,7 @@ function module.render_preview(state: any)
             end
 
             scope.column({ gap = 8 }, function()
-                if gallery.skeleton_loading then
+                if catalog.skeleton_loading then
                     api.render({
                         width = 180,
                         height = 16,

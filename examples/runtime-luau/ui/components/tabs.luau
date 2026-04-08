@@ -1,10 +1,10 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local text = require("../text")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 
 type TabOption = ui_types.TabOption
 type TabsProps = ui_types.TabsProps
@@ -54,66 +54,66 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
 
     scope.column({ gap = 18 }, function()
-        local next_tab, changed = api.render("preview_tabs_inline", gallery.tabs_inline_index, INLINE_TABS, {
+        local next_tab, changed = api.render("preview_tabs_inline", catalog.tabs_inline_index, INLINE_TABS, {
             variant = "underline",
         })
         if changed then
-            gallery.tabs_inline_index = next_tab
+            catalog.tabs_inline_index = next_tab
         end
         scope.column({ gap = 6 }, function()
-            local selected = INLINE_TABS[gallery.tabs_inline_index]
+            local selected = INLINE_TABS[catalog.tabs_inline_index]
             text.meta(if selected ~= nil then selected.label else INLINE_TABS[1].label)
         end)
 
         local next_blender_tab, blender_changed = api.render(
             "preview_tabs_blender",
-            gallery.tabs_blender_index,
+            catalog.tabs_blender_index,
             BLENDER_TABS,
             {
                 variant = "blender_topbar",
             }
         )
         if blender_changed then
-            gallery.tabs_blender_index = next_blender_tab
+            catalog.tabs_blender_index = next_blender_tab
         end
 
         local next_segmented_tab, segmented_changed = api.render(
             "preview_tabs_segmented",
-            gallery.tabs_segmented_index,
+            catalog.tabs_segmented_index,
             INLINE_TABS,
             {
                 variant = "segmented",
             }
         )
         if segmented_changed then
-            gallery.tabs_segmented_index = next_segmented_tab
+            catalog.tabs_segmented_index = next_segmented_tab
         end
 
         local next_stacked_tab, stacked_changed = api.render(
             "preview_tabs_stacked",
-            gallery.tabs_stacked_index,
+            catalog.tabs_stacked_index,
             STACKED_TABS,
             {
                 variant = "stacked",
             }
         )
         if stacked_changed then
-            gallery.tabs_stacked_index = next_stacked_tab
+            catalog.tabs_stacked_index = next_stacked_tab
         end
 
         local next_rail_tab, rail_changed = api.render(
             "preview_tabs_rail",
-            gallery.tabs_rail_index,
+            catalog.tabs_rail_index,
             RAIL_TABS,
             {
                 variant = "rail",
             }
         )
         if rail_changed then
-            gallery.tabs_rail_index = next_rail_tab
+            catalog.tabs_rail_index = next_rail_tab
         end
     end)
 end

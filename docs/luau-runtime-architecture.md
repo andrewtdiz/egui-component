@@ -72,7 +72,7 @@ That seam is where runtime performance, memory behavior, and correctness matter 
 The canonical signatures, prop schemas, and enum tokens for this bridge are generated from Rust source of truth:
 
 - [`docs/luau-runtime-api-reference.md`](/home/andy/Documents/egui-component/docs/luau-runtime-api-reference.md)
-- [`ui/types.luau`](/home/andy/Documents/egui-component/examples/runtime-luau/ui/types.luau)
+- [`ui/core/types.luau`](/home/andy/Documents/egui-component/examples/runtime-luau/ui/core/types.luau)
 
 `ui.end_scope()` is used instead of `ui.end()` because `end` is a reserved Luau keyword.
 

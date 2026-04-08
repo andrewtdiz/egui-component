@@ -150,7 +150,7 @@ Exit criteria:
 
 Goal: add reliable file-backed hot reload without introducing module-graph complexity yet.
 
-Status: complete for `examples/runtime-luau/demo.luau` in `runtime-egui-host`.
+Status: complete for `examples/runtime-luau/apps/demo/main.luau` in `runtime-egui-host`.
 
 Implement:
 
@@ -274,7 +274,7 @@ Do not implement:
 Verification:
 
 - Run `runtime-egui-host`.
-- Edit `examples/runtime-luau/panel.luau` and confirm the rendered card updates live.
+- Edit `examples/runtime-luau/apps/panel/main.luau` and confirm the rendered card updates live.
 - Click contract-driven controls and confirm Luau state updates through `ContractEvent`s.
 - Save a broken leaf module and confirm the previous tree remains active until the file is fixed.
 
@@ -426,7 +426,7 @@ Do this in layers instead of converting `showcase` wholesale.
    - `card`
    - `tabs`
    - one `internal_taffy` grid/flex-heavy example
-4. Add a script-side component library under `examples/runtime-luau/components/`.
+4. Add a script-side component or recipe library under `examples/runtime-luau/ui/`.
 5. Add script-side class presets under `examples/runtime-luau/styles/`.
 6. Keep the static showcase as the truth source for snapshots until runtime parity is good enough.
 

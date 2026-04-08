@@ -31,6 +31,7 @@ fn default_script_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
         .join("runtime-luau")
+        .join("apps")
         .join("showcase")
         .join("main.luau")
 }

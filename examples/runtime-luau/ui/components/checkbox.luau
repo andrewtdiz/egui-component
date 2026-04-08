@@ -1,8 +1,8 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local state_store = require("./catalog_state")
 
 type CheckboxProps = ui_types.CheckboxProps
 
@@ -21,12 +21,12 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local next_value, changed = api.render("receive_shadows", gallery.checkbox_receive_shadows, {
+    local catalog = state.catalog
+    local next_value, changed = api.render("receive_shadows", catalog.checkbox_receive_shadows, {
         label = "Receive Shadows",
     })
     if changed then
-        gallery.checkbox_receive_shadows = next_value
+        catalog.checkbox_receive_shadows = next_value
     end
 end
 

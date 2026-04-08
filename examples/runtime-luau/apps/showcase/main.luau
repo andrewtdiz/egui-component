@@ -1,10 +1,10 @@
 --!strict
 
-local ui_types = require("../ui/types")
-local kit = require("../ui.luau")
-local editor_sidebar = require("../components/editor_sidebar")
-local profile_panel = require("../components/profile_panel")
-local settings_form = require("../components/settings_form")
+local ui_types = require("../../ui/core/types")
+local kit = require("../../ui.luau")
+local editor_sidebar = require("../../ui/recipes/editor_sidebar")
+local profile_panel = require("../../ui/recipes/profile_panel")
+local settings_form = require("../../ui/recipes/settings_form")
 
 type App = ui_types.App
 type Ui = ui_types.Ui
@@ -22,7 +22,7 @@ function module.reload(_old_exports: any, state: any)
     local app: App = app
 
     state.reloads = (state.reloads or 0) + 1
-    app.log("info", "showcase/main.luau reloaded")
+    app.log("info", "apps/showcase/main.luau reloaded")
 end
 
 function module.render(state: any)
@@ -37,7 +37,7 @@ function module.render(state: any)
         kit.stack.row({ gap = kit.tokens.spacing.lg }, function()
             profile_panel.render(state, {
                 eyebrow = "Profile Recipe",
-                source_label = "showcase/profile_panel",
+                source_label = "ui/recipes/profile_panel",
                 card_props = kit.tokens.card_showcase,
                 placeholder = "Rename the showcase profile",
             })

@@ -465,7 +465,9 @@ fn default_script_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
         .join("runtime-luau")
-        .join("demo.luau")
+        .join("apps")
+        .join("demo")
+        .join("main.luau")
 }
 
 fn format_bytes(bytes: usize) -> String {
@@ -1722,7 +1724,7 @@ mod tests {
             r#"
                 --!strict
 
-                local settings_form = require("./components/settings_form")
+                local settings_form = require("./ui/recipes/settings_form")
                 local module = {}
 
                 function module.render(state)
@@ -1756,7 +1758,7 @@ mod tests {
                 --!strict
 
                 local kit = require("./ui.luau")
-                local settings_form = require("./components/settings_form")
+                local settings_form = require("./ui/recipes/settings_form")
                 local module = {}
 
                 function module.render(state)
@@ -1794,7 +1796,7 @@ mod tests {
             r#"
                 --!strict
 
-                local editor_sidebar = require("./components/editor_sidebar")
+                local editor_sidebar = require("./ui/recipes/editor_sidebar")
                 local module = {}
 
                 function module.render(state)
@@ -1820,7 +1822,7 @@ mod tests {
             "expected library-backed editor sidebar to use the native virtual list primitive"
         );
 
-        let target_file = "examples/runtime-luau/demo.luau";
+        let target_file = "examples/runtime-luau/apps/demo/main.luau";
         let target_center = find_text_center(
             &run_frame_output(&context, &mut app, RawInput::default()).shapes,
             target_file,
@@ -2438,7 +2440,7 @@ mod tests {
             r#"
                 --!strict
 
-                local profile_panel = require("./components/profile_panel")
+                local profile_panel = require("./ui/recipes/profile_panel")
                 local module = {}
 
                 function module.init(state)
@@ -2872,6 +2874,7 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("examples")
             .join("runtime-luau")
+            .join("apps")
             .join("showcase")
             .join("main.luau")
     }
@@ -2880,8 +2883,8 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("examples")
             .join("runtime-luau")
-            .join("ui")
-            .join("components")
+            .join("apps")
+            .join("gallery")
             .join("main.luau")
     }
 
@@ -2892,8 +2895,7 @@ mod tests {
         copy_path_tree(&root.join(".luaurc"), &destination.join(".luaurc"));
         copy_path_tree(&root.join("ui.luau"), &destination.join("ui.luau"));
         copy_path_tree(&root.join("ui"), &destination.join("ui"));
-        copy_path_tree(&root.join("components"), &destination.join("components"));
-        copy_path_tree(&root.join("showcase"), &destination.join("showcase"));
+        copy_path_tree(&root.join("apps"), &destination.join("apps"));
     }
 
     fn copy_path_tree(source: &Path, destination: &Path) {

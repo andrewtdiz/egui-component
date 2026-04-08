@@ -4721,6 +4721,7 @@ fn generated_runtime_api_typings_file_is_current() {
         .join("examples")
         .join("runtime-luau")
         .join("ui")
+        .join("core")
         .join("types.luau");
     let generated = runtime_api_luau_typings();
     let checked_in = fs::read_to_string(&path).unwrap();

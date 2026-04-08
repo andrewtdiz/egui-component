@@ -1,33 +1,33 @@
 --!strict
 
-local bridge = require("../bridge")
+local bridge = require("../../ui/core/bridge")
 local kit = require("../../ui.luau")
-local catalog = require("./catalog")
-local component_state = require("./state")
+local component_registry = require("../../ui/components/registry")
+local catalog_state = require("../../ui/components/catalog_state")
 
-type GalleryPreview = catalog.GalleryPreview
-type GallerySection = catalog.GallerySection
+type ComponentPreview = component_registry.ComponentPreview
+type ComponentSection = component_registry.ComponentSection
 
 local module = {}
 
-local function render_preview(state: any, item: GalleryPreview)
+local function render_preview(state: any, item: ComponentPreview)
     item.render_preview(state)
 end
 
 function module.init(state: any)
-    component_state.init(state)
+    catalog_state.init(state)
 end
 
 function module.update(state: any, _input: any)
-    component_state.update(state)
+    catalog_state.update(state)
 end
 
 function module.render(state: any)
-    component_state.init(state)
-    local gallery = state.gallery
+    catalog_state.init(state)
+    local catalog = state.catalog
     local current_ui = bridge.current_ui()
-    local selected_id = tostring(gallery.selected or catalog.default_preview.id)
-    local section, item = catalog.find(selected_id)
+    local selected_id = tostring(catalog.selected or component_registry.default_preview.id)
+    local section, item = component_registry.find(selected_id)
 
     kit.stack.column({ gap = kit.tokens.spacing.md }, function()
         kit.text.title("Luau Primitive Component Gallery")
@@ -43,7 +43,7 @@ function module.render(state: any)
             }, function()
                 kit.stack.column({ gap = kit.tokens.spacing.xs }, function()
                     kit.text.kicker("Components")
-                    for _, sidebar_section in ipairs(catalog.sections) do
+                    for _, sidebar_section in ipairs(component_registry.sections) do
                         kit.text.meta(sidebar_section.title)
                         for _, sidebar_item in ipairs(sidebar_section.items) do
                             local clicked = if sidebar_item.id == item.id
@@ -54,7 +54,7 @@ function module.render(state: any)
                                     width = 216,
                                 })
                             if clicked then
-                                gallery.selected = sidebar_item.id
+                                catalog.selected = sidebar_item.id
                             end
                         end
                         current_ui.separator()

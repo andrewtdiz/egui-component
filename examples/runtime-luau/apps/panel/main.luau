@@ -1,6 +1,6 @@
 --!strict
 
-local ui_types = require("./ui/types")
+local ui_types = require("../../ui/core/types")
 
 type App = ui_types.App
 type Ui = ui_types.Ui
@@ -18,7 +18,7 @@ function module.reload(_old_exports: any, state: any)
 
     module_state = state
     state.reloads = (state.reloads or 0) + 1
-    app.log("info", "panel.luau reloaded")
+    app.log("info", "apps/panel/main.luau reloaded")
 end
 
 function module.view(state: any)

@@ -1,9 +1,9 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local state_store = require("./catalog_state")
 
 type NumberInputProps = ui_types.NumberInputProps
 
@@ -22,10 +22,10 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
 
     scope.row({ gap = 8 }, function()
-        local next_number_x, changed_x = api.render("number_x", gallery.number_input_x, {
+        local next_number_x, changed_x = api.render("number_x", catalog.number_input_x, {
             min = 0,
             max = 100,
             width = 110,
@@ -36,10 +36,10 @@ function module.render_preview(state: any)
             axis = "horizontal",
         })
         if changed_x then
-            gallery.number_input_x = next_number_x
+            catalog.number_input_x = next_number_x
         end
 
-        local next_number_y, changed_y = api.render("number_y", gallery.number_input_y, {
+        local next_number_y, changed_y = api.render("number_y", catalog.number_input_y, {
             min = 0,
             max = 100,
             width = 110,
@@ -50,7 +50,7 @@ function module.render_preview(state: any)
             axis = "vertical",
         })
         if changed_y then
-            gallery.number_input_y = next_number_y
+            catalog.number_input_y = next_number_y
         end
     end)
 end

@@ -6,6 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("examples")
         .join("runtime-luau")
         .join("ui")
+        .join("core")
         .join("types.luau");
     let reference_path = workspace_root
         .join("docs")

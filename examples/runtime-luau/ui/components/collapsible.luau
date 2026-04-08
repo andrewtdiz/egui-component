@@ -1,10 +1,10 @@
 --!strict
 
-local disclosure = require("../disclosure")
-local scope = require("../scope")
-local text = require("../text")
-local tokens = require("../tokens")
-local state_store = require("./state")
+local disclosure = require("../core/disclosure")
+local scope = require("../core/layout")
+local text = require("../core/text")
+local tokens = require("../core/tokens")
+local state_store = require("./catalog_state")
 
 local api = {}
 
@@ -27,11 +27,11 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    gallery.collapsible_transform_open = api.render(
-        "gallery_details",
+    local catalog = state.catalog
+    catalog.collapsible_transform_open = api.render(
+        "catalog_details",
         "Transform",
-        gallery.collapsible_transform_open,
+        catalog.collapsible_transform_open,
         {
             leading_icon = "move-3d",
             trailing_icon = "ellipsis",

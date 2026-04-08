@@ -1,8 +1,8 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local state_store = require("./catalog_state")
 
 type SwitchProps = ui_types.SwitchProps
 
@@ -21,26 +21,26 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
 
-    local next_switch, changed = api.render("post_fx_toggle", gallery.switch_enable_post_fx, {
+    local next_switch, changed = api.render("post_fx_toggle", catalog.switch_enable_post_fx, {
         label = "Enable Post FX",
         size = "md",
     })
     if changed then
-        gallery.switch_enable_post_fx = next_switch
+        catalog.switch_enable_post_fx = next_switch
     end
 
     local next_small_switch, small_changed = api.render(
         "compact_handles_toggle",
-        gallery.switch_compact_handles,
+        catalog.switch_compact_handles,
         {
             label = "Use Compact Handles",
             size = "sm",
         }
     )
     if small_changed then
-        gallery.switch_compact_handles = next_small_switch
+        catalog.switch_compact_handles = next_small_switch
     end
 end
 

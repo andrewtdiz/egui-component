@@ -23,7 +23,7 @@ local skeleton = require("./skeleton")
 local dropdown_menu = require("./dropdown-menu")
 local tooltip = require("./tooltip")
 
-export type GalleryPreview = {
+export type ComponentPreview = {
     id: string,
     label: string,
     section: string,
@@ -35,57 +35,57 @@ export type GalleryPreview = {
     api: any,
 }
 
-export type GallerySection = {
+export type ComponentSection = {
     title: string,
-    items: { GalleryPreview },
+    items: { ComponentPreview },
 }
 
-local SECTIONS: { GallerySection } = table.freeze({
+local SECTIONS: { ComponentSection } = table.freeze({
     {
         title = "Content",
         items = {
-            label :: GalleryPreview,
-            input :: GalleryPreview,
-            field :: GalleryPreview,
-            separator :: GalleryPreview,
-            card :: GalleryPreview,
-            collapsible :: GalleryPreview,
+            label :: ComponentPreview,
+            input :: ComponentPreview,
+            field :: ComponentPreview,
+            separator :: ComponentPreview,
+            card :: ComponentPreview,
+            collapsible :: ComponentPreview,
         },
     },
     {
         title = "Inputs",
         items = {
-            checkbox :: GalleryPreview,
-            switch :: GalleryPreview,
-            slider :: GalleryPreview,
-            number_input :: GalleryPreview,
-            select :: GalleryPreview,
-            radio :: GalleryPreview,
-            radio_group :: GalleryPreview,
+            checkbox :: ComponentPreview,
+            switch :: ComponentPreview,
+            slider :: ComponentPreview,
+            number_input :: ComponentPreview,
+            select :: ComponentPreview,
+            radio :: ComponentPreview,
+            radio_group :: ComponentPreview,
         },
     },
     {
         title = "Actions",
         items = {
-            button :: GalleryPreview,
-            button_group :: GalleryPreview,
-            tabs :: GalleryPreview,
-            pagination :: GalleryPreview,
+            button :: ComponentPreview,
+            button_group :: ComponentPreview,
+            tabs :: ComponentPreview,
+            pagination :: ComponentPreview,
         },
     },
     {
         title = "Feedback",
         items = {
-            progress :: GalleryPreview,
-            spinner :: GalleryPreview,
-            skeleton :: GalleryPreview,
+            progress :: ComponentPreview,
+            spinner :: ComponentPreview,
+            skeleton :: ComponentPreview,
         },
     },
     {
         title = "Overlays",
         items = {
-            dropdown_menu :: GalleryPreview,
-            tooltip :: GalleryPreview,
+            dropdown_menu :: ComponentPreview,
+            tooltip :: ComponentPreview,
         },
     },
 })
@@ -97,7 +97,7 @@ local module = {
     default_preview = DEFAULT_PREVIEW,
 }
 
-function module.find(selected_id: string): (GallerySection, GalleryPreview)
+function module.find(selected_id: string): (ComponentSection, ComponentPreview)
     for _, section in ipairs(SECTIONS) do
         for _, item in ipairs(section.items) do
             if item.id == selected_id then

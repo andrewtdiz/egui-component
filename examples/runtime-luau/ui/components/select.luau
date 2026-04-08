@@ -1,9 +1,9 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local text = require("../text")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 
 type SelectOption = ui_types.SelectOption
 type SelectProps = ui_types.SelectProps
@@ -35,19 +35,19 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
     local next_select, changed = api.render(
         "review_state",
-        gallery.select_review_state,
+        catalog.select_review_state,
         SELECT_OPTIONS,
         {
             width = 280,
         }
     )
     if changed then
-        gallery.select_review_state = next_select
+        catalog.select_review_state = next_select
     end
-    local selected = SELECT_OPTIONS[gallery.select_review_state]
+    local selected = SELECT_OPTIONS[catalog.select_review_state]
     text.meta(if selected ~= nil then selected.label else "None")
 end
 

@@ -1,12 +1,12 @@
 --!strict
 
-local stack = require("./ui/scope")
-local text = require("./ui/text")
-local loading = require("./ui/loading")
-local disclosure = require("./ui/disclosure")
-local list = require("./ui/virtual_list")
-local tokens = require("./ui/tokens")
-local variant = require("./ui/variant")
+local layout = require("./ui/core/layout")
+local text = require("./ui/core/text")
+local loading = require("./ui/core/loading")
+local disclosure = require("./ui/core/disclosure")
+local list = require("./ui/core/virtual_list")
+local tokens = require("./ui/core/tokens")
+local variant = require("./ui/core/variant")
 local button = require("./ui/components/button").api
 local button_group = require("./ui/components/button-group").api
 local card = require("./ui/components/card").api
@@ -25,7 +25,8 @@ local tabs = require("./ui/components/tabs").api
 local tooltip = require("./ui/components/tooltip").api
 
 return {
-    stack = stack,
+    layout = layout,
+    stack = layout,
     card = card,
     text = text,
     button = button,

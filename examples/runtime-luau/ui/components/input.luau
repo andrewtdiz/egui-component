@@ -1,11 +1,11 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local state_store = require("./state")
-local tokens = require("../tokens")
-local variant = require("../variant")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local state_store = require("./catalog_state")
+local tokens = require("../core/tokens")
+local variant = require("../core/variant")
 
 type TextEditProps = ui_types.TextEditProps
 
@@ -37,24 +37,24 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
 
     scope.column({ gap = 10 }, function()
         local next_input, input_changed = api.text(
-            "gallery_input_primary",
-            tostring(gallery.input_value),
+            "catalog_input_primary",
+            tostring(catalog.input_value),
             {
                 width = 280,
                 placeholder = "Type component name",
             }
         )
         if input_changed then
-            gallery.input_value = next_input
+            catalog.input_value = next_input
         end
 
         local next_search, search_changed = api.text(
-            "gallery_input_search",
-            tostring(gallery.search_query),
+            "catalog_input_search",
+            tostring(catalog.search_query),
             {
                 width = 280,
                 placeholder = "Search",
@@ -62,7 +62,7 @@ function module.render_preview(state: any)
             }
         )
         if search_changed then
-            gallery.search_query = next_search
+            catalog.search_query = next_search
         end
     end)
 end

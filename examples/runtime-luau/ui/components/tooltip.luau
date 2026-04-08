@@ -1,8 +1,8 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local state_store = require("./catalog_state")
 local tabs = require("./tabs").api
 
 type TooltipProps = ui_types.TooltipProps
@@ -36,10 +36,10 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
     local placement_index = 1
     for index, placement in ipairs(TOOLTIP_PLACEMENTS) do
-        if placement == gallery.tooltip_placement then
+        if placement == catalog.tooltip_placement then
             placement_index = index
             break
         end
@@ -53,12 +53,12 @@ function module.render_preview(state: any)
         }
     )
     if changed then
-        gallery.tooltip_placement = TOOLTIP_PLACEMENTS[next_index] or "top"
+        catalog.tooltip_placement = TOOLTIP_PLACEMENTS[next_index] or "top"
     end
 
     api.render("Hover this trigger", "Tooltip content example", {
         width = 220,
-        placement = gallery.tooltip_placement,
+        placement = catalog.tooltip_placement,
     })
 end
 

@@ -1,11 +1,11 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local state_store = require("./state")
-local tokens = require("../tokens")
-local variant = require("../variant")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local state_store = require("./catalog_state")
+local tokens = require("../core/tokens")
+local variant = require("../core/variant")
 
 type ButtonProps = ui_types.ButtonProps
 

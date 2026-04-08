@@ -1,10 +1,10 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local text = require("../text")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 
 type SliderProps = ui_types.SliderProps
 
@@ -23,17 +23,17 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
+    local catalog = state.catalog
     scope.row({ gap = 8 }, function()
-        local next_slider, changed = api.render("slider_value", gallery.slider_value, {
+        local next_slider, changed = api.render("slider_value", catalog.slider_value, {
             min = 0,
             max = 100,
             width = 250,
         })
         if changed then
-            gallery.slider_value = next_slider
+            catalog.slider_value = next_slider
         end
-        text.label(tostring(math.floor(gallery.slider_value + 0.5)), {
+        text.label(tostring(math.floor(catalog.slider_value + 0.5)), {
             tone = "secondary",
             weight = "semibold",
         })

@@ -1,9 +1,9 @@
 --!strict
 
-local bridge = require("../bridge")
-local scope = require("../scope")
-local text = require("../text")
-local state_store = require("./state")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 local button = require("./button").api
 
 local api = {}

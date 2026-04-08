@@ -1,8 +1,8 @@
 --!strict
 
-local ui_types = require("../ui/types")
-local bridge = require("../ui/bridge")
-local kit = require("../ui.luau")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local kit = require("../../ui.luau")
 
 type CardProps = ui_types.CardProps
 
@@ -29,7 +29,7 @@ function module.render(state: any, config: ProfilePanelConfig?)
         else "Library-backed Surface"
     local source_label = if config ~= nil and config.source_label ~= nil
         then config.source_label
-        else tostring(state.variant or "examples/runtime-luau/demo.luau")
+        else tostring(state.variant or "examples/runtime-luau/apps/demo/main.luau")
     local placeholder = if config ~= nil and config.placeholder ~= nil
         then config.placeholder
         else "Enter a display name"

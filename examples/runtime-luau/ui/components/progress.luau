@@ -1,9 +1,9 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local state_store = require("./catalog_state")
 local button = require("./button").api
 
 type ProgressProps = ui_types.ProgressProps
@@ -23,20 +23,20 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    api.render(gallery.progress_value, {
+    local catalog = state.catalog
+    api.render(catalog.progress_value, {
         width = 280,
     })
     scope.row({ gap = 8 }, function()
         if button.render("progress_advance", "Advance", {
             variant = "primary",
         }) then
-            gallery.progress_value = math.min(gallery.progress_value + 0.1, 1)
+            catalog.progress_value = math.min(catalog.progress_value + 0.1, 1)
         end
         if button.render("progress_reset", "Reset", {
             variant = "secondary",
         }) then
-            gallery.progress_value = 0
+            catalog.progress_value = 0
         end
     end)
 end

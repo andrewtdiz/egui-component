@@ -1,9 +1,9 @@
 --!strict
 
-local text = require("../text")
-local scope = require("../scope")
-local loading = require("../loading")
-local state_store = require("./state")
+local text = require("../core/text")
+local scope = require("../core/layout")
+local loading = require("../core/loading")
+local state_store = require("./catalog_state")
 local button = require("./button").api
 
 local api = {}
@@ -21,8 +21,8 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local spinner_demo_active = gallery.spinner_demo_frames > 0
+    local catalog = state.catalog
+    local spinner_demo_active = catalog.spinner_demo_frames > 0
 
     scope.row({ gap = 16 }, function()
         api.render({
@@ -59,7 +59,7 @@ function module.render_preview(state: any)
                 width = 112,
             }
         ) then
-            gallery.spinner_demo_frames = 180
+            catalog.spinner_demo_frames = 180
         end
     end)
 end

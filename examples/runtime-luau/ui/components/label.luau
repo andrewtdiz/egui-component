@@ -1,8 +1,8 @@
 --!strict
 
-local text = require("../text")
-local scope = require("../scope")
-local state_store = require("./state")
+local text = require("../core/text")
+local scope = require("../core/layout")
+local state_store = require("./catalog_state")
 
 local api = {}
 

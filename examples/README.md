@@ -64,6 +64,6 @@ The window restarts on each rebuild instead of reloading code into the running p
 
 Snapshot mode is headless and crops the PNG to the component preview itself, without the outer showcase title/subtext/card wrapper.
 
-For live Luau edits, run `runtime-egui-host` for the main demo surface, `showcase-runtime` for the library-backed recipe showcase, or `component-gallery-runtime` for the primitive component catalog. The component catalog now lives under `examples/runtime-luau/ui/components/`, while the reusable Luau component library entrypoint stays at `examples/runtime-luau/ui.luau`. In all three cases Luau owns composition through the direct `ui.*` layer, while Rust owns `egui` frame execution, widget dispatch, hot reload, and rollback.
+For live Luau edits, run `runtime-egui-host` for the main demo surface, `showcase-runtime` for the recipe showcase, or `component-gallery-runtime` for the primitive component catalog. Runtime roots now live under `examples/runtime-luau/apps/`, while the reusable Luau library lives under `examples/runtime-luau/ui/` with one component directory at `examples/runtime-luau/ui/components/`. In all three cases Luau owns composition through the direct `ui.*` layer, while Rust owns `egui` frame execution, widget dispatch, hot reload, and rollback.
 
 Use `contract-showcase` only when you explicitly want the alternate host-authored `ContractTree` path for declarative schema/tooling work. It is not required for the direct embedded Luau runtime path.

@@ -1,6 +1,6 @@
 --!strict
 
-local kit = require("../ui.luau")
+local kit = require("../../ui.luau")
 
 local DEFAULT_SETTINGS = {
     workspace = "egui-component",

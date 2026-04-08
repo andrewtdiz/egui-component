@@ -1,9 +1,9 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local text = require("../text")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 
 type DropdownMenuEntry = ui_types.DropdownMenuEntry
 type DropdownMenuProps = ui_types.DropdownMenuProps
@@ -95,15 +95,15 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local action_id, changed = api.render("gallery_menu", "Open", MENU_ENTRIES, {
+    local catalog = state.catalog
+    local action_id, changed = api.render("catalog_menu", "Open", MENU_ENTRIES, {
         width = 220,
     })
     if changed then
-        gallery.dropdown_menu_action = action_id
-        gallery.dropdown_menu_label = MENU_ACTION_LABELS[action_id] or "No action triggered"
+        catalog.dropdown_menu_action = action_id
+        catalog.dropdown_menu_label = MENU_ACTION_LABELS[action_id] or "No action triggered"
     end
-    text.meta(tostring(gallery.dropdown_menu_label))
+    text.meta(tostring(catalog.dropdown_menu_label))
 end
 
 function module.init(state: any)

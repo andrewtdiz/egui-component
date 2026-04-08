@@ -1,10 +1,10 @@
 --!strict
 
-local bridge = require("../bridge")
+local bridge = require("../core/bridge")
 
 local module = {}
 
-local DEFAULT_GALLERY_STATE = table.freeze({
+local DEFAULT_CATALOG_STATE = table.freeze({
     selected = "field",
     field_material = "M_Robot_Body",
     input_value = "Player_Robot",
@@ -35,24 +35,24 @@ local DEFAULT_GALLERY_STATE = table.freeze({
 })
 
 function module.init(state: any)
-    local preview_state = state.gallery
-    if preview_state == nil then
-        preview_state = {}
-        state.gallery = preview_state
+    local catalog_state = state.catalog
+    if catalog_state == nil then
+        catalog_state = {}
+        state.catalog = catalog_state
     end
 
-    for key, value in pairs(DEFAULT_GALLERY_STATE) do
-        if preview_state[key] == nil then
-            preview_state[key] = value
+    for key, value in pairs(DEFAULT_CATALOG_STATE) do
+        if catalog_state[key] == nil then
+            catalog_state[key] = value
         end
     end
 end
 
 function module.update(state: any)
     module.init(state)
-    local preview_state = state.gallery
-    if preview_state.spinner_demo_frames > 0 then
-        preview_state.spinner_demo_frames = preview_state.spinner_demo_frames - 1
+    local catalog_state = state.catalog
+    if catalog_state.spinner_demo_frames > 0 then
+        catalog_state.spinner_demo_frames = catalog_state.spinner_demo_frames - 1
         bridge.current_app().request_repaint()
     end
 end

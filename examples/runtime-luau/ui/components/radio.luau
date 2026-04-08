@@ -1,10 +1,10 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local scope = require("../scope")
-local text = require("../text")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local scope = require("../core/layout")
+local text = require("../core/text")
+local state_store = require("./catalog_state")
 local button = require("./button").api
 
 type RadioProps = ui_types.RadioProps
@@ -60,21 +60,21 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local next_radio, changed = api.render("publish_channel", gallery.radio_publish_channel, {
+    local catalog = state.catalog
+    local next_radio, changed = api.render("publish_channel", catalog.radio_publish_channel, {
         label = "Use publish channel",
         description = "Standalone radios stay selected until you explicitly reset them.",
     })
     if changed then
-        gallery.radio_publish_channel = next_radio
+        catalog.radio_publish_channel = next_radio
     end
     scope.row({ gap = 8 }, function()
         if button.render("radio_reset", "Reset", {
             variant = "secondary",
         }) then
-            gallery.radio_publish_channel = false
+            catalog.radio_publish_channel = false
         end
-        text.meta(if gallery.radio_publish_channel then "Selected" else "Unselected")
+        text.meta(if catalog.radio_publish_channel then "Selected" else "Unselected")
     end)
 end
 

@@ -1,8 +1,8 @@
 --!strict
 
-local ui_types = require("../types")
-local bridge = require("../bridge")
-local state_store = require("./state")
+local ui_types = require("../core/types")
+local bridge = require("../core/bridge")
+local state_store = require("./catalog_state")
 
 type ButtonGroupOption = ui_types.ButtonGroupOption
 type ButtonGroupProps = ui_types.ButtonGroupProps
@@ -32,10 +32,10 @@ local module = {
 }
 
 function module.render_preview(state: any)
-    local gallery = state.gallery
-    local clicked_group, changed = api.render("gallery_actions", ACTION_GROUP_OPTIONS)
+    local catalog = state.catalog
+    local clicked_group, changed = api.render("catalog_actions", ACTION_GROUP_OPTIONS)
     if changed then
-        gallery.button_group_transform_mode = clicked_group
+        catalog.button_group_transform_mode = clicked_group
     end
 end
 

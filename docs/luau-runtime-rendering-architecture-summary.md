@@ -17,11 +17,11 @@ The thin executable wrapper is `examples/runtime-egui-host.rs`. The actual host 
 - `luau-runtime/src/runtime/types.rs`
 - `luau-runtime/src/watch.rs`
 - `src/example_apps/runtime_egui_host.rs`
-- `examples/runtime-luau/demo.luau`
+- `examples/runtime-luau/apps/demo/main.luau`
 - `examples/runtime-luau/ui.luau`
-- `examples/runtime-luau/ui/bridge.luau`
-- `examples/runtime-luau/ui/scope.luau`
-- representative Luau helpers such as `ui/components/button.luau`, `ui/text.luau`, `ui/components/select.luau`, and `ui/virtual_list.luau`
+- `examples/runtime-luau/ui/core/bridge.luau`
+- `examples/runtime-luau/ui/core/layout.luau`
+- representative Luau helpers such as `ui/components/button.luau`, `ui/core/text.luau`, `ui/components/select.luau`, and `ui/core/virtual_list.luau`
 
 ## Architecture In One Sentence
 
@@ -228,7 +228,7 @@ Examples:
 
 ### 9. Layout scopes are balanced both in Luau and Rust
 
-The Luau helper layer wraps scopes in `examples/runtime-luau/ui/scope.luau:15-90`.
+The Luau helper layer wraps scopes in `examples/runtime-luau/ui/core/layout.luau`.
 
 It uses:
 
@@ -278,7 +278,7 @@ The `runtime-luau` side is a thin typed library, not a second rendering architec
 
 ### Bridge layer
 
-`examples/runtime-luau/ui/bridge.luau:10-18` exposes typed accessors:
+`examples/runtime-luau/ui/core/bridge.luau` exposes typed accessors:
 
 - `current_app()`
 - `current_ui()`
@@ -303,14 +303,14 @@ Those helpers still bottom out in `ui.*`.
 Representative examples:
 
 - `ui/components/button.luau` forwards to `bridge.current_ui().button(...)`
-- `ui/text.luau:19-32` forwards to `bridge.current_ui().label(...)`
+- `ui/core/text.luau` forwards to `bridge.current_ui().label(...)`
 - `ui/components/select.luau` forwards to `bridge.current_ui().select(...)`
-- `ui/virtual_list.luau:9-11` forwards to `bridge.current_ui().virtual_list(...)`
+- `ui/core/virtual_list.luau` forwards to `bridge.current_ui().virtual_list(...)`
 
 The helper layer can add convenience work before the bridge:
 
-- merge variant props in Luau via `variant.merge(...)` (`ui/variant.luau:5-18`)
-- wrap scope begin/end in protected callbacks (`ui/scope.luau:15-90`)
+- merge variant props in Luau via `variant.merge(...)` (`ui/core/variant.luau`)
+- wrap scope begin/end in protected callbacks (`ui/core/layout.luau`)
 
 But it does not:
 
@@ -320,7 +320,7 @@ But it does not:
 
 ### Root scripts use the runtime hooks directly
 
-`examples/runtime-luau/demo.luau:12-61` shows the intended script contract:
+`examples/runtime-luau/apps/demo/main.luau` shows the intended script contract:
 
 - `init(state)`
 - `update(state, input)`
@@ -369,8 +369,8 @@ These are not architectural bugs. They are the current cost model of the immedia
 
 The Luau helper layer is thin, but not free:
 
-- `variant.merge(...)` allocates a new merged props table (`ui/variant.luau:5-18`)
-- `stack.column(...)`, `stack.row(...)`, `stack.card(...)`, and `with_id(...)` wrap every scoped callback with `xpcall`/`pcall` (`ui/scope.luau:15-90`)
+- `variant.merge(...)` allocates a new merged props table (`ui/core/variant.luau`)
+- `stack.column(...)`, `stack.row(...)`, `stack.card(...)`, and `with_id(...)` wrap every scoped callback with `xpcall`/`pcall` (`ui/core/layout.luau`)
 
 For shallow UIs this is minor. For very deeply nested or helper-heavy UIs, it becomes measurable Lua-side overhead before the bridge call even happens.
 
