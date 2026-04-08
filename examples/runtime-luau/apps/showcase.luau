@@ -1,10 +1,10 @@
 --!strict
 
-local ui_types = require("../../ui/core/types")
-local kit = require("../../ui.luau")
-local editor_sidebar = require("../../ui/recipes/editor_sidebar")
-local profile_panel = require("../../ui/recipes/profile_panel")
-local settings_form = require("../../ui/recipes/settings_form")
+local ui_types = require("../ui/core/types")
+local kit = require("../ui.luau")
+local editor_sidebar = require("../ui/recipes/editor_sidebar")
+local profile_panel = require("../ui/recipes/profile_panel")
+local settings_form = require("../ui/recipes/settings_form")
 
 type App = ui_types.App
 type Ui = ui_types.Ui
@@ -22,7 +22,7 @@ function module.reload(_old_exports: any, state: any)
     local app: App = app
 
     state.reloads = (state.reloads or 0) + 1
-    app.log("info", "apps/showcase/main.luau reloaded")
+    app.log("info", "apps/showcase.luau reloaded")
 end
 
 function module.render(state: any)

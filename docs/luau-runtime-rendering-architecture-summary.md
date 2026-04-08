@@ -17,7 +17,7 @@ The thin executable wrapper is `examples/runtime-egui-host.rs`. The actual host 
 - `luau-runtime/src/runtime/types.rs`
 - `luau-runtime/src/watch.rs`
 - `src/example_apps/runtime_egui_host.rs`
-- `examples/runtime-luau/apps/demo/main.luau`
+- `examples/runtime-luau/apps/demo.luau`
 - `examples/runtime-luau/ui.luau`
 - `examples/runtime-luau/ui/core/bridge.luau`
 - `examples/runtime-luau/ui/core/layout.luau`
@@ -320,7 +320,7 @@ But it does not:
 
 ### Root scripts use the runtime hooks directly
 
-`examples/runtime-luau/apps/demo/main.luau` shows the intended script contract:
+`examples/runtime-luau/apps/demo.luau` shows the intended script contract:
 
 - `init(state)`
 - `update(state, input)`

@@ -6,7 +6,7 @@ local kit = require("../../ui.luau")
 local OPEN_FILES = table.freeze({
     "src/lib.rs",
     "src/example_apps/runtime_egui_host.rs",
-    "examples/runtime-luau/apps/demo/main.luau",
+    "examples/runtime-luau/apps/demo.luau",
     "examples/runtime-luau/ui/recipes/editor_sidebar.luau",
     "luau-runtime/src/runtime/api.rs",
 })

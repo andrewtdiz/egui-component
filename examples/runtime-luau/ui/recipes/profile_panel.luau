@@ -29,7 +29,7 @@ function module.render(state: any, config: ProfilePanelConfig?)
         else "Library-backed Surface"
     local source_label = if config ~= nil and config.source_label ~= nil
         then config.source_label
-        else tostring(state.variant or "examples/runtime-luau/apps/demo/main.luau")
+        else tostring(state.variant or "examples/runtime-luau/apps/demo.luau")
     local placeholder = if config ~= nil and config.placeholder ~= nil
         then config.placeholder
         else "Enter a display name"

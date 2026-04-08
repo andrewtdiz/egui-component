@@ -466,8 +466,7 @@ fn default_script_path() -> PathBuf {
         .join("examples")
         .join("runtime-luau")
         .join("apps")
-        .join("demo")
-        .join("main.luau")
+        .join("demo.luau")
 }
 
 fn format_bytes(bytes: usize) -> String {
@@ -1822,7 +1821,7 @@ mod tests {
             "expected library-backed editor sidebar to use the native virtual list primitive"
         );
 
-        let target_file = "examples/runtime-luau/apps/demo/main.luau";
+        let target_file = "examples/runtime-luau/apps/demo.luau";
         let target_center = find_text_center(
             &run_frame_output(&context, &mut app, RawInput::default()).shapes,
             target_file,
@@ -2875,8 +2874,7 @@ mod tests {
             .join("examples")
             .join("runtime-luau")
             .join("apps")
-            .join("showcase")
-            .join("main.luau")
+            .join("showcase.luau")
     }
 
     fn component_gallery_script_path() -> PathBuf {
@@ -2884,8 +2882,7 @@ mod tests {
             .join("examples")
             .join("runtime-luau")
             .join("apps")
-            .join("gallery")
-            .join("main.luau")
+            .join("gallery.luau")
     }
 
     fn copy_example_runtime_library(destination: &Path) {

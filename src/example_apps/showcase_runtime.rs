@@ -32,6 +32,5 @@ fn default_script_path() -> PathBuf {
         .join("examples")
         .join("runtime-luau")
         .join("apps")
-        .join("showcase")
-        .join("main.luau")
+        .join("showcase.luau")
 }

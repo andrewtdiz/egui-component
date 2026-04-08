@@ -1,9 +1,9 @@
 --!strict
 
-local bridge = require("../../ui/core/bridge")
-local kit = require("../../ui.luau")
-local component_registry = require("../../ui/components/registry")
-local catalog_state = require("../../ui/components/catalog_state")
+local bridge = require("../ui/core/bridge")
+local kit = require("../ui.luau")
+local component_registry = require("../ui/components/registry")
+local catalog_state = require("../ui/components/catalog_state")
 
 type ComponentPreview = component_registry.ComponentPreview
 type ComponentSection = component_registry.ComponentSection

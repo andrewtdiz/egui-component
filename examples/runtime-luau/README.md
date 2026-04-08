@@ -22,13 +22,13 @@ cargo run --example component-gallery-runtime
 
 This tree is organized around one rule: runtime roots live in `apps/`, and the reusable library lives in `ui/`.
 
-- `examples/runtime-luau/apps/demo/main.luau`
+- `examples/runtime-luau/apps/demo.luau`
   Canonical library-backed demo root.
-- `examples/runtime-luau/apps/panel/main.luau`
+- `examples/runtime-luau/apps/panel.luau`
   Raw direct `ui.*` debug surface kept for bridge validation.
-- `examples/runtime-luau/apps/showcase/main.luau`
+- `examples/runtime-luau/apps/showcase.luau`
   Recipe showcase root.
-- `examples/runtime-luau/apps/gallery/main.luau`
+- `examples/runtime-luau/apps/gallery.luau`
   Component catalog root.
 - `examples/runtime-luau/ui.luau`
   Public Luau library entrypoint.
@@ -41,7 +41,7 @@ This tree is organized around one rule: runtime roots live in `apps/`, and the r
 
 The rendering flow is:
 
-1. Rust mounts one runtime root from `apps/.../main.luau`.
+1. Rust mounts one runtime root from `apps/*.luau`.
 2. That root imports `ui.luau` plus any `ui/recipes/...` modules it needs.
 3. Recipes compose `ui/components/...`.
 4. Components bottom out in `ui/core/...`, which is the only layer that talks to the frame-local `app` and `ui` globals.
@@ -103,7 +103,7 @@ The public runtime surface is intentionally small:
 
 The direct `ui.*` bridge is immediate-mode and frame-local. Scripted components should be composed as normal Luau functions that call these primitives, and scope/id stacks must be balanced before `render` returns.
 
-The shipped examples opt into the generated typings with `--!strict`, `require("../../ui/core/types")` from app roots, and typed local aliases for the mounted `app` and `ui` globals.
+The shipped examples opt into the generated typings with `--!strict`, `require("../ui/core/types")` from app roots, and typed local aliases for the mounted `app` and `ui` globals.
 
 ## Recommended Luau Composition
 
@@ -116,8 +116,8 @@ Use it from product-facing surfaces:
 ```luau
 --!strict
 
-local kit = require("../../ui.luau")
-local profile_panel = require("../../ui/recipes/profile_panel")
+local kit = require("../ui.luau")
+local profile_panel = require("../ui/recipes/profile_panel")
 
 function module.render(state)
     kit.stack.column({ gap = kit.tokens.spacing.md }, function()
@@ -133,9 +133,9 @@ This library is intentionally Luau-only:
 - helper modules call the direct typed `ui.*` bridge
 - no retained IR or contract tree is built on the frame path
 
-Use raw `ui.*` directly in `apps/panel/main.luau` when you are debugging the host bridge or validating a primitive. Use `ui/recipes/*.luau` for reusable product-facing surfaces, and use `ui/components/*.luau` when you want the primitive-by-primitive catalog surface.
+Use raw `ui.*` directly in `apps/panel.luau` when you are debugging the host bridge or validating a primitive. Use `ui/recipes/*.luau` for reusable product-facing surfaces, and use `ui/components/*.luau` when you want the primitive-by-primitive catalog surface.
 
-Use the explicit file path `require("../../ui.luau")` from app roots so both the embedded runtime and `luau-lsp` resolve the same entrypoint. The public library module is `ui.luau`; host-facing internals stay under `ui/core/`, components stay under `ui/components/`, and composed surfaces stay under `ui/recipes/`.
+Use the explicit file path `require("../ui.luau")` from app roots so both the embedded runtime and `luau-lsp` resolve the same entrypoint. The public library module is `ui.luau`; host-facing internals stay under `ui/core/`, components stay under `ui/components/`, and composed surfaces stay under `ui/recipes/`.
 
 Scoped helpers such as `kit.stack.column(...)`, `kit.card.surface(...)`, and `kit.stack.with_id(...)` use Luau-only callbacks and always unwind their scopes before rethrowing callback errors.
 

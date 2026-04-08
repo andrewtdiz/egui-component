@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn modify_create_remove_and_rename_mark_project_modules_dirty() {
-        let root = normalize_path(&runtime_example_path("apps/demo/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/demo.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let leaf = normalize_path(&runtime_example_path("leaf.luau")).unwrap();
 
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn metadata_only_events_are_ignored() {
-        let root = normalize_path(&runtime_example_path("apps/demo/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/demo.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let event = Event {
             kind: EventKind::Modify(ModifyKind::Metadata(notify::event::MetadataKind::Any)),
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn non_luau_or_out_of_tree_paths_are_ignored() {
-        let root = normalize_path(&runtime_example_path("apps/demo/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/demo.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let png = normalize_path(&runtime_example_path("preview.png")).unwrap();
         let elsewhere = normalize_path(&workspace_root().join("Cargo.toml")).unwrap();
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn rescan_marks_root_dirty() {
-        let root = normalize_path(&runtime_example_path("apps/demo/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/demo.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let mut event = Event {
             kind: EventKind::Any,
@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn duplicate_paths_are_coalesced_per_event() {
-        let root = normalize_path(&runtime_example_path("apps/demo/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/demo.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let leaf = normalize_path(&runtime_example_path("leaf.luau")).unwrap();
         let event = Event {
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn nested_root_uses_luaurc_project_root_for_watch_scope() {
-        let root = normalize_path(&runtime_example_path("apps/showcase/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/showcase.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let expected = normalize_path(&runtime_example_path("")).unwrap();
 
@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn nested_root_detects_sibling_modules_under_project_root() {
-        let root = normalize_path(&runtime_example_path("apps/showcase/main.luau")).unwrap();
+        let root = normalize_path(&runtime_example_path("apps/showcase.luau")).unwrap();
         let watched_dir = resolve_watched_dir(&root).unwrap();
         let helper =
             normalize_path(&runtime_example_path("ui/recipes/profile_panel.luau")).unwrap();
