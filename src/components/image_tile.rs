@@ -15,7 +15,7 @@ use egui::{CornerRadius, CursorIcon, Layout, Rect, Response, Sense, Stroke, Stro
 const PLAYBACK_BUTTON_SIZE: f32 = 30.0;
 const PLAYBACK_ICON_SIZE: f32 = 12.0;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum ImageTileSize {
     Sm,
     Md,

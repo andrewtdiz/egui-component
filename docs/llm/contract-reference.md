@@ -13,9 +13,9 @@ egui_component::contract::reference_markdown()
 
 `contract::*` is an optional host-driven declarative layer.
 
-- The direct embedded Luau runtime path is the typed frame-local `app.*` / `ui.*` bridge shown by `runtime-egui-host`.
+- The `egui-component-runtime-jsx` crate in `crates/runtime-jsx` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.
 - `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.
-- Renderer ownership stays in Rust. `contract::*` is not the default render boundary for the Luau runtime hot path.
+- Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.
 
 ## Shared Node Fields
 
@@ -89,6 +89,30 @@ egui_component::contract::reference_markdown()
 | `spinner` | none | none | Indeterminate loading spinner. |
 | `progress` | none | none | Determinate progress indicator. |
 | `toast-viewport` | none | `opened`, `closed` | Overlay toast stack with lifecycle events. |
+| `color` | none | none | Color swatch primitive. |
+| `icon` | none | none | Icon glyph primitive. |
+| `image` | none | none | Raster image primitive. |
+| `twemoji` | none | none | Twemoji image primitive. |
+| `kbd` | none | none | Keyboard keycap primitive. |
+| `skeleton` | none | none | Animated placeholder primitive. |
+| `slider` | none | `changed` | Numeric range slider. |
+| `radio` | none | `toggled` | Single boolean radio option. |
+| `radio-group` | none | `selected` | Mutually exclusive radio options. |
+| `combobox` | none | `selected` | Filterable multi-select picker. |
+| `emoji-selector` | none | `selected` | Button-triggered emoji picker. |
+| `pagination` | none | `selected` | Page-number navigation. |
+| `tooltip` | none | none | Hover-triggered helper content. |
+| `popover` | children | `toggled`, `opened`, `closed` | Click-triggered popup surface. |
+| `dropdown-menu` | none | `command_invoked` | Button-triggered action menu. |
+| `context-menu` | children | `command_invoked` | Right-click action menu surface. |
+| `open-with` | none | `command_invoked` | Split current-editor picker. |
+| `collab-cursor` | none | none | Presence cursor and name badge. |
+| `icon-toolbar` | none | `selected` | Icon-first selection toolbar. |
+| `file-tree` | none | `selected`, `opened`, `closed` | Compact file explorer tree. |
+| `drag-board` | none | `changed` | Two-region drag-and-drop board. |
+| `audio-playback` | children | `toggled` | Playback row with optional trailing actions. |
+| `image-tile` | children | `clicked` | Media tile with optional body and playback state. |
+| `command` | none | `changed` | Searchable command list. |
 
 ## Shared Types
 

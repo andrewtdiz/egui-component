@@ -1,18 +1,10 @@
 use crate::components::{
-    ButtonVariant, Card, ComponentUiExt, DialogueIntent, HierarchyItemKind, Label, LabelTone,
-    LabelWeight, SelectVariant, ToastIntent, ToastPlacement,
+    AudioPlaybackState, ButtonVariant, Card, ComponentUiExt, ControlSize, DialogueIntent,
+    DragBoardRegion, FileTreeItemKind, HierarchyItemKind, ImageTilePlaybackState, ImageTileSize,
+    Label, LabelTone, LabelWeight, PopoverAlign, PopoverSide, SelectVariant, ToastIntent,
+    ToastPlacement, TooltipPlacement,
 };
-use crate::contract::{
-    registry, render_tree, ActionId, ContractAnchor, ContractButton, ContractButtonGroup,
-    ContractCard, ContractCheckbox, ContractChoiceItem, ContractCollapsible, ContractColumn,
-    ContractCommon, ContractDialogueModal, ContractEvent, ContractField, ContractHierarchy,
-    ContractHierarchyItem, ContractInput, ContractInset, ContractLabel, ContractMenu,
-    ContractMenuAction, ContractMenuBar, ContractMenuEntry, ContractNode, ContractNumberInput,
-    ContractProgress, ContractRow, ContractSelect, ContractSidebar, ContractSizedBox,
-    ContractSpacer, ContractSpinner, ContractSwitch, ContractTabItem, ContractTabs,
-    ContractTabsStyle, ContractToastItem, ContractToastViewport, ContractToolbar, ContractTree,
-    EventKind, EventValue,
-};
+use crate::contract::*;
 use crate::internal_taffy::{
     taffy,
     taffy::prelude::{auto, length, percent},
@@ -196,7 +188,7 @@ fn render_demo_header(app: &ContractDemoApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let _ = ui.components().label(
                 Label::new(
-                    "A host-authored `ContractTree` rendered by Rust. The direct Luau runtime path lives in `runtime-egui-host`.",
+                    "A host-authored `ContractTree` rendered by Rust. The authored JSX runtime path lives in `runtime-jsx-host`.",
                 )
                     .tone(LabelTone::Muted),
             );
@@ -405,7 +397,7 @@ impl ContractDemoApp {
                         muted_node(
                             "contract-demo.subtitle",
                             format!(
-                                "Host-owned state, one contract tree in, semantic events out. Direct Luau runtime path: runtime-egui-host. Active tab: {}",
+                                "Host-owned state, one contract tree in, semantic events out. JSX runtime path: runtime-jsx-host. Active tab: {}",
                                 self.active_tab.as_deref().unwrap_or("overview")
                             ),
                         ),
@@ -602,6 +594,10 @@ impl ContractDemoApp {
                             self.layout_primitives_nodes(),
                         ),
                         card_node(
+                            "contract-demo.component-parity",
+                            self.component_parity_nodes(),
+                        ),
+                        card_node(
                             "contract-demo.registry-card",
                             self.supported_family_nodes(),
                         ),
@@ -769,6 +765,276 @@ impl ContractDemoApp {
         }
 
         children
+    }
+
+    fn component_parity_nodes(&self) -> Vec<ContractNode> {
+        vec![
+            subheading_node("contract-demo.parity.title", "Component Library Parity"),
+            muted_node(
+                "contract-demo.parity.subtitle",
+                "Reusable showcase widgets are available through contract nodes so JSX can author the same surfaces."
+                    .to_owned(),
+            ),
+            separator_node("contract-demo.parity.sep"),
+            row_node(
+                "contract-demo.parity.media-row",
+                12.0,
+                vec![
+                    ContractNode::Color(ContractColor {
+                        common: common("contract-demo.parity.color"),
+                        fill: "#22334d".into(),
+                        size: 22.0,
+                        stroke: Some(ContractStroke {
+                            width: 1.0,
+                            color: "#94a3b8".into(),
+                        }),
+                        corner_radius: Some(6),
+                    }),
+                    ContractNode::Icon(ContractIcon {
+                        common: common("contract-demo.parity.icon"),
+                        name: "sparkles".to_owned(),
+                        size: 18.0,
+                        tint: Some("#f1a84e".into()),
+                    }),
+                    ContractNode::Twemoji(ContractTwemoji {
+                        common: common("contract-demo.parity.twemoji"),
+                        emoji: "🔥".to_owned(),
+                        size: 26.0,
+                    }),
+                    ContractNode::Kbd(ContractKbd {
+                        common: common("contract-demo.parity.kbd"),
+                        text: "Ctrl".to_owned(),
+                        min_width: 30.0,
+                        height: 22.0,
+                    }),
+                ],
+            ),
+            ContractNode::Image(ContractImage {
+                common: common("contract-demo.parity.image"),
+                source: "builtin:showcase-image".to_owned(),
+                width: 144.0,
+                height: 96.0,
+                corner_radius: Some(8),
+            }),
+            ContractNode::Skeleton(ContractSkeleton {
+                common: common("contract-demo.parity.skeleton"),
+                width: 220.0,
+                height: 14.0,
+                circle: false,
+                corner_radius: Some(7),
+                animated: true,
+            }),
+            ContractNode::Slider(ContractSlider {
+                common: common("contract-demo.parity.slider"),
+                value: self.rotation,
+                action_id: Some(action("field.rotation")),
+                width: 220.0,
+                min: 0.0,
+                max: 360.0,
+            }),
+            ContractNode::Radio(ContractRadio {
+                common: common("contract-demo.parity.radio"),
+                value: self.snap_to_grid,
+                action_id: Some(action("toggle.snap")),
+                label: Some("Use publish channel".to_owned()),
+                description: Some("Standalone radio authoring through JSX.".to_owned()),
+            }),
+            ContractNode::RadioGroup(ContractRadioGroup {
+                common: common("contract-demo.parity.radio-group"),
+                action_id: Some(action("parity.radio_group")),
+                selected_item_id: Some("team".to_owned()),
+                gap: 6.0,
+                items: vec![
+                    radio_item("starter", "Starter", "Basic surfaces"),
+                    radio_item("team", "Team", "Shared component previews"),
+                    radio_item("enterprise", "Enterprise", "Extended controls"),
+                ],
+            }),
+            ContractNode::Combobox(ContractCombobox {
+                common: common("contract-demo.parity.combobox"),
+                action_id: Some(action("parity.combobox")),
+                query: String::new(),
+                selected_item_ids: vec!["material-glass".to_owned()],
+                width: 280.0,
+                max_height: 140.0,
+                placeholder: Some("Select assets".to_owned()),
+                filter_placeholder: Some("Filter assets".to_owned()),
+                searchable: true,
+                items: vec![
+                    choice_item("material-glass", "Material Glass"),
+                    choice_item("material-metal", "Material Metal"),
+                    choice_item("sprite-atlas", "Sprite Atlas"),
+                ],
+            }),
+            ContractNode::EmojiSelector(ContractEmojiSelector {
+                common: common("contract-demo.parity.emoji-selector"),
+                value: "🙂".to_owned(),
+                action_id: Some(action("parity.emoji")),
+                popup_width: 320.0,
+                popup_max_height: 360.0,
+                placeholder: Some("Pick emoji".to_owned()),
+                trigger_variant: Some(ButtonVariant::Secondary),
+            }),
+            ContractNode::Pagination(ContractPagination {
+                common: common("contract-demo.parity.pagination"),
+                action_id: Some(action("parity.pagination")),
+                current_page: 2,
+                page_count: 8,
+                sibling_count: 1,
+            }),
+            ContractNode::Tooltip(ContractTooltip {
+                common: common("contract-demo.parity.tooltip"),
+                trigger_label: "Hover this trigger".to_owned(),
+                text: "Tooltip content example".to_owned(),
+                width: 220.0,
+                delay_ms: 0,
+                placement: TooltipPlacement::Top,
+            }),
+            ContractNode::Popover(ContractPopover {
+                common: common("contract-demo.parity.popover"),
+                action_id: Some(action("parity.popover")),
+                open: false,
+                trigger_label: Some("Open Popover".to_owned()),
+                side: PopoverSide::Bottom,
+                align: PopoverAlign::Center,
+                side_offset: 4.0,
+                width: Some(280.0),
+                padding_x: 12,
+                padding_y: 12,
+                children: vec![muted_node(
+                    "contract-demo.parity.popover.copy",
+                    "Interactive popovers can host contract children.".to_owned(),
+                )],
+            }),
+            row_node(
+                "contract-demo.parity.menu-row",
+                8.0,
+                vec![
+                    ContractNode::DropdownMenu(ContractDropdownMenu {
+                        common: common("contract-demo.parity.dropdown"),
+                        action_id: Some(action("parity.dropdown")),
+                        trigger_label: "Open".to_owned(),
+                        width: 220.0,
+                        trigger_variant: Some(ButtonVariant::Secondary),
+                        entries: parity_menu_entries(),
+                    }),
+                    ContractNode::OpenWith(ContractOpenWith {
+                        common: common("contract-demo.parity.open-with"),
+                        action_id: Some(action("parity.open_with")),
+                        width: 240.0,
+                        placeholder: Some("Open With".to_owned()),
+                        size: Some(ControlSize::Md),
+                        trigger_variant: Some(ButtonVariant::Secondary),
+                        entries: vec![ContractMenuEntry::Action(ContractMenuAction {
+                            item_id: "codex".to_owned(),
+                            label: "Codex".to_owned(),
+                            action_id: Some(action("parity.open_with.codex")),
+                            leading_icon: Some("codex".to_owned()),
+                            shortcut: None,
+                        })],
+                        selected_item_id: Some("codex".to_owned()),
+                    }),
+                ],
+            ),
+            ContractNode::ContextMenu(ContractContextMenu {
+                common: common("contract-demo.parity.context-menu"),
+                action_id: Some(action("parity.context_menu")),
+                width: 220.0,
+                region_width: 360.0,
+                region_height: 128.0,
+                padding_x: 14,
+                padding_y: 14,
+                entries: parity_menu_entries(),
+                children: vec![muted_node(
+                    "contract-demo.parity.context-menu.copy",
+                    "Right-click this region for scene actions.".to_owned(),
+                )],
+            }),
+            ContractNode::CollabCursor(ContractCollabCursor {
+                common: common("contract-demo.parity.collab-cursor"),
+                name: "Lisa Chen".to_owned(),
+                x: 96.0,
+                y: 34.0,
+                color: Some("#39bdf8".into()),
+                size: 32.0,
+            }),
+            ContractNode::IconToolbar(ContractIconToolbar {
+                common: common("contract-demo.parity.icon-toolbar"),
+                action_id: Some(action("parity.icon_toolbar")),
+                selected_item_id: Some("move".to_owned()),
+                size: Some(ControlSize::Md),
+                gap: 4.0,
+                icon_size: Some(16.0),
+                items: vec![
+                    icon_toolbar_item("select", "mouse-pointer-2", "Select"),
+                    icon_toolbar_item("move", "move", "Move"),
+                    icon_toolbar_item("delete", "trash", "Delete"),
+                ],
+            }),
+            ContractNode::FileTree(ContractFileTree {
+                common: common("contract-demo.parity.file-tree"),
+                action_id: Some(action("parity.file_tree")),
+                selected_item_id: Some("main-script".to_owned()),
+                width: 260.0,
+                row_height: 20.0,
+                indent_width: 14.0,
+                items: parity_file_tree_items(),
+            }),
+            ContractNode::DragBoard(ContractDragBoard {
+                common: common("contract-demo.parity.drag-board"),
+                action_id: Some(action("parity.drag_board")),
+                left_title: "Backlog".to_owned(),
+                right_title: "Done".to_owned(),
+                height: 220.0,
+                items: vec![
+                    drag_board_item("spacing", "Polish header spacing", DragBoardRegion::Left),
+                    drag_board_item("sidebar", "Tune sidebar spacing", DragBoardRegion::Left),
+                    drag_board_item("runtime", "Ship JSX runtime", DragBoardRegion::Right),
+                ],
+            }),
+            ContractNode::AudioPlayback(ContractAudioPlayback {
+                common: common("contract-demo.parity.audio"),
+                action_id: Some(action("parity.audio")),
+                playback_state: AudioPlaybackState::Paused,
+                duration_seconds: Some(8.0),
+                children: vec![icon_button(
+                    "contract-demo.parity.audio.download",
+                    "download",
+                    "parity.audio.download",
+                )],
+            }),
+            ContractNode::ImageTile(ContractImageTile {
+                common: common("contract-demo.parity.image-tile"),
+                source: "builtin:showcase-image".to_owned(),
+                action_id: Some(action("parity.image_tile")),
+                play_pause_action_id: Some(action("parity.image_tile.play")),
+                size: Some(ImageTileSize::Md),
+                image_width: None,
+                image_height: None,
+                image_frame: true,
+                selected: true,
+                playback_state: Some(ImageTilePlaybackState::Paused),
+                children: vec![muted_node(
+                    "contract-demo.parity.image-tile.label",
+                    "Ambient Preview".to_owned(),
+                )],
+            }),
+            ContractNode::Command(ContractCommand {
+                common: common("contract-demo.parity.command"),
+                action_id: Some(action("parity.command")),
+                query: String::new(),
+                width: 360.0,
+                max_height: 180.0,
+                placeholder: Some("Execute a command...".to_owned()),
+                preview: true,
+                preview_height: 220.0,
+                items: vec![
+                    command_item("scene", "open scene search", "Ctrl+P"),
+                    command_item("scene", "save active scene", "Ctrl+S"),
+                    command_item("tools", "build nav mesh", "Ctrl+B"),
+                ],
+            }),
+        ]
     }
 
     fn apply_event(&mut self, event: &ContractEvent) {
@@ -1086,6 +1352,120 @@ fn tab_item(item_id: &str, label: &str, icon: &str) -> ContractTabItem {
     }
 }
 
+fn radio_item(item_id: &str, label: &str, description: &str) -> ContractRadioItem {
+    ContractRadioItem {
+        item_id: item_id.to_owned(),
+        label: label.to_owned(),
+        description: Some(description.to_owned()),
+        action_id: None,
+    }
+}
+
+fn parity_menu_entries() -> Vec<ContractMenuEntry> {
+    vec![
+        ContractMenuEntry::Action(ContractMenuAction {
+            item_id: "profile".to_owned(),
+            label: "Profile".to_owned(),
+            action_id: Some(action("parity.menu.profile")),
+            leading_icon: Some("user".to_owned()),
+            shortcut: Some("Shift+Cmd+P".to_owned()),
+        }),
+        ContractMenuEntry::Action(ContractMenuAction {
+            item_id: "settings".to_owned(),
+            label: "Settings".to_owned(),
+            action_id: Some(action("parity.menu.settings")),
+            leading_icon: Some("settings".to_owned()),
+            shortcut: Some("Cmd+S".to_owned()),
+        }),
+        ContractMenuEntry::Separator,
+        ContractMenuEntry::Submenu(ContractMenuSubmenu {
+            label: "Invite users".to_owned(),
+            leading_icon: Some("users".to_owned()),
+            entries: vec![
+                ContractMenuEntry::Action(ContractMenuAction {
+                    item_id: "email".to_owned(),
+                    label: "Email".to_owned(),
+                    action_id: Some(action("parity.menu.email")),
+                    leading_icon: Some("mail".to_owned()),
+                    shortcut: None,
+                }),
+                ContractMenuEntry::Action(ContractMenuAction {
+                    item_id: "message".to_owned(),
+                    label: "Message".to_owned(),
+                    action_id: Some(action("parity.menu.message")),
+                    leading_icon: Some("message-square".to_owned()),
+                    shortcut: None,
+                }),
+            ],
+        }),
+    ]
+}
+
+fn icon_toolbar_item(item_id: &str, icon: &str, tooltip: &str) -> ContractIconToolbarItem {
+    ContractIconToolbarItem {
+        item_id: item_id.to_owned(),
+        icon: icon.to_owned(),
+        tooltip: Some(tooltip.to_owned()),
+        badge_fill: None,
+        action_id: None,
+    }
+}
+
+fn parity_file_tree_items() -> Vec<ContractFileTreeItem> {
+    vec![ContractFileTreeItem {
+        item_id: "workspace".to_owned(),
+        label: "Workspace".to_owned(),
+        kind: FileTreeItemKind::Project,
+        open: true,
+        action_id: None,
+        children: vec![
+            ContractFileTreeItem {
+                item_id: "scripts".to_owned(),
+                label: "scripts".to_owned(),
+                kind: FileTreeItemKind::Folder,
+                open: true,
+                action_id: None,
+                children: vec![ContractFileTreeItem {
+                    item_id: "main-script".to_owned(),
+                    label: "main.jsx".to_owned(),
+                    kind: FileTreeItemKind::Script,
+                    open: true,
+                    action_id: None,
+                    children: Vec::new(),
+                }],
+            },
+            ContractFileTreeItem {
+                item_id: "readme".to_owned(),
+                label: "README.md".to_owned(),
+                kind: FileTreeItemKind::Markdown,
+                open: true,
+                action_id: None,
+                children: Vec::new(),
+            },
+        ],
+    }]
+}
+
+fn drag_board_item(item_id: &str, title: &str, region: DragBoardRegion) -> ContractDragBoardItem {
+    ContractDragBoardItem {
+        item_id: item_id.to_owned(),
+        title: title.to_owned(),
+        description: Some("Contract-authored board card".to_owned()),
+        region,
+        action_id: None,
+    }
+}
+
+fn command_item(group: &str, label: &str, shortcut: &str) -> ContractCommandItem {
+    ContractCommandItem {
+        item_id: format!("{group}.{label}"),
+        group: group.to_owned(),
+        label: label.to_owned(),
+        shortcut: Some(shortcut.to_owned()),
+        action_id: None,
+    }
+}
+
 fn demo_hierarchy(app: &ContractDemoApp) -> Vec<ContractHierarchyItem> {
     fn item(
         app: &ContractDemoApp,
@@ -1151,6 +1531,10 @@ fn format_event(event: &ContractEvent) -> String {
         Some(EventValue::Number(value)) => format!("{value:.1}"),
         Some(EventValue::Text(value)) => value.clone(),
         Some(EventValue::ItemId(value)) => value.clone(),
+        Some(EventValue::ItemIds(values)) => values.join(","),
+        Some(EventValue::ItemMove(value)) => {
+            format!("{}:{}->{}", value.item_id, value.from, value.to)
+        }
         None => "-".to_owned(),
     };
 
@@ -1193,6 +1577,10 @@ mod tests {
             ContractNode::Toolbar(props) => collect_children(&props.children, families),
             ContractNode::Collapsible(props) => collect_children(&props.children, families),
             ContractNode::DialogueModal(props) => collect_children(&props.children, families),
+            ContractNode::Popover(props) => collect_children(&props.children, families),
+            ContractNode::ContextMenu(props) => collect_children(&props.children, families),
+            ContractNode::AudioPlayback(props) => collect_children(&props.children, families),
+            ContractNode::ImageTile(props) => collect_children(&props.children, families),
             ContractNode::Spacer(_)
             | ContractNode::MenuBar(_)
             | ContractNode::Tabs(_)
@@ -1209,7 +1597,27 @@ mod tests {
             | ContractNode::Hierarchy(_)
             | ContractNode::Spinner(_)
             | ContractNode::Progress(_)
-            | ContractNode::ToastViewport(_) => {}
+            | ContractNode::ToastViewport(_)
+            | ContractNode::Color(_)
+            | ContractNode::Icon(_)
+            | ContractNode::Image(_)
+            | ContractNode::Twemoji(_)
+            | ContractNode::Kbd(_)
+            | ContractNode::Skeleton(_)
+            | ContractNode::Slider(_)
+            | ContractNode::Radio(_)
+            | ContractNode::RadioGroup(_)
+            | ContractNode::Combobox(_)
+            | ContractNode::EmojiSelector(_)
+            | ContractNode::Pagination(_)
+            | ContractNode::Tooltip(_)
+            | ContractNode::DropdownMenu(_)
+            | ContractNode::OpenWith(_)
+            | ContractNode::CollabCursor(_)
+            | ContractNode::IconToolbar(_)
+            | ContractNode::FileTree(_)
+            | ContractNode::DragBoard(_)
+            | ContractNode::Command(_) => {}
         }
     }
 

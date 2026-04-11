@@ -1,11 +1,12 @@
 use crate::components::{
-    ButtonVariant, ControlSize, DialogueIntent, HierarchyIconStyle, HierarchyItemKind,
-    HierarchyStyle, LabelTone, LabelWeight, NumberInputAxis, SelectVariant, SidebarSide,
-    ToastIntent, ToastPlacement,
+    AudioPlaybackState, ButtonVariant, ControlSize, DialogueIntent, DragBoardRegion,
+    FileTreeItemKind, HierarchyIconStyle, HierarchyItemKind, HierarchyStyle,
+    ImageTilePlaybackState, ImageTileSize, LabelTone, LabelWeight, NumberInputAxis, PopoverAlign,
+    PopoverSide, SelectVariant, SidebarSide, ToastIntent, ToastPlacement, TooltipPlacement,
 };
 use std::{collections::BTreeMap, fmt};
 
-pub const CONTRACT_MODEL_VERSION: u32 = 1;
+pub const CONTRACT_MODEL_VERSION: u32 = 2;
 
 #[derive(
     Debug,
@@ -126,6 +127,30 @@ pub enum ContractFamilyId {
     Spinner,
     Progress,
     ToastViewport,
+    Color,
+    Icon,
+    Image,
+    Twemoji,
+    Kbd,
+    Skeleton,
+    Slider,
+    Radio,
+    RadioGroup,
+    Combobox,
+    EmojiSelector,
+    Pagination,
+    Tooltip,
+    Popover,
+    DropdownMenu,
+    ContextMenu,
+    OpenWith,
+    CollabCursor,
+    IconToolbar,
+    FileTree,
+    DragBoard,
+    AudioPlayback,
+    ImageTile,
+    Command,
 }
 
 impl ContractFamilyId {
@@ -157,6 +182,30 @@ impl ContractFamilyId {
             Self::Spinner => "spinner",
             Self::Progress => "progress",
             Self::ToastViewport => "toast-viewport",
+            Self::Color => "color",
+            Self::Icon => "icon",
+            Self::Image => "image",
+            Self::Twemoji => "twemoji",
+            Self::Kbd => "kbd",
+            Self::Skeleton => "skeleton",
+            Self::Slider => "slider",
+            Self::Radio => "radio",
+            Self::RadioGroup => "radio-group",
+            Self::Combobox => "combobox",
+            Self::EmojiSelector => "emoji-selector",
+            Self::Pagination => "pagination",
+            Self::Tooltip => "tooltip",
+            Self::Popover => "popover",
+            Self::DropdownMenu => "dropdown-menu",
+            Self::ContextMenu => "context-menu",
+            Self::OpenWith => "open-with",
+            Self::CollabCursor => "collab-cursor",
+            Self::IconToolbar => "icon-toolbar",
+            Self::FileTree => "file-tree",
+            Self::DragBoard => "drag-board",
+            Self::AudioPlayback => "audio-playback",
+            Self::ImageTile => "image-tile",
+            Self::Command => "command",
         }
     }
 }
@@ -410,6 +459,30 @@ pub enum ContractNode {
     Spinner(ContractSpinner),
     Progress(ContractProgress),
     ToastViewport(ContractToastViewport),
+    Color(ContractColor),
+    Icon(ContractIcon),
+    Image(ContractImage),
+    Twemoji(ContractTwemoji),
+    Kbd(ContractKbd),
+    Skeleton(ContractSkeleton),
+    Slider(ContractSlider),
+    Radio(ContractRadio),
+    RadioGroup(ContractRadioGroup),
+    Combobox(ContractCombobox),
+    EmojiSelector(ContractEmojiSelector),
+    Pagination(ContractPagination),
+    Tooltip(ContractTooltip),
+    Popover(ContractPopover),
+    DropdownMenu(ContractDropdownMenu),
+    ContextMenu(ContractContextMenu),
+    OpenWith(ContractOpenWith),
+    CollabCursor(ContractCollabCursor),
+    IconToolbar(ContractIconToolbar),
+    FileTree(ContractFileTree),
+    DragBoard(ContractDragBoard),
+    AudioPlayback(ContractAudioPlayback),
+    ImageTile(ContractImageTile),
+    Command(ContractCommand),
 }
 
 impl ContractNode {
@@ -441,6 +514,30 @@ impl ContractNode {
             Self::Spinner(_) => ContractFamilyId::Spinner,
             Self::Progress(_) => ContractFamilyId::Progress,
             Self::ToastViewport(_) => ContractFamilyId::ToastViewport,
+            Self::Color(_) => ContractFamilyId::Color,
+            Self::Icon(_) => ContractFamilyId::Icon,
+            Self::Image(_) => ContractFamilyId::Image,
+            Self::Twemoji(_) => ContractFamilyId::Twemoji,
+            Self::Kbd(_) => ContractFamilyId::Kbd,
+            Self::Skeleton(_) => ContractFamilyId::Skeleton,
+            Self::Slider(_) => ContractFamilyId::Slider,
+            Self::Radio(_) => ContractFamilyId::Radio,
+            Self::RadioGroup(_) => ContractFamilyId::RadioGroup,
+            Self::Combobox(_) => ContractFamilyId::Combobox,
+            Self::EmojiSelector(_) => ContractFamilyId::EmojiSelector,
+            Self::Pagination(_) => ContractFamilyId::Pagination,
+            Self::Tooltip(_) => ContractFamilyId::Tooltip,
+            Self::Popover(_) => ContractFamilyId::Popover,
+            Self::DropdownMenu(_) => ContractFamilyId::DropdownMenu,
+            Self::ContextMenu(_) => ContractFamilyId::ContextMenu,
+            Self::OpenWith(_) => ContractFamilyId::OpenWith,
+            Self::CollabCursor(_) => ContractFamilyId::CollabCursor,
+            Self::IconToolbar(_) => ContractFamilyId::IconToolbar,
+            Self::FileTree(_) => ContractFamilyId::FileTree,
+            Self::DragBoard(_) => ContractFamilyId::DragBoard,
+            Self::AudioPlayback(_) => ContractFamilyId::AudioPlayback,
+            Self::ImageTile(_) => ContractFamilyId::ImageTile,
+            Self::Command(_) => ContractFamilyId::Command,
         }
     }
 
@@ -472,6 +569,30 @@ impl ContractNode {
             Self::Spinner(node) => &node.common,
             Self::Progress(node) => &node.common,
             Self::ToastViewport(node) => &node.common,
+            Self::Color(node) => &node.common,
+            Self::Icon(node) => &node.common,
+            Self::Image(node) => &node.common,
+            Self::Twemoji(node) => &node.common,
+            Self::Kbd(node) => &node.common,
+            Self::Skeleton(node) => &node.common,
+            Self::Slider(node) => &node.common,
+            Self::Radio(node) => &node.common,
+            Self::RadioGroup(node) => &node.common,
+            Self::Combobox(node) => &node.common,
+            Self::EmojiSelector(node) => &node.common,
+            Self::Pagination(node) => &node.common,
+            Self::Tooltip(node) => &node.common,
+            Self::Popover(node) => &node.common,
+            Self::DropdownMenu(node) => &node.common,
+            Self::ContextMenu(node) => &node.common,
+            Self::OpenWith(node) => &node.common,
+            Self::CollabCursor(node) => &node.common,
+            Self::IconToolbar(node) => &node.common,
+            Self::FileTree(node) => &node.common,
+            Self::DragBoard(node) => &node.common,
+            Self::AudioPlayback(node) => &node.common,
+            Self::ImageTile(node) => &node.common,
+            Self::Command(node) => &node.common,
         }
     }
 
@@ -864,6 +985,401 @@ pub struct ContractToastViewport {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractColor {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub fill: ContractColorValue,
+    #[serde(default = "default_color_size")]
+    pub size: f32,
+    #[serde(default)]
+    pub stroke: Option<ContractStroke>,
+    #[serde(default)]
+    pub corner_radius: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractIcon {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub name: String,
+    #[serde(default = "default_icon_size")]
+    pub size: f32,
+    #[serde(default)]
+    pub tint: Option<ContractColorValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractImage {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub source: String,
+    #[serde(default = "default_image_width")]
+    pub width: f32,
+    #[serde(default = "default_image_height")]
+    pub height: f32,
+    #[serde(default)]
+    pub corner_radius: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractTwemoji {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub emoji: String,
+    #[serde(default = "default_twemoji_size")]
+    pub size: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractKbd {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub text: String,
+    #[serde(default = "default_kbd_min_width")]
+    pub min_width: f32,
+    #[serde(default = "default_kbd_height")]
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractSkeleton {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default = "default_skeleton_width")]
+    pub width: f32,
+    #[serde(default = "default_skeleton_height")]
+    pub height: f32,
+    #[serde(default)]
+    pub circle: bool,
+    #[serde(default)]
+    pub corner_radius: Option<u8>,
+    #[serde(default = "default_true")]
+    pub animated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractSlider {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub value: f32,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_slider_width")]
+    pub width: f32,
+    #[serde(default = "default_number_min")]
+    pub min: f32,
+    #[serde(default = "default_number_max")]
+    pub max: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractRadio {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub value: bool,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractRadioGroup {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub selected_item_id: Option<String>,
+    #[serde(default = "default_gap")]
+    pub gap: f32,
+    #[serde(default)]
+    pub items: Vec<ContractRadioItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractCombobox {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub query: String,
+    #[serde(default)]
+    pub selected_item_ids: Vec<String>,
+    #[serde(default = "default_input_width")]
+    pub width: f32,
+    #[serde(default = "default_combobox_max_height")]
+    pub max_height: f32,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub filter_placeholder: Option<String>,
+    #[serde(default = "default_true")]
+    pub searchable: bool,
+    #[serde(default)]
+    pub items: Vec<ContractChoiceItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractEmojiSelector {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub value: String,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_emoji_popup_width")]
+    pub popup_width: f32,
+    #[serde(default = "default_emoji_popup_max_height")]
+    pub popup_max_height: f32,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub trigger_variant: Option<ButtonVariant>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractPagination {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_pagination_current_page")]
+    pub current_page: usize,
+    #[serde(default = "default_pagination_page_count")]
+    pub page_count: usize,
+    #[serde(default = "default_pagination_sibling_count")]
+    pub sibling_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractTooltip {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub trigger_label: String,
+    pub text: String,
+    #[serde(default = "default_tooltip_width")]
+    pub width: f32,
+    #[serde(default)]
+    pub delay_ms: u32,
+    #[serde(default = "default_tooltip_placement")]
+    pub placement: TooltipPlacement,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractPopover {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub open: bool,
+    #[serde(default)]
+    pub trigger_label: Option<String>,
+    #[serde(default = "default_popover_side")]
+    pub side: PopoverSide,
+    #[serde(default = "default_popover_align")]
+    pub align: PopoverAlign,
+    #[serde(default = "default_popover_side_offset")]
+    pub side_offset: f32,
+    #[serde(default)]
+    pub width: Option<f32>,
+    #[serde(default = "default_popover_padding_x")]
+    pub padding_x: u8,
+    #[serde(default = "default_popover_padding_y")]
+    pub padding_y: u8,
+    #[serde(default)]
+    pub children: Vec<ContractNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractDropdownMenu {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    pub trigger_label: String,
+    #[serde(default = "default_dropdown_width")]
+    pub width: f32,
+    #[serde(default)]
+    pub trigger_variant: Option<ButtonVariant>,
+    #[serde(default)]
+    pub entries: Vec<ContractMenuEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractContextMenu {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_context_menu_width")]
+    pub width: f32,
+    #[serde(default = "default_context_menu_region_width")]
+    pub region_width: f32,
+    #[serde(default = "default_context_menu_region_height")]
+    pub region_height: f32,
+    #[serde(default = "default_context_menu_padding_x")]
+    pub padding_x: u8,
+    #[serde(default = "default_context_menu_padding_y")]
+    pub padding_y: u8,
+    #[serde(default)]
+    pub entries: Vec<ContractMenuEntry>,
+    #[serde(default)]
+    pub children: Vec<ContractNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractOpenWith {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_dropdown_width")]
+    pub width: f32,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub size: Option<ControlSize>,
+    #[serde(default)]
+    pub trigger_variant: Option<ButtonVariant>,
+    #[serde(default)]
+    pub entries: Vec<ContractMenuEntry>,
+    #[serde(default)]
+    pub selected_item_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractCollabCursor {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub name: String,
+    #[serde(default)]
+    pub x: f32,
+    #[serde(default)]
+    pub y: f32,
+    #[serde(default)]
+    pub color: Option<ContractColorValue>,
+    #[serde(default = "default_collab_cursor_size")]
+    pub size: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractIconToolbar {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub selected_item_id: Option<String>,
+    #[serde(default)]
+    pub size: Option<ControlSize>,
+    #[serde(default = "default_icon_toolbar_gap")]
+    pub gap: f32,
+    #[serde(default)]
+    pub icon_size: Option<f32>,
+    #[serde(default)]
+    pub items: Vec<ContractIconToolbarItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractFileTree {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub selected_item_id: Option<String>,
+    #[serde(default = "default_file_tree_width")]
+    pub width: f32,
+    #[serde(default = "default_file_tree_row_height")]
+    pub row_height: f32,
+    #[serde(default = "default_file_tree_indent_width")]
+    pub indent_width: f32,
+    #[serde(default)]
+    pub items: Vec<ContractFileTreeItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractDragBoard {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_drag_board_left_title")]
+    pub left_title: String,
+    #[serde(default = "default_drag_board_right_title")]
+    pub right_title: String,
+    #[serde(default = "default_drag_board_height")]
+    pub height: f32,
+    #[serde(default)]
+    pub items: Vec<ContractDragBoardItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractAudioPlayback {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default = "default_audio_playback_state")]
+    pub playback_state: AudioPlaybackState,
+    #[serde(default)]
+    pub duration_seconds: Option<f64>,
+    #[serde(default)]
+    pub children: Vec<ContractNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractImageTile {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    pub source: String,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub play_pause_action_id: Option<ActionId>,
+    #[serde(default)]
+    pub size: Option<ImageTileSize>,
+    #[serde(default)]
+    pub image_width: Option<f32>,
+    #[serde(default)]
+    pub image_height: Option<f32>,
+    #[serde(default = "default_true")]
+    pub image_frame: bool,
+    #[serde(default)]
+    pub selected: bool,
+    #[serde(default)]
+    pub playback_state: Option<ImageTilePlaybackState>,
+    #[serde(default)]
+    pub children: Vec<ContractNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractCommand {
+    #[serde(flatten)]
+    pub common: ContractCommon,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub query: String,
+    #[serde(default = "default_command_width")]
+    pub width: f32,
+    #[serde(default = "default_command_max_height")]
+    pub max_height: f32,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub preview: bool,
+    #[serde(default = "default_command_preview_height")]
+    pub preview_height: f32,
+    #[serde(default)]
+    pub items: Vec<ContractCommandItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ContractActionItem {
     pub item_id: String,
     pub label: String,
@@ -877,6 +1393,35 @@ pub struct ContractChoiceItem {
     pub label: String,
     #[serde(default)]
     pub action_id: Option<ActionId>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(transparent)]
+pub struct ContractColorValue(pub String);
+
+impl ContractColorValue {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<&str> for ContractColorValue {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl From<String> for ContractColorValue {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractStroke {
+    #[serde(default = "default_stroke_width")]
+    pub width: f32,
+    pub color: ContractColorValue,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -906,6 +1451,7 @@ pub struct ContractMenu {
 pub enum ContractMenuEntry {
     Action(ContractMenuAction),
     Separator,
+    Submenu(ContractMenuSubmenu),
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -918,6 +1464,74 @@ pub struct ContractMenuAction {
     pub leading_icon: Option<String>,
     #[serde(default)]
     pub shortcut: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractMenuSubmenu {
+    pub label: String,
+    #[serde(default)]
+    pub leading_icon: Option<String>,
+    #[serde(default)]
+    pub entries: Vec<ContractMenuEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractRadioItem {
+    pub item_id: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractIconToolbarItem {
+    pub item_id: String,
+    pub icon: String,
+    #[serde(default)]
+    pub tooltip: Option<String>,
+    #[serde(default)]
+    pub badge_fill: Option<ContractColorValue>,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractFileTreeItem {
+    pub item_id: String,
+    pub label: String,
+    pub kind: FileTreeItemKind,
+    #[serde(default = "default_true")]
+    pub open: bool,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+    #[serde(default)]
+    pub children: Vec<ContractFileTreeItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractDragBoardItem {
+    pub item_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub region: DragBoardRegion,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractCommandItem {
+    pub item_id: String,
+    #[serde(default)]
+    pub group: String,
+    pub label: String,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+    #[serde(default)]
+    pub action_id: Option<ActionId>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -1010,6 +1624,15 @@ pub enum EventValue {
     Number(f32),
     Text(String),
     ItemId(String),
+    ItemIds(Vec<String>),
+    ItemMove(ContractItemMove),
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ContractItemMove {
+    pub item_id: String,
+    pub from: String,
+    pub to: String,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -1149,6 +1772,174 @@ fn default_toast_duration_secs() -> f32 {
     4.0
 }
 
+fn default_color_size() -> f32 {
+    20.0
+}
+
+fn default_icon_size() -> f32 {
+    16.0
+}
+
+fn default_image_width() -> f32 {
+    160.0
+}
+
+fn default_image_height() -> f32 {
+    104.0
+}
+
+fn default_twemoji_size() -> f32 {
+    22.0
+}
+
+fn default_kbd_min_width() -> f32 {
+    20.0
+}
+
+fn default_kbd_height() -> f32 {
+    20.0
+}
+
+fn default_skeleton_width() -> f32 {
+    120.0
+}
+
+fn default_skeleton_height() -> f32 {
+    16.0
+}
+
+fn default_slider_width() -> f32 {
+    156.0
+}
+
+fn default_combobox_max_height() -> f32 {
+    104.0
+}
+
+fn default_emoji_popup_width() -> f32 {
+    320.0
+}
+
+fn default_emoji_popup_max_height() -> f32 {
+    360.0
+}
+
+fn default_pagination_current_page() -> usize {
+    1
+}
+
+fn default_pagination_page_count() -> usize {
+    1
+}
+
+fn default_pagination_sibling_count() -> usize {
+    1
+}
+
+fn default_tooltip_width() -> f32 {
+    220.0
+}
+
+fn default_tooltip_placement() -> TooltipPlacement {
+    TooltipPlacement::Top
+}
+
+fn default_popover_side() -> PopoverSide {
+    PopoverSide::Bottom
+}
+
+fn default_popover_align() -> PopoverAlign {
+    PopoverAlign::Center
+}
+
+fn default_popover_side_offset() -> f32 {
+    8.0
+}
+
+fn default_popover_padding_x() -> u8 {
+    12
+}
+
+fn default_popover_padding_y() -> u8 {
+    12
+}
+
+fn default_dropdown_width() -> f32 {
+    220.0
+}
+
+fn default_context_menu_width() -> f32 {
+    220.0
+}
+
+fn default_context_menu_region_width() -> f32 {
+    360.0
+}
+
+fn default_context_menu_region_height() -> f32 {
+    176.0
+}
+
+fn default_context_menu_padding_x() -> u8 {
+    16
+}
+
+fn default_context_menu_padding_y() -> u8 {
+    14
+}
+
+fn default_icon_toolbar_gap() -> f32 {
+    4.0
+}
+
+fn default_collab_cursor_size() -> f32 {
+    30.0
+}
+
+fn default_file_tree_width() -> f32 {
+    240.0
+}
+
+fn default_file_tree_row_height() -> f32 {
+    20.0
+}
+
+fn default_file_tree_indent_width() -> f32 {
+    14.0
+}
+
+fn default_drag_board_left_title() -> String {
+    "Backlog".to_owned()
+}
+
+fn default_drag_board_right_title() -> String {
+    "Done".to_owned()
+}
+
+fn default_drag_board_height() -> f32 {
+    280.0
+}
+
+fn default_audio_playback_state() -> AudioPlaybackState {
+    AudioPlaybackState::Paused
+}
+
+fn default_command_width() -> f32 {
+    360.0
+}
+
+fn default_command_max_height() -> f32 {
+    216.0
+}
+
+fn default_command_preview_height() -> f32 {
+    244.0
+}
+
+fn default_stroke_width() -> f32 {
+    1.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1194,7 +1985,7 @@ mod tests {
     fn contract_common_scaffolding_round_trips_class_actions_and_layout() {
         let json = r#"
         {
-            "version": 1,
+            "version": 2,
             "root": {
                 "family": "label",
                 "node_id": "contract.label",

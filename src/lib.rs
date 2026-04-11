@@ -17,9 +17,7 @@ pub mod ui;
 ///
 /// This is not part of the main component-library surface.
 pub mod demos {
-    pub use crate::demo_apps_internal::{
-        component_gallery_runtime, contract_demo, runtime_egui_host, showcase, showcase_runtime,
-    };
+    pub use crate::demo_apps_internal::{contract_demo, showcase};
 }
 
 #[doc(hidden)]

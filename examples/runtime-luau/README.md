@@ -1,24 +1,10 @@
-# Luau Runtime Immediate Example
+# Retired Luau Runtime Sources
 
-Run the canonical host from the repo root:
+The compiled Luau runtime host examples were retired with the Luau runtime crate. This directory remains as historical source reference only.
 
-```bash
-cargo run --example runtime-egui-host
-```
+Use `cargo run --example runtime-jsx-host` for the active authored-runtime example.
 
-Run the library-backed showcase wrapper with:
-
-```bash
-cargo run --example showcase-runtime
-```
-
-Run the primitive component gallery with:
-
-```bash
-cargo run --example component-gallery-runtime
-```
-
-## Hierarchy
+## Historical Hierarchy
 
 This tree is organized around one rule: runtime roots live in `apps/`, and the reusable library lives in `ui/`.
 
@@ -48,7 +34,7 @@ The rendering flow is:
 
 There is only one component directory in this example tree: `ui/components/`.
 
-## Runtime Contract
+## Historical Runtime Contract
 
 The root script must return a table. These hooks are supported:
 

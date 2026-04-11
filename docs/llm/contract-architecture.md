@@ -9,12 +9,12 @@
 - Preserve `egui-component` as the rendering substrate instead of exposing raw `egui`.
 - Return normalized semantic events so the host can stay authoritative for state.
 
-## Relationship To The Portable Luau Core
+## Relationship To Authored Runtimes
 
-- `egui_component::contract::*` is an egui-side declarative surface that a host can drive from any runtime, including Luau.
-- The portable Luau embedding core is packaged separately in `luau-runtime-core` and owns VM lifetime, module loading, reload orchestration, and scheduling.
-- This layer only renders host-authored trees and returns semantic events; it does not own Luau state or script dispatch.
-- The direct embedded Luau path is the typed frame-local `app.*` / `ui.*` bridge used by `runtime-egui-host`, not `ContractTree`.
+- `egui_component::contract::*` is an egui-side declarative surface that a host can drive from any authored runtime.
+- The `egui-component-runtime-jsx` crate in `crates/runtime-jsx` owns V8 lifetime, module loading, JSX/TSX transpilation through `deno_ast`, and incremental retained host-tree commits through a host op.
+- This layer only renders host-authored trees and returns semantic events; it does not own script state or dispatch.
+- The runtime lowers JSX into Rust-owned host nodes, materializes `ContractTree` for rendering, and keeps Rust as the egui renderer.
 
 ## Runtime Shape
 
@@ -22,7 +22,7 @@
 - Every node carries a stable `node_id`, plus shared `visible`, `enabled`, `class`, `class_list`, `slot_classes`, `actions`, and `layout` scaffolding.
 - Interactive nodes expose stable string `action_id`s rather than callback handles.
 - `render_tree` and `render_component_tree` translate the declarative tree into the existing typed builders and return `Vec<ContractEvent>` for the current frame.
-- These functions are host adapter entry points, not scripting runtime entry points or the default Luau hot path.
+- These functions are host adapter entry points, not scripting runtime entry points.
 
 ## State Ownership
 
@@ -35,7 +35,7 @@
 - `contract::registry()` is the Rust source of truth for the supported families.
 - `contract::schema()` and `contract::schema_json_pretty()` expose machine-readable metadata for code generation.
 - `contract::reference_markdown()` exposes a generated human-readable family reference from the same source of truth.
-- Shared object and enum types are described alongside family metadata so Luau generation does not need to infer nested item shapes.
+- Shared object and enum types are described alongside family metadata so runtime bridges do not need to infer nested item shapes.
 
 ## V1 Scope
 
@@ -49,7 +49,7 @@
 
 - Add a family when the host needs a stable semantic surface that maps cleanly onto existing typed builders.
 - Add a family when state can stay host-owned and the renderer can return meaningful semantic events without leaking immediate-mode internals.
-- Add a family when the Rust registry can describe the props, variants, and events clearly enough for schema-driven Luau generation.
+- Add a family when the Rust registry can describe the props, variants, and events clearly enough for schema-driven runtime bridges.
 
 ## When Not To Add A Family
 
@@ -64,4 +64,4 @@
 - No authoritative state ownership in the renderer
 - No `combobox` in the first declarative release
 - No hierarchy drag-reorder event contract in v1
-- No Luau VM ownership, script loading, or reload orchestration in this layer
+- No scripting VM ownership, script loading, or reload orchestration in this layer

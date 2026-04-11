@@ -1,19 +1,14 @@
-use super::{
-    ActionId, ContractAlign, ContractAnchor, ContractButton, ContractButtonGroup, ContractCheckbox,
-    ContractCollapsible, ContractColumn, ContractCommon, ContractDialogueModal, ContractDirection,
-    ContractEvent, ContractField, ContractHierarchy, ContractHierarchyItem, ContractInput,
-    ContractInset, ContractJustify, ContractLayout, ContractLength, ContractMenuBar,
-    ContractMenuEntry, ContractNode, ContractNumberInput, ContractRow, ContractSelect,
-    ContractSidebar, ContractSizedBox, ContractSpacer, ContractSwitch, ContractTabs,
-    ContractTabsStyle, ContractToastItem, ContractToastViewport, ContractToolbar, ContractTree,
-    EventKind, EventMetadata, EventValue,
-};
+use super::*;
 use crate::components::{
-    Button, ButtonGroup, ButtonVariant, Card, Checkbox, Collapsible, ComponentUi, ComponentUiExt,
-    ControlSize, DialogueHeader, DialogueModal, DropdownMenuEntry, Field,
-    Hierarchy as HierarchyWidget, HierarchyNode as HierarchyWidgetNode, Label, LabelTone,
-    LabelWeight, MenuBar, MenuBarItem, NumberInput, Progress, Select, Sidebar, Spinner, Switch,
-    TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar,
+    AudioPlayback, AudioPlaybackState, Button, ButtonGroup, ButtonVariant, Card, Checkbox,
+    CollabCursor, Collapsible, Color, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt,
+    ContextMenu, ControlSize, DialogueHeader, DialogueModal, DragBoard, DragBoardItem,
+    DragBoardRegion, DropdownMenu, DropdownMenuAction, DropdownMenuEntry, EmojiSelector, Field,
+    FileTree, FileTreeNode, Hierarchy as HierarchyWidget, HierarchyNode as HierarchyWidgetNode,
+    Icon, IconToolbar, IconToolbarItem, Image, ImageTile, Kbd, Label, LabelTone, LabelWeight,
+    MenuBar, MenuBarItem, NumberInput, OpenWith, Pagination, Popover, Progress, Radio, RadioGroup,
+    RadioOption, Select, Sidebar, Skeleton, Slider, Spinner, Switch, TabOption, TextInput,
+    ToastIntent, ToastPlacement, Toolbar, Tooltip, Twemoji,
 };
 use crate::layout::{
     column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify,
@@ -23,6 +18,8 @@ use crate::theme::ColorRole;
 use crate::ui::tokens;
 use egui::{Align, Align2, Color32, Id, Key, Layout, Order, Stroke, Vec2};
 use std::collections::{BTreeMap, BTreeSet};
+
+const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../assets/images/showcase-image.png");
 
 pub fn render_tree(ui: &mut egui::Ui, tree: &ContractTree) -> Vec<ContractEvent> {
     let mut ui = ui.components();
@@ -142,6 +139,30 @@ impl FrameRenderer {
                 );
             }
             ContractNode::ToastViewport(props) => self.render_toast_viewport(ui, props),
+            ContractNode::Color(props) => self.render_color(ui, props),
+            ContractNode::Icon(props) => self.render_icon(ui, props),
+            ContractNode::Image(props) => self.render_image(ui, props),
+            ContractNode::Twemoji(props) => self.render_twemoji(ui, props),
+            ContractNode::Kbd(props) => self.render_kbd(ui, props),
+            ContractNode::Skeleton(props) => self.render_skeleton(ui, props),
+            ContractNode::Slider(props) => self.render_slider(ui, props),
+            ContractNode::Radio(props) => self.render_radio(ui, props),
+            ContractNode::RadioGroup(props) => self.render_radio_group(ui, props),
+            ContractNode::Combobox(props) => self.render_combobox(ui, props),
+            ContractNode::EmojiSelector(props) => self.render_emoji_selector(ui, props),
+            ContractNode::Pagination(props) => self.render_pagination(ui, props),
+            ContractNode::Tooltip(props) => self.render_tooltip(ui, props),
+            ContractNode::Popover(props) => self.render_popover(ui, props),
+            ContractNode::DropdownMenu(props) => self.render_dropdown_menu(ui, props),
+            ContractNode::ContextMenu(props) => self.render_context_menu(ui, props),
+            ContractNode::OpenWith(props) => self.render_open_with(ui, props),
+            ContractNode::CollabCursor(props) => self.render_collab_cursor(ui, props),
+            ContractNode::IconToolbar(props) => self.render_icon_toolbar(ui, props),
+            ContractNode::FileTree(props) => self.render_file_tree(ui, props),
+            ContractNode::DragBoard(props) => self.render_drag_board(ui, props),
+            ContractNode::AudioPlayback(props) => self.render_audio_playback(ui, props),
+            ContractNode::ImageTile(props) => self.render_image_tile(ui, props),
+            ContractNode::Command(props) => self.render_command(ui, props),
         }
     }
 
@@ -278,43 +299,9 @@ impl FrameRenderer {
             .menus
             .iter()
             .map(|menu| {
-                menu.entries
-                    .iter()
-                    .map(|entry| match entry {
-                        ContractMenuEntry::Action(action) => {
-                            let action_index = action_bindings.len();
-                            action_bindings.push(MenuActionBinding {
-                                item_id: action.item_id.as_str(),
-                                label: action.label.as_str(),
-                                action_id: action.action_id.as_ref(),
-                            });
-                            match (action.leading_icon.as_deref(), action.shortcut.as_deref()) {
-                                (Some(icon), Some(shortcut)) => {
-                                    DropdownMenuEntry::action_with_icon_and_shortcut(
-                                        action_index,
-                                        action.label.as_str(),
-                                        icon,
-                                        shortcut,
-                                    )
-                                }
-                                (Some(icon), None) => DropdownMenuEntry::action_with_icon(
-                                    action_index,
-                                    action.label.as_str(),
-                                    icon,
-                                ),
-                                (None, Some(shortcut)) => DropdownMenuEntry::action_with_shortcut(
-                                    action_index,
-                                    action.label.as_str(),
-                                    shortcut,
-                                ),
-                                (None, None) => {
-                                    DropdownMenuEntry::action(action_index, action.label.as_str())
-                                }
-                            }
-                        }
-                        ContractMenuEntry::Separator => DropdownMenuEntry::separator(),
-                    })
-                    .collect::<Vec<_>>()
+                let mut entries = Vec::new();
+                append_runtime_menu_entries(&menu.entries, &mut entries, &mut action_bindings);
+                entries
             })
             .collect::<Vec<_>>();
 
@@ -952,6 +939,627 @@ impl FrameRenderer {
         );
     }
 
+    fn render_color(&mut self, ui: &mut ComponentUi<'_>, props: &ContractColor) {
+        let mut color = Color::new(parse_contract_color(&props.fill).unwrap_or(Color32::WHITE))
+            .size(props.size);
+        if let Some(stroke) = props.stroke.as_ref().and_then(parse_contract_stroke) {
+            color = color.stroke(stroke);
+        }
+        if let Some(corner_radius) = props.corner_radius {
+            color = color.rounded(corner_radius);
+        }
+        let _ = ui.color(color);
+    }
+
+    fn render_icon(&mut self, ui: &mut ComponentUi<'_>, props: &ContractIcon) {
+        let mut icon = Icon::new(props.name.as_str()).size(props.size);
+        if let Some(tint) = props.tint.as_ref().and_then(parse_contract_color) {
+            icon = icon.tint(tint);
+        }
+        let _ = ui.icon(icon);
+    }
+
+    fn render_image(&mut self, ui: &mut ComponentUi<'_>, props: &ContractImage) {
+        let mut image = contract_image(props.source.as_str())
+            .fit_to_exact_size(egui::vec2(props.width.max(1.0), props.height.max(1.0)));
+        if let Some(corner_radius) = props.corner_radius {
+            image = image.corner_radius(egui::CornerRadius::same(corner_radius));
+        }
+        let _ = ui.image(image);
+    }
+
+    fn render_twemoji(&mut self, ui: &mut ComponentUi<'_>, props: &ContractTwemoji) {
+        let _ = ui.twemoji(Twemoji::new(props.emoji.as_str()).size(props.size));
+    }
+
+    fn render_kbd(&mut self, ui: &mut ComponentUi<'_>, props: &ContractKbd) {
+        let _ = ui.kbd(
+            Kbd::new(props.text.as_str())
+                .min_width(props.min_width)
+                .height(props.height),
+        );
+    }
+
+    fn render_skeleton(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSkeleton) {
+        let mut skeleton = Skeleton::new()
+            .width(props.width)
+            .height(props.height)
+            .animated(props.animated);
+        if props.circle {
+            skeleton = skeleton.circle(props.width.min(props.height).max(1.0));
+        }
+        if let Some(corner_radius) = props.corner_radius {
+            skeleton = skeleton.corner_radius(corner_radius);
+        }
+        let _ = ui.skeleton(skeleton);
+    }
+
+    fn render_slider(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSlider) {
+        let mut value = props.value;
+        let _ = ui.slider(
+            &mut value,
+            Slider::new(props.min..=props.max).width(props.width),
+        );
+        if (value - props.value).abs() > f32::EPSILON {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Changed,
+                props.action_id.as_ref(),
+                Some(EventValue::Number(value)),
+                None,
+            );
+        }
+    }
+
+    fn render_radio(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRadio) {
+        let mut value = props.value;
+        let mut radio = Radio::new();
+        if let Some(label) = props.label.as_deref() {
+            radio = radio.label(label);
+        }
+        if let Some(description) = props.description.as_deref() {
+            radio = radio.description(description);
+        }
+        let _ = ui.radio(&mut value, radio);
+        if value != props.value {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Toggled,
+                props.action_id.as_ref(),
+                Some(EventValue::Boolean(value)),
+                None,
+            );
+        }
+    }
+
+    fn render_radio_group(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRadioGroup) {
+        let options = props
+            .items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let mut option = RadioOption::new(index, item.label.as_str());
+                if let Some(description) = item.description.as_deref() {
+                    option = option.description(description);
+                }
+                option
+            })
+            .collect::<Vec<_>>();
+        let mut current = props
+            .selected_item_id
+            .as_deref()
+            .and_then(|item_id| props.items.iter().position(|item| item.item_id == item_id));
+        let previous = current;
+        let _ = ui.radio_group(
+            &mut current,
+            RadioGroup::new(
+                make_id(&props.common.node_id, "radio_group"),
+                options.as_slice(),
+            )
+            .gap(props.gap),
+        );
+        if current != previous {
+            match current.and_then(|index| props.items.get(index)) {
+                Some(item) => self.emit_item(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    item.action_id.as_ref().or(props.action_id.as_ref()),
+                    item.item_id.as_str(),
+                    item.label.as_str(),
+                ),
+                None => self.emit_value(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    props.action_id.as_ref(),
+                    None,
+                    None,
+                ),
+            }
+        }
+    }
+
+    fn render_combobox(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCombobox) {
+        let options = props
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>();
+        let mut query = props.query.clone();
+        let mut selected_indices = props
+            .selected_item_ids
+            .iter()
+            .filter_map(|item_id| props.items.iter().position(|item| item.item_id == *item_id))
+            .collect::<Vec<_>>();
+        let previous_indices = selected_indices.clone();
+        let previous_query = query.clone();
+        let mut combobox = Combobox::new(
+            make_id(&props.common.node_id, "combobox"),
+            options.as_slice(),
+        )
+        .width(props.width)
+        .max_height(props.max_height)
+        .searchable(props.searchable);
+        if let Some(placeholder) = props.placeholder.as_deref() {
+            combobox = combobox.placeholder(placeholder);
+        }
+        if let Some(filter_placeholder) = props.filter_placeholder.as_deref() {
+            combobox = combobox.filter_placeholder(filter_placeholder);
+        }
+        let _ = ui.combobox(&mut query, &mut selected_indices, combobox);
+        if selected_indices != previous_indices {
+            let selected_item_ids = selected_indices
+                .iter()
+                .filter_map(|index| props.items.get(*index))
+                .map(|item| item.item_id.clone())
+                .collect::<Vec<_>>();
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Selected,
+                props.action_id.as_ref(),
+                Some(EventValue::ItemIds(selected_item_ids)),
+                None,
+            );
+        } else if query != previous_query {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Changed,
+                props.action_id.as_ref(),
+                Some(EventValue::Text(query)),
+                None,
+            );
+        }
+    }
+
+    fn render_emoji_selector(&mut self, ui: &mut ComponentUi<'_>, props: &ContractEmojiSelector) {
+        let mut value = props.value.clone();
+        let mut selector = EmojiSelector::new(make_id(&props.common.node_id, "emoji_selector"))
+            .popup_width(props.popup_width)
+            .popup_max_height(props.popup_max_height);
+        if let Some(placeholder) = props.placeholder.as_deref() {
+            selector = selector.placeholder(placeholder);
+        }
+        if let Some(trigger_variant) = props.trigger_variant {
+            selector = selector.trigger_variant(trigger_variant);
+        }
+        let _ = ui.emoji_selector(&mut value, selector);
+        if value != props.value {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Selected,
+                props.action_id.as_ref(),
+                Some(EventValue::Text(value)),
+                None,
+            );
+        }
+    }
+
+    fn render_pagination(&mut self, ui: &mut ComponentUi<'_>, props: &ContractPagination) {
+        let mut current_page = props.current_page;
+        let _ = ui.pagination(
+            &mut current_page,
+            Pagination::new(
+                make_id(&props.common.node_id, "pagination"),
+                props.page_count,
+            )
+            .sibling_count(props.sibling_count),
+        );
+        if current_page != props.current_page {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Selected,
+                props.action_id.as_ref(),
+                Some(EventValue::Number(current_page as f32)),
+                None,
+            );
+        }
+    }
+
+    fn render_tooltip(&mut self, ui: &mut ComponentUi<'_>, props: &ContractTooltip) {
+        let _ = ui.tooltip(
+            Tooltip::new(props.trigger_label.as_str(), props.text.as_str())
+                .width(props.width)
+                .delay_ms(props.delay_ms)
+                .placement(props.placement),
+        );
+    }
+
+    fn render_popover(&mut self, ui: &mut ComponentUi<'_>, props: &ContractPopover) {
+        let mut open = props.open;
+        let mut popover = Popover::new(make_id(&props.common.node_id, "popover"))
+            .side(props.side)
+            .align(props.align)
+            .side_offset(props.side_offset)
+            .padding(props.padding_x as i8, props.padding_y as i8);
+        if let Some(width) = props.width {
+            popover = popover.width(width);
+        }
+        let trigger_label = props.trigger_label.as_deref().unwrap_or("Open");
+        let _ = ui.popover(
+            &mut open,
+            popover,
+            |ui| {
+                ui.components()
+                    .button(Button::new(trigger_label).variant(ButtonVariant::Secondary))
+            },
+            |ui, _open| self.render_children(ui, &props.children),
+        );
+        if open != props.open {
+            self.emit_value(
+                &props.common.node_id,
+                if open {
+                    EventKind::Opened
+                } else {
+                    EventKind::Closed
+                },
+                props.action_id.as_ref(),
+                Some(EventValue::Boolean(open)),
+                None,
+            );
+        }
+    }
+
+    fn render_dropdown_menu(&mut self, ui: &mut ComponentUi<'_>, props: &ContractDropdownMenu) {
+        let mut action_bindings = Vec::new();
+        let mut runtime_entries = Vec::new();
+        append_runtime_menu_entries(&props.entries, &mut runtime_entries, &mut action_bindings);
+        let mut dropdown = DropdownMenu::new(props.trigger_label.as_str())
+            .entries(runtime_entries.as_slice())
+            .width(props.width);
+        if let Some(variant) = props.trigger_variant {
+            dropdown = dropdown.trigger_variant(variant);
+        }
+        let (_, state) = ui.dropdown_menu(dropdown);
+        self.emit_menu_action(
+            &props.common.node_id,
+            props.action_id.as_ref(),
+            state.action,
+            &action_bindings,
+        );
+    }
+
+    fn render_context_menu(&mut self, ui: &mut ComponentUi<'_>, props: &ContractContextMenu) {
+        let mut action_bindings = Vec::new();
+        let mut runtime_entries = Vec::new();
+        append_runtime_menu_entries(&props.entries, &mut runtime_entries, &mut action_bindings);
+        let (_, state) = ui.context_menu(
+            ContextMenu::new(
+                make_id(&props.common.node_id, "context_menu"),
+                runtime_entries.as_slice(),
+            )
+            .width(props.width)
+            .size(egui::vec2(props.region_width, props.region_height))
+            .padding(props.padding_x as i8, props.padding_y as i8),
+            |ui| self.render_children(ui, &props.children),
+        );
+        self.emit_menu_action(
+            &props.common.node_id,
+            props.action_id.as_ref(),
+            state.action,
+            &action_bindings,
+        );
+    }
+
+    fn render_open_with(&mut self, ui: &mut ComponentUi<'_>, props: &ContractOpenWith) {
+        let mut action_bindings = Vec::new();
+        let mut runtime_entries = Vec::new();
+        append_runtime_menu_entries(&props.entries, &mut runtime_entries, &mut action_bindings);
+        let mut selected_action = props.selected_item_id.as_deref().and_then(|item_id| {
+            action_bindings
+                .iter()
+                .position(|binding| binding.item_id == item_id)
+        });
+        let previous = selected_action;
+        let mut open_with = OpenWith::new(
+            make_id(&props.common.node_id, "open_with"),
+            runtime_entries.as_slice(),
+        )
+        .width(props.width);
+        if let Some(placeholder) = props.placeholder.as_deref() {
+            open_with = open_with.placeholder(placeholder);
+        }
+        if let Some(size) = props.size {
+            open_with = open_with.size(size);
+        }
+        if let Some(variant) = props.trigger_variant {
+            open_with = open_with.trigger_variant(variant);
+        }
+        let _ = ui.open_with(&mut selected_action, open_with);
+        if selected_action != previous {
+            self.emit_menu_action(
+                &props.common.node_id,
+                props.action_id.as_ref(),
+                selected_action,
+                &action_bindings,
+            );
+        }
+    }
+
+    fn render_collab_cursor(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCollabCursor) {
+        let mut cursor = CollabCursor::new(
+            make_id(&props.common.node_id, "collab_cursor"),
+            props.name.as_str(),
+            egui::pos2(props.x, props.y),
+        )
+        .size(props.size);
+        if let Some(color) = props.color.as_ref().and_then(parse_contract_color) {
+            cursor = cursor.color(color);
+        }
+        let _ = ui.collab_cursor(cursor);
+    }
+
+    fn render_icon_toolbar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractIconToolbar) {
+        let items = props
+            .items
+            .iter()
+            .map(|item| {
+                let mut runtime_item = IconToolbarItem::new(item.icon.as_str());
+                if let Some(tooltip) = item.tooltip.as_deref() {
+                    runtime_item = runtime_item.tooltip(tooltip);
+                }
+                if let Some(badge_fill) = item.badge_fill.as_ref().and_then(parse_contract_color) {
+                    runtime_item = runtime_item.badge_fill(badge_fill);
+                }
+                runtime_item
+            })
+            .collect::<Vec<_>>();
+        let mut current = props
+            .selected_item_id
+            .as_deref()
+            .and_then(|item_id| props.items.iter().position(|item| item.item_id == item_id))
+            .unwrap_or(0);
+        let previous = current;
+        let mut toolbar = IconToolbar::new(
+            make_id(&props.common.node_id, "icon_toolbar"),
+            items.as_slice(),
+        )
+        .gap(props.gap);
+        if let Some(size) = props.size {
+            toolbar = toolbar.size(size);
+        }
+        if let Some(icon_size) = props.icon_size {
+            toolbar = toolbar.icon_size(icon_size);
+        }
+        let _ = ui.icon_toolbar(&mut current, toolbar);
+        if current != previous {
+            if let Some(item) = props.items.get(current) {
+                self.emit_item(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    item.action_id.as_ref().or(props.action_id.as_ref()),
+                    item.item_id.as_str(),
+                    item.tooltip.as_deref().unwrap_or(item.icon.as_str()),
+                );
+            }
+        }
+    }
+
+    fn render_file_tree(&mut self, ui: &mut ComponentUi<'_>, props: &ContractFileTree) {
+        let mut bindings = Vec::new();
+        let mut runtime_nodes = build_runtime_file_tree(&props.items, &mut bindings);
+        let mut selected_id = props.selected_item_id.as_deref().and_then(|item_id| {
+            bindings
+                .iter()
+                .position(|binding| binding.item_id == item_id)
+        });
+        let previous_selected_id = selected_id;
+        let _ = ui.file_tree(
+            &mut selected_id,
+            FileTree::new(
+                make_id(&props.common.node_id, "file_tree"),
+                &mut runtime_nodes,
+            )
+            .width(props.width)
+            .row_height(props.row_height)
+            .indent_width(props.indent_width),
+        );
+        if selected_id != previous_selected_id {
+            if let Some(binding) = selected_id.and_then(|index| bindings.get(index)) {
+                self.emit_item(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    binding.action_id.or(props.action_id.as_ref()),
+                    binding.item_id,
+                    binding.label,
+                );
+            }
+        }
+        self.emit_file_tree_open_events(
+            &props.common.node_id,
+            props.action_id.as_ref(),
+            runtime_nodes.as_slice(),
+            bindings.as_slice(),
+        );
+    }
+
+    fn render_drag_board(&mut self, ui: &mut ComponentUi<'_>, props: &ContractDragBoard) {
+        let items = props
+            .items
+            .iter()
+            .map(|item| {
+                let mut runtime_item = DragBoardItem::new(item.title.as_str());
+                if let Some(description) = item.description.as_deref() {
+                    runtime_item = runtime_item.description(description);
+                }
+                runtime_item
+            })
+            .collect::<Vec<_>>();
+        let mut regions = props
+            .items
+            .iter()
+            .map(|item| item.region)
+            .collect::<Vec<_>>();
+        let previous_regions = regions.clone();
+        let _ = ui.drag_board(
+            regions.as_mut_slice(),
+            DragBoard::new(
+                make_id(&props.common.node_id, "drag_board"),
+                props.left_title.as_str(),
+                props.right_title.as_str(),
+                items.as_slice(),
+            )
+            .height(props.height),
+        );
+        if let Some((index, next_region)) = regions
+            .iter()
+            .enumerate()
+            .find(|(index, region)| previous_regions.get(*index) != Some(*region))
+        {
+            if let Some(item) = props.items.get(index) {
+                self.emit_value(
+                    &props.common.node_id,
+                    EventKind::Changed,
+                    item.action_id.as_ref().or(props.action_id.as_ref()),
+                    Some(EventValue::ItemMove(ContractItemMove {
+                        item_id: item.item_id.clone(),
+                        from: drag_region_id(item.region).to_owned(),
+                        to: drag_region_id(*next_region).to_owned(),
+                    })),
+                    Some(EventMetadata::item(
+                        item.item_id.as_str(),
+                        item.title.as_str(),
+                    )),
+                );
+            }
+        }
+    }
+
+    fn render_audio_playback(&mut self, ui: &mut ComponentUi<'_>, props: &ContractAudioPlayback) {
+        let mut playback = AudioPlayback::new(
+            make_id(&props.common.node_id, "audio_playback"),
+            props.playback_state,
+        );
+        if let Some(duration_seconds) = props.duration_seconds {
+            playback = playback.duration_seconds(duration_seconds);
+        }
+        let (_, result) = if props.children.is_empty() {
+            ui.audio_playback(playback)
+        } else {
+            ui.audio_playback_with_actions(playback, |ui| {
+                self.render_children(ui, &props.children);
+            })
+        };
+        if result.play_pause_clicked {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Toggled,
+                props.action_id.as_ref(),
+                Some(EventValue::Boolean(matches!(
+                    props.playback_state,
+                    AudioPlaybackState::Paused
+                ))),
+                None,
+            );
+        }
+    }
+
+    fn render_image_tile(&mut self, ui: &mut ComponentUi<'_>, props: &ContractImageTile) {
+        let mut tile = ImageTile::new(contract_image(props.source.as_str()))
+            .image_frame(props.image_frame)
+            .selected(props.selected);
+        if let Some(size) = props.size {
+            tile = tile.size(size);
+        }
+        if let (Some(width), Some(height)) = (props.image_width, props.image_height) {
+            tile = tile.image_size(egui::vec2(width, height));
+        }
+        if let Some(playback_state) = props.playback_state {
+            tile = tile.playback_state(playback_state);
+        }
+        let (_, state) = if props.children.is_empty() {
+            ui.image_tile(tile)
+        } else {
+            ui.image_tile_with_body(tile, |ui| self.render_children(ui, &props.children))
+        };
+        if state.play_pause_clicked {
+            self.emit_basic(
+                &props.common.node_id,
+                EventKind::Toggled,
+                props
+                    .play_pause_action_id
+                    .as_ref()
+                    .or(props.action_id.as_ref()),
+            );
+        } else if state.tile_clicked {
+            self.emit_basic(
+                &props.common.node_id,
+                EventKind::Clicked,
+                props.action_id.as_ref(),
+            );
+        }
+    }
+
+    fn render_command(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCommand) {
+        let items = props
+            .items
+            .iter()
+            .map(|item| {
+                let mut command_item = CommandItem::new(item.group.as_str(), item.label.as_str());
+                if let Some(shortcut) = item.shortcut.as_deref() {
+                    command_item = command_item.shortcut(shortcut);
+                }
+                command_item
+            })
+            .collect::<Vec<_>>();
+        let mut query = props.query.clone();
+        let previous_query = query.clone();
+        let mut command = Command::new(make_id(&props.common.node_id, "command"))
+            .width(props.width)
+            .max_height(props.max_height)
+            .preview(props.preview)
+            .preview_height(props.preview_height);
+        if let Some(placeholder) = props.placeholder.as_deref() {
+            command = command.placeholder(placeholder);
+        }
+        let _ = ui.command(&mut query, items.as_slice(), command);
+        if query != previous_query {
+            self.emit_value(
+                &props.common.node_id,
+                EventKind::Changed,
+                props.action_id.as_ref(),
+                Some(EventValue::Text(query)),
+                None,
+            );
+        }
+    }
+
+    fn emit_menu_action(
+        &mut self,
+        node_id: &NodeId,
+        fallback_action: Option<&ActionId>,
+        action_index: Option<usize>,
+        bindings: &[MenuActionBinding<'_>],
+    ) {
+        if let Some(binding) = action_index.and_then(|index| bindings.get(index)) {
+            self.emit_item(
+                node_id,
+                EventKind::CommandInvoked,
+                binding.action_id.or(fallback_action),
+                binding.item_id,
+                binding.label,
+            );
+        }
+    }
+
     fn emit_hierarchy_open_events(
         &mut self,
         node_id: &crate::contract::NodeId,
@@ -977,6 +1585,38 @@ impl FrameRenderer {
                 self.emit_hierarchy_open_events(
                     node_id,
                     hierarchy_action,
+                    node.children.as_slice(),
+                    bindings,
+                );
+            }
+        }
+    }
+
+    fn emit_file_tree_open_events(
+        &mut self,
+        node_id: &NodeId,
+        file_tree_action: Option<&ActionId>,
+        nodes: &[FileTreeNode<'_>],
+        bindings: &[HierarchyBinding<'_>],
+    ) {
+        for node in nodes {
+            if let Some(binding) = bindings.get(node.id) {
+                if node.expanded != binding.open {
+                    self.emit_item(
+                        node_id,
+                        if node.expanded {
+                            EventKind::Opened
+                        } else {
+                            EventKind::Closed
+                        },
+                        binding.action_id.or(file_tree_action),
+                        binding.item_id,
+                        binding.label,
+                    );
+                }
+                self.emit_file_tree_open_events(
+                    node_id,
+                    file_tree_action,
                     node.children.as_slice(),
                     bindings,
                 );
@@ -1234,6 +1874,149 @@ fn build_runtime_hierarchy<'a>(
                 ))
         })
         .collect()
+}
+
+fn build_runtime_file_tree<'a>(
+    items: &'a [ContractFileTreeItem],
+    bindings: &mut Vec<HierarchyBinding<'a>>,
+) -> Vec<FileTreeNode<'a>> {
+    items
+        .iter()
+        .map(|item| {
+            let runtime_id = bindings.len();
+            bindings.push(HierarchyBinding {
+                item_id: item.item_id.as_str(),
+                label: item.label.as_str(),
+                action_id: item.action_id.as_ref(),
+                open: item.open,
+            });
+            FileTreeNode::new(runtime_id, item.label.as_str(), item.kind)
+                .expanded(item.open)
+                .children(build_runtime_file_tree(item.children.as_slice(), bindings))
+        })
+        .collect()
+}
+
+fn append_runtime_menu_entries<'a>(
+    entries: &'a [ContractMenuEntry],
+    runtime_entries: &mut Vec<DropdownMenuEntry<'a>>,
+    bindings: &mut Vec<MenuActionBinding<'a>>,
+) {
+    for entry in entries {
+        match entry {
+            ContractMenuEntry::Action(action) => {
+                let action_index = bindings.len();
+                bindings.push(MenuActionBinding {
+                    item_id: action.item_id.as_str(),
+                    label: action.label.as_str(),
+                    action_id: action.action_id.as_ref(),
+                });
+                runtime_entries.push(runtime_menu_action_entry(action, action_index));
+            }
+            ContractMenuEntry::Separator => {
+                runtime_entries.push(DropdownMenuEntry::separator());
+            }
+            ContractMenuEntry::Submenu(submenu) => {
+                runtime_entries.push(DropdownMenuEntry::separator());
+                let label_index = bindings.len();
+                bindings.push(MenuActionBinding {
+                    item_id: submenu.label.as_str(),
+                    label: submenu.label.as_str(),
+                    action_id: None,
+                });
+                let mut label_action =
+                    DropdownMenuAction::new(label_index, submenu.label.as_str()).enabled(false);
+                if let Some(icon) = submenu.leading_icon.as_deref() {
+                    label_action = label_action.icon(icon);
+                }
+                runtime_entries.push(DropdownMenuEntry::Action(label_action));
+                append_runtime_menu_entries(submenu.entries.as_slice(), runtime_entries, bindings);
+            }
+        }
+    }
+}
+
+fn runtime_menu_action_entry<'a>(
+    action: &'a ContractMenuAction,
+    action_index: usize,
+) -> DropdownMenuEntry<'a> {
+    match (action.leading_icon.as_deref(), action.shortcut.as_deref()) {
+        (Some(icon), Some(shortcut)) => DropdownMenuEntry::action_with_icon_and_shortcut(
+            action_index,
+            action.label.as_str(),
+            icon,
+            shortcut,
+        ),
+        (Some(icon), None) => {
+            DropdownMenuEntry::action_with_icon(action_index, action.label.as_str(), icon)
+        }
+        (None, Some(shortcut)) => {
+            DropdownMenuEntry::action_with_shortcut(action_index, action.label.as_str(), shortcut)
+        }
+        (None, None) => DropdownMenuEntry::action(action_index, action.label.as_str()),
+    }
+}
+
+fn parse_contract_color(value: &ContractColorValue) -> Option<Color32> {
+    parse_color(value.as_str())
+}
+
+fn parse_color(value: &str) -> Option<Color32> {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case("transparent") {
+        return Some(Color32::TRANSPARENT);
+    }
+    if value.eq_ignore_ascii_case("black") {
+        return Some(Color32::BLACK);
+    }
+    if value.eq_ignore_ascii_case("white") {
+        return Some(Color32::WHITE);
+    }
+
+    let hex = value.strip_prefix('#')?;
+    match hex.len() {
+        6 => {
+            let rgb = u32::from_str_radix(hex, 16).ok()?;
+            Some(Color32::from_rgb(
+                ((rgb >> 16) & 0xff) as u8,
+                ((rgb >> 8) & 0xff) as u8,
+                (rgb & 0xff) as u8,
+            ))
+        }
+        8 => {
+            let rgba = u32::from_str_radix(hex, 16).ok()?;
+            Some(Color32::from_rgba_unmultiplied(
+                ((rgba >> 24) & 0xff) as u8,
+                ((rgba >> 16) & 0xff) as u8,
+                ((rgba >> 8) & 0xff) as u8,
+                (rgba & 0xff) as u8,
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn parse_contract_stroke(stroke: &ContractStroke) -> Option<Stroke> {
+    Some(Stroke::new(
+        stroke.width.max(0.0),
+        parse_contract_color(&stroke.color)?,
+    ))
+}
+
+fn contract_image(source: &str) -> Image<'static> {
+    match source {
+        "showcase" | "showcase-image" | "builtin:showcase-image" => {
+            Image::from_bytes("bytes://contract/showcase-image.png", SHOWCASE_IMAGE_BYTES)
+        }
+        source => Image::from_uri(source.to_owned()),
+    }
+}
+
+fn drag_region_id(region: DragBoardRegion) -> &'static str {
+    match region {
+        DragBoardRegion::Left => "left",
+        DragBoardRegion::Right => "right",
+    }
 }
 
 fn should_emit_dialogue_closed(

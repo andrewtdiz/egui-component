@@ -15,7 +15,7 @@ The crate also ships an optional host-owned declarative layer for serialized or 
 Repo-local demos and showcase helpers live under `egui_component::demos::*`. The older
 `egui_component::example_apps::*` and `egui_component::catalog::*` module paths are deprecated shims.
 
-The portable Luau embedding core lives in the reusable `luau-runtime-core` crate. `egui-component` does not expose that runtime surface; new hosts should depend on `luau-runtime-core` directly. The core includes filesystem hot-reload support for file-backed script providers.
+The reusable JSX/TSX host runtime lives under `crates/runtime-jsx/`. The repo-local `examples/runtime-jsx/` app keeps the `egui` frame loop in Rust, calls that runtime crate, evaluates JSX/TSX with `deno_core`/V8 via `deno_ast`, and renders the result through the optional `egui_component::contract::*` surface.
 
 ## Install
 
@@ -118,7 +118,7 @@ From there, use:
 
 ## Declarative Contract
 
-The `contract` module is an optional host-driven declarative layer. It is not the default embedded Luau runtime boundary.
+The `contract` module is an optional host-driven declarative layer. The JSX runtime example uses it as the Rust-side render boundary after V8 evaluates the authored JSX file.
 
 It provides:
 
@@ -220,9 +220,9 @@ The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
 - `contract-showcase`: optional declarative editor surface driven entirely through `egui_component::contract::*`
-- `runtime-egui-host`: canonical embedded Luau runtime host using the direct typed `app.*` / `ui.*` bridge
-- `showcase-runtime`: convenience wrapper that boots the Luau showcase surface through the same direct runtime host
-- `component-gallery-runtime`: Luau primitive component catalog for the shadcn-like direct `ui.*` surface
+- `runtime-jsx-host`: embedded JSX/TSX runtime host using the `crates/runtime-jsx` `deno_core`/V8 runtime and the contract renderer
+- `runtime-jsx-motion`: focused JSX/TSX motion sync demo for opacity, translation, scale, and rotation values driven by the runtime and drawn by egui
+- `runtime-egui-host`: legacy compatibility alias for `runtime-jsx-host`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
 
 Run the main showcase:
@@ -257,13 +257,13 @@ Run any focused example:
 ```bash
 cargo run --example theme-playground
 cargo run --example runtime-egui-host
-cargo run --example showcase-runtime
-cargo run --example component-gallery-runtime
+cargo run --example runtime-jsx-host
+cargo run --example runtime-jsx-motion
 ```
 
 Replace `theme-playground` with `contract-showcase`.
 
-For live Luau edits, use `runtime-egui-host` for the main demo surface, `showcase-runtime` for the library-backed recipe showcase, and `component-gallery-runtime` for the primitive Luau component catalog. The component gallery now uses the same Rust-owned showcase shell pattern as the original catalog while each selected preview is rendered from a focused Luau root. The direct typed Luau path is the supported product-development model. The alternate `contract-showcase` path remains optional.
+For live JSX edits, run `runtime-jsx-host` and edit `examples/runtime-jsx/app.jsx` on disk. For a focused motion sync surface, run `runtime-jsx-motion` and edit `examples/runtime-jsx/motion-sync.tsx`. The reusable runtime is the `egui-component-runtime-jsx` workspace crate under `crates/runtime-jsx`; JSX/TSX changes commit into a Rust-owned retained host tree before rendering through `ContractTree`. `runtime-egui-host` remains as a legacy alias for the same host.
 
 In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
 The window is restarted on each rebuild rather than patched in place.

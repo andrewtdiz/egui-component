@@ -5,10 +5,10 @@ local kit = require("../../ui.luau")
 
 local OPEN_FILES = table.freeze({
     "src/lib.rs",
-    "src/example_apps/runtime_egui_host.rs",
-    "examples/runtime-luau/apps/demo.luau",
+    "examples/runtime-jsx/runtime.rs",
+    "examples/runtime-jsx/app.rs",
+    "examples/runtime-jsx/app.jsx",
     "examples/runtime-luau/ui/recipes/editor_sidebar.luau",
-    "luau-runtime/src/runtime/api.rs",
 })
 
 local DEFAULT_EDITOR = {

@@ -5,7 +5,7 @@ use egui::{
     Response, Stroke, Ui,
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum PopoverSide {
     Top,
     Right,
@@ -13,7 +13,7 @@ pub enum PopoverSide {
     Left,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum PopoverAlign {
     Start,
     Center,

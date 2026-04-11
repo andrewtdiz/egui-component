@@ -17,7 +17,6 @@ Read these files in order:
 3. `components-reference.md`
 4. `contract-architecture.md`
 5. `contract-reference.md`
-6. `../../defold_luau_gui_runtime_architecture.md`
 
 ## What This Library Is
 
@@ -30,7 +29,7 @@ The public runtime surface is built around three ideas:
 - `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
 - `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
 - `contract::*` exposes an optional host-driven declarative contract layer, semantic event model, and schema export.
-- The portable Luau embedding core is packaged separately as `luau-runtime-core`; see `../../defold_luau_gui_runtime_architecture.md` for the host-agnostic core/adapter split. File-backed providers can surface filesystem hot-reload events through the core API.
+- The reusable authored-runtime crate lives in `crates/runtime-jsx`, and the active example in `examples/runtime-jsx` feeds JSX/TSX-authored trees into `contract::*`.
 - Each component method accepts a typed builder; new work should keep shorthand forms minimal.
 
 ## Non-Negotiable Design Contract

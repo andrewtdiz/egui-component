@@ -12,7 +12,7 @@ const DRAG_BOARD_ITEM_GAP: f32 = 8.0;
 const DRAG_BOARD_PLACEHOLDER_HEIGHT: f32 = 72.0;
 const DRAG_BOARD_PLACEHOLDER_LABEL: &str = "Drop card here";
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub enum DragBoardRegion {
     #[default]
     Left,

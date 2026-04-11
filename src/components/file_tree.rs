@@ -12,7 +12,7 @@ const FILE_TREE_DISCLOSURE_GLYPH_SIZE: f32 = 8.0;
 const FILE_TREE_ICON_SIZE: f32 = 13.0;
 const FILE_TREE_ICON_GAP: f32 = 6.0;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum FileTreeItemKind {
     Folder,
     Collection,
