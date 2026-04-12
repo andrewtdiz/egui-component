@@ -24,7 +24,12 @@ include = [
 ]
 
 [workspace]
-members = [".", "crates/runtime-jsx", "tools/example-runner"]
+members = [
+    ".",
+    "crates/clay-jsx-runtime",
+    "crates/clay-jsx-egui-bridge",
+    "tools/example-runner",
+]
 resolver = "2"
 
 [lib]
@@ -46,5 +51,5 @@ twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg
 
 [dev-dependencies]
 eframe = "0.33.3"
-egui-component-runtime-jsx = { path = "crates/runtime-jsx" }
+clay-jsx-egui-bridge = { path = "crates/clay-jsx-egui-bridge" }
 tempfile = "3.16.0"

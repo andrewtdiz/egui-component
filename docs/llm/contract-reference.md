@@ -13,7 +13,7 @@ egui_component::contract::reference_markdown()
 
 `contract::*` is an optional host-driven declarative layer.
 
-- The `egui-component-runtime-jsx` crate in `crates/runtime-jsx` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.
+- The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.
 - `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.
 - Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.
 
@@ -24,11 +24,11 @@ egui_component::contract::reference_markdown()
 | `node_id` | `string` | `supported` | Stable host-owned node identifier. |
 | `visible` | `boolean` | `supported` | Whether the node renders at all. Defaults to true. |
 | `enabled` | `boolean` | `supported` | Whether interaction is enabled. Defaults to true. |
-| `class` | `string` | `unsupported` | Optional primary class string. Declared in the model and schema only. The current Rust renderer ignores class strings. |
-| `class_list` | `list<string>` | `unsupported` | Optional expanded class token list. Declared in the model and schema only. The current Rust renderer ignores class lists. |
+| `class` | `string` | `supported` | Optional primary class string. |
+| `class_list` | `list<string>` | `supported` | Optional expanded class token list. |
 | `slot_classes` | `map<string, string>` | `unsupported` | Optional slot-name to class-string overrides. Declared in the model and schema only. The current Rust renderer does not apply slot-specific class behavior. |
 | `actions` | `object:actions` | `unsupported` | Optional common semantic action bindings. Declared in the model and schema only. The current renderer uses family-specific action fields instead. |
-| `layout` | `object:layout` | `partial` | Optional shared layout hints. The renderer applies sizing on every node and container direction/justify/align/gap overrides on flow containers only. |
+| `layout` | `object:layout` | `partial` | Optional shared layout hints. The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap overrides on flow containers only. |
 
 ## Layout Support
 
@@ -47,8 +47,8 @@ egui_component::contract::reference_markdown()
 | `max_height` | `object:layout_length` | `supported` | Optional maximum height override. |
 | `gap_x` | `number` | `partial` | Optional horizontal gap override. Only executed by the flow-container helpers used by row, column, inset, and card. |
 | `gap_y` | `number` | `partial` | Optional vertical gap override. Only executed by the flow-container helpers used by row, column, inset, and card. |
-| `padding` | `object:layout_edges` | `unsupported` | Optional padding edges. Declared in the schema only. Shared layout padding is not executed by the current renderer. |
-| `margin` | `object:layout_edges` | `unsupported` | Optional margin edges. Declared in the schema only. Shared layout margins are not executed by the current renderer. |
+| `padding` | `object:layout_edges` | `partial` | Optional padding edges. Executed as an egui frame inner margin on every node. Percent class-derived padding is ignored because egui margins are pixel based. |
+| `margin` | `object:layout_edges` | `supported` | Optional margin edges. |
 | `align` | `enum:align` | `partial` | Optional cross-axis alignment override. Only executed by the flow-container helpers used by row, column, inset, and card. |
 | `justify` | `enum:justify` | `partial` | Optional main-axis alignment override. Only executed by the flow-container helpers used by row, column, inset, and card. |
 | `wrap` | `boolean` | `unsupported` | Optional wrap hint. Declared in the schema only. Wrapping is not executed by the current renderer. |
@@ -118,10 +118,10 @@ egui_component::contract::reference_markdown()
 
 | Type | Kind | Support | Summary |
 | --- | --- | --- | --- |
-| `node_common` | `object` | `partial` | Common fields flattened into every node. Visible, enabled, and part of layout are executed today. Class, slot, and common action fields are metadata-only. |
+| `node_common` | `object` | `partial` | Common fields flattened into every node. Visible, enabled, class, class_list, and part of layout are executed today. Slot and common action fields are metadata-only. |
 | `actions` | `object` | `unsupported` | Optional common semantic action bindings. Declared in the schema only. The current renderer uses family-specific action fields instead. |
-| `layout` | `object` | `partial` | Shared layout hints available on every node. Sizing is executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers. |
-| `layout_edges` | `object` | `unsupported` | Top, right, bottom, and left edge values for shared layout padding and margin. Edge-based shared padding and margin are not executed by the current renderer. |
+| `layout` | `object` | `partial` | Shared layout hints available on every node. Sizing, padding, and margin are executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers. |
+| `layout_edges` | `object` | `partial` | Top, right, bottom, and left edge values for shared layout padding and margin. Executed for padding and margin with egui margin rounding and clamping. |
 | `layout_length` | `object` | `partial` | Tagged length value used by shared layout sizing fields. Supported when referenced from width, height, min, and max layout fields. Other consumers such as basis remain unsupported. |
 | `layout_length_kind` | `enum` | `supported` | Supported layout length kinds. |
 | `layout_track` | `object` | `unsupported` | Tagged grid track value for declared column and row tracks. Grid tracks are declared in the schema only and are not executed by the current renderer. |

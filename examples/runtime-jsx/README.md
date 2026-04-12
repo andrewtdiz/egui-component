@@ -23,8 +23,8 @@ cargo run --example runtime-jsx-host -- ./examples/runtime-jsx/app.jsx
 The runtime path is:
 
 1. `examples/runtime-jsx/mod.rs` wires the eframe shell and `examples/runtime-jsx/app.rs` owns the editor/preview UI.
-2. `crates/runtime-jsx` owns the reusable host runtime, creates one retained `deno_core::JsRuntime` session per JSX rebuild, and transpiles `.jsx`, `.tsx`, and `.ts` through `deno_ast`.
-3. `crates/runtime-jsx/src/mod.js`, `crates/runtime-jsx/src/runtime_api.js`, and `crates/runtime-jsx/src/motion_api.js` provide the virtual `egui`, `motion/react`, and `react/motion` modules, `render`, `log`, `useState`, event dispatch, and the JSX runtime functions.
+2. `crates/clay-jsx-runtime` owns the host-neutral `deno_core::JsRuntime` session and `.jsx`, `.tsx`, and `.ts` transpilation through `deno_ast`.
+3. `crates/clay-jsx-egui-bridge/src/mod.js`, `crates/clay-jsx-egui-bridge/src/runtime_api.js`, and `crates/clay-jsx-egui-bridge/src/motion_api.js` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules, `render`, `log`, `useState`, event dispatch, and the JSX runtime functions.
 4. `render(<column ... />)` lowers JSX into host nodes and commits incremental mutation batches through a Deno op.
 5. Rust applies those mutations to a retained host tree, materializes a `ContractTree`, checks the contract model version and registered families, and renders it with `egui_component::contract::render_tree`.
 6. Motion props such as `initial`, `animate`, and `transition` are stored beside the host tree and ticked by Rust as retained numeric values. The current egui renderer does not consume those values yet.

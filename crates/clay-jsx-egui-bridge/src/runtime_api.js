@@ -100,6 +100,8 @@ const familyAliases = {
 
 const propAliases = {
   className: "class",
+  classNames: "class",
+  classList: "class_list",
   nodeId: "node_id",
   actionId: "action_id",
   selectedItemId: "selected_item_id",

@@ -1,5 +1,8 @@
 use std::{path::PathBuf, time::SystemTime};
 
+use clay_jsx_egui_bridge::{
+    extend_logs, JsxRuntimeSession, MotionFrame, MotionProperty, MotionValues, RuntimeLogBuffer,
+};
 use eframe::egui::{
     self, pos2, vec2, Align2, CentralPanel, Color32, Context, CornerRadius, FontId, Pos2, Rect,
     Sense, Shape, Stroke, StrokeKind, TopBottomPanel, Vec2, ViewportBuilder,
@@ -7,9 +10,6 @@ use eframe::egui::{
 use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree, NodeId},
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
-};
-use egui_component_runtime_jsx::{
-    extend_logs, JsxRuntimeSession, MotionFrame, MotionProperty, MotionValues, RuntimeLogBuffer,
 };
 
 const WINDOW_TITLE: &str = "egui-component JSX Motion Sync";
@@ -414,8 +414,8 @@ fn modified_time(path: &std::path::Path) -> Option<SystemTime> {
 #[cfg(test)]
 mod tests {
     use super::default_entry_path;
+    use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionProperty};
     use egui_component::contract::{ContractEvent, EventKind, NodeId};
-    use egui_component_runtime_jsx::{JsxRuntimeSession, MotionProperty};
 
     #[test]
     fn motion_sync_tsx_loads_and_retargets_all_demo_values() {

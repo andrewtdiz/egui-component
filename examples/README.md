@@ -37,7 +37,7 @@ Available examples:
 - `theme-playground`
   Live controls for `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`.
 - `runtime-jsx-host`
-  Embedded JSX runtime example. The reusable host lives in `crates/runtime-jsx`; JSX/TSX is transpiled with `deno_ast`, evaluated by `deno_core`/V8, committed into a Rust-owned retained host tree, and rendered by Rust-owned egui.
+  Embedded JSX runtime example. The host-neutral runtime lives in `crates/clay-jsx-runtime`, while the egui bridge lives in `crates/clay-jsx-egui-bridge`; JSX/TSX is transpiled with `deno_ast`, evaluated by `deno_core`/V8, committed into a Rust-owned retained host tree, and rendered by Rust-owned egui.
 - `runtime-jsx-motion`
   Focused JSX motion sync example. The TSX file owns the motion specs and hook state; egui ticks the retained motion frame and draws opacity, translation, scale, and rotation values.
 - `runtime-egui-host`
@@ -64,6 +64,6 @@ The window restarts on each rebuild instead of reloading code into the running p
 
 Snapshot mode is headless and crops the PNG to the component preview itself, without the outer showcase title/subtext/card wrapper.
 
-For live JSX edits, run `runtime-jsx-host` and edit `examples/runtime-jsx/app.jsx` on disk. For motion sync verification, run `runtime-jsx-motion` and edit `examples/runtime-jsx/motion-sync.tsx`. The embeddable runtime crate is `egui-component-runtime-jsx` at `crates/runtime-jsx`. `runtime-egui-host` remains as a legacy alias for the same host.
+For live JSX edits, run `runtime-jsx-host` and edit `examples/runtime-jsx/app.jsx` on disk. For motion sync verification, run `runtime-jsx-motion` and edit `examples/runtime-jsx/motion-sync.tsx`. The host-neutral runtime crate is `clay-jsx-runtime` at `crates/clay-jsx-runtime`; the egui bridge crate is `clay-jsx-egui-bridge` at `crates/clay-jsx-egui-bridge`. `runtime-egui-host` remains as a legacy alias for the same host.
 
 Use `contract-showcase` when you explicitly want a Rust-authored `ContractTree` path for declarative schema/tooling work. Use `runtime-jsx-host` when you want the authored JSX-to-egui runtime path.

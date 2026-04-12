@@ -12,7 +12,7 @@
 ## Relationship To Authored Runtimes
 
 - `egui_component::contract::*` is an egui-side declarative surface that a host can drive from any authored runtime.
-- The `egui-component-runtime-jsx` crate in `crates/runtime-jsx` owns V8 lifetime, module loading, JSX/TSX transpilation through `deno_ast`, and incremental retained host-tree commits through a host op.
+- The `clay-jsx-runtime` crate in `crates/clay-jsx-runtime` owns host-neutral V8 lifetime, module loading, JSX/TSX transpilation through `deno_ast`, and commit/log host ops. The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` owns incremental retained host-tree commits and egui contract materialization.
 - This layer only renders host-authored trees and returns semantic events; it does not own script state or dispatch.
 - The runtime lowers JSX into Rust-owned host nodes, materializes `ContractTree` for rendering, and keeps Rust as the egui renderer.
 

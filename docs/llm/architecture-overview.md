@@ -10,7 +10,7 @@
 - Each public widget lives in `src/components/*.rs` as a small builder plus a `ComponentUi` entry point.
 - `contract::*` owns serializable node trees, semantic events, schema export, and the host renderer that translates declarative nodes into the typed builders.
 - `contract::*` is the egui-side declarative contract layer, not a scripting VM embedding core.
-- The reusable authored-runtime crate lives in `crates/runtime-jsx`, and the active example in `examples/runtime-jsx` feeds this layer through a host adapter.
+- The host-neutral authored-runtime crate lives in `crates/clay-jsx-runtime`, the egui bridge lives in `crates/clay-jsx-egui-bridge`, and the active example in `examples/runtime-jsx` feeds this layer through the bridge.
 
 ## Styling Layers
 

@@ -1,22 +1,22 @@
 use super::*;
 use crate::components::{
-    AudioPlayback, AudioPlaybackState, Button, ButtonGroup, ButtonVariant, Card, Checkbox,
-    CollabCursor, Collapsible, Color, Combobox, Command, CommandItem, ComponentUi, ComponentUiExt,
-    ContextMenu, ControlSize, DialogueHeader, DialogueModal, DragBoard, DragBoardItem,
-    DragBoardRegion, DropdownMenu, DropdownMenuAction, DropdownMenuEntry, EmojiSelector, Field,
-    FileTree, FileTreeNode, Hierarchy as HierarchyWidget, HierarchyNode as HierarchyWidgetNode,
-    Icon, IconToolbar, IconToolbarItem, Image, ImageTile, Kbd, Label, LabelTone, LabelWeight,
-    MenuBar, MenuBarItem, NumberInput, OpenWith, Pagination, Popover, Progress, Radio, RadioGroup,
-    RadioOption, Select, Sidebar, Skeleton, Slider, Spinner, Switch, TabOption, TextInput,
-    ToastIntent, ToastPlacement, Toolbar, Tooltip, Twemoji,
+    AudioPlayback, AudioPlaybackState, Button, ButtonGroup, ButtonLabelWeight, ButtonVariant, Card,
+    Checkbox, CollabCursor, Collapsible, Color, Combobox, Command, CommandItem, ComponentUi,
+    ComponentUiExt, ContextMenu, ControlSize, DialogueHeader, DialogueModal, DragBoard,
+    DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction, DropdownMenuEntry,
+    EmojiSelector, Field, FileTree, FileTreeNode, Hierarchy as HierarchyWidget,
+    HierarchyNode as HierarchyWidgetNode, Icon, IconToolbar, IconToolbarItem, Image, ImageTile,
+    Kbd, Label, LabelTone, LabelWeight, MenuBar, MenuBarItem, NumberInput, OpenWith, Pagination,
+    Popover, Progress, Radio, RadioGroup, RadioOption, Select, Sidebar, Skeleton, Slider, Spinner,
+    Switch, TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar, Tooltip, Twemoji,
 };
 use crate::layout::{
     column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify,
 };
 use crate::primitives::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
-use crate::ui::tokens;
-use egui::{Align, Align2, Color32, Id, Key, Layout, Order, Stroke, Vec2};
+use crate::ui::{tailwind, tokens};
+use egui::{Align, Align2, Color32, Id, Key, Layout, Margin, Order, Stroke, Vec2};
 use std::collections::{BTreeMap, BTreeSet};
 
 const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../assets/images/showcase-image.png");
@@ -83,39 +83,47 @@ impl FrameRenderer {
             return;
         }
 
-        // Common-field execution truth for Phase 9:
-        // - visible, enabled, and the supported subset of layout are executed here
-        // - class, class_list, slot_classes, and common.actions remain metadata-only
+        // Common-field execution truth:
+        // - visible, enabled, the supported subset of layout, and class/class_list are executed here
+        // - slot_classes and common.actions remain metadata-only
         ignore_metadata_only_common_fields(common);
 
+        let class_spec = class_spec(common);
+        let layout = effective_layout(common, class_spec.as_ref());
+
         if common.enabled {
-            with_layout_scope(ui, common.layout.as_ref(), |ui| {
-                self.render_node_inner(ui, node);
+            with_layout_scope(ui, layout.as_ref(), |ui| {
+                self.render_node_inner(ui, node, class_spec.as_ref());
             });
         } else {
             ui.ui_mut().add_enabled_ui(false, |ui| {
                 let mut ui = ui.components();
-                with_layout_scope(&mut ui, common.layout.as_ref(), |ui| {
-                    self.render_node_inner(ui, node);
+                with_layout_scope(&mut ui, layout.as_ref(), |ui| {
+                    self.render_node_inner(ui, node, class_spec.as_ref());
                 });
             });
         }
     }
 
-    fn render_node_inner(&mut self, ui: &mut ComponentUi<'_>, node: &ContractNode) {
+    fn render_node_inner(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        node: &ContractNode,
+        class_spec: Option<&tailwind::Spec>,
+    ) {
         match node {
             ContractNode::Row(props) => self.render_row(ui, props),
             ContractNode::Column(props) => self.render_column(ui, props),
             ContractNode::Inset(props) => self.render_inset(ui, props),
             ContractNode::SizedBox(props) => self.render_sized_box(ui, props),
             ContractNode::Spacer(props) => self.render_spacer(ui, props),
-            ContractNode::Card(props) => self.render_card(ui, props),
+            ContractNode::Card(props) => self.render_card(ui, props, class_spec),
             ContractNode::Sidebar(props) => self.render_sidebar(ui, props),
             ContractNode::Toolbar(props) => self.render_toolbar(ui, props),
             ContractNode::MenuBar(props) => self.render_menu_bar(ui, props),
             ContractNode::Tabs(props) => self.render_tabs(ui, props),
-            ContractNode::Label(props) => self.render_label(ui, props),
-            ContractNode::Button(props) => self.render_button(ui, props),
+            ContractNode::Label(props) => self.render_label(ui, props, class_spec),
+            ContractNode::Button(props) => self.render_button(ui, props, class_spec),
             ContractNode::ButtonGroup(props) => self.render_button_group(ui, props),
             ContractNode::Input(props) => self.render_input(ui, props),
             ContractNode::NumberInput(props) => self.render_number_input(ui, props),
@@ -251,21 +259,35 @@ impl FrameRenderer {
         let _ = ui.allocate_exact_size(size, egui::Sense::hover());
     }
 
-    fn render_card(&mut self, ui: &mut ComponentUi<'_>, props: &crate::contract::ContractCard) {
-        let _ = ui.card(
-            Card::new().padding(props.padding_x as i8, props.padding_y as i8),
-            |ui| {
-                render_container_children(
-                    ui,
-                    &props.common,
-                    ContractDirection::Column,
-                    0.0,
-                    ContractJustify::Start,
-                    ContractAlign::Start,
-                    |ui| self.render_children(ui, &props.children),
-                );
-            },
-        );
+    fn render_card(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &crate::contract::ContractCard,
+        class_spec: Option<&tailwind::Spec>,
+    ) {
+        let mut card = Card::new().padding(props.padding_x as i8, props.padding_y as i8);
+        let runtime = crate::theme::runtime_for_ui(ui.raw());
+        if let Some(fill) = class_background_color(class_spec, runtime) {
+            card = card.fill(fill);
+        }
+        if let Some(stroke) = class_border_stroke(class_spec, runtime) {
+            card = card.stroke(stroke);
+        }
+        if let Some(corner_radius) = class_corner_radius(class_spec) {
+            card = card.corner_radius(corner_radius);
+        }
+
+        let _ = ui.card(card, |ui| {
+            render_container_children(
+                ui,
+                &props.common,
+                ContractDirection::Column,
+                0.0,
+                ContractJustify::Start,
+                ContractAlign::Start,
+                |ui| self.render_children(ui, &props.children),
+            );
+        });
     }
 
     fn render_sidebar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSidebar) {
@@ -385,8 +407,29 @@ impl FrameRenderer {
         }
     }
 
-    fn render_label(&mut self, ui: &mut ComponentUi<'_>, props: &crate::contract::ContractLabel) {
+    fn render_label(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &crate::contract::ContractLabel,
+        class_spec: Option<&tailwind::Spec>,
+    ) {
         let mut label = Label::new(props.text.as_str());
+        let runtime = crate::theme::runtime_for_ui(ui.raw());
+        if props.tone.is_none() {
+            if let Some(color) = class_text_color(class_spec, runtime) {
+                label = label.color(color);
+            }
+        }
+        if props.weight.is_none() {
+            if let Some(weight) = class_label_weight(class_spec) {
+                label = label.weight(weight);
+            }
+        }
+        if props.size.is_none() {
+            if let Some(size) = class_text_size(class_spec) {
+                label = label.size(size);
+            }
+        }
         if let Some(tone) = props.tone {
             label = label.tone(tone);
         }
@@ -402,7 +445,12 @@ impl FrameRenderer {
         let _ = ui.label(label);
     }
 
-    fn render_button(&mut self, ui: &mut ComponentUi<'_>, props: &ContractButton) {
+    fn render_button(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &ContractButton,
+        class_spec: Option<&tailwind::Spec>,
+    ) {
         let mut button = if props.icon_only {
             if let Some(icon) = props.leading_icon.as_deref() {
                 Button::icon_only(icon)
@@ -412,6 +460,14 @@ impl FrameRenderer {
         } else {
             Button::new(props.label.as_str())
         };
+
+        let runtime = crate::theme::runtime_for_ui(ui.raw());
+        if let Some(label_color) = class_text_color(class_spec, runtime) {
+            button = button.label_color(label_color);
+        }
+        if let Some(label_weight) = class_button_label_weight(class_spec) {
+            button = button.label_weight(label_weight);
+        }
 
         if let Some(variant) = props.variant {
             button = button.variant(variant);
@@ -1672,6 +1728,197 @@ impl FrameRenderer {
     }
 }
 
+fn class_spec(common: &ContractCommon) -> Option<tailwind::Spec> {
+    let mut classes = String::new();
+    if let Some(class) = common.class.as_deref() {
+        classes.push_str(class);
+    }
+    for class in &common.class_list {
+        if !classes.is_empty() {
+            classes.push(' ');
+        }
+        classes.push_str(class);
+    }
+    let classes = classes.trim();
+    (!classes.is_empty()).then(|| tailwind::parse(classes))
+}
+
+fn effective_layout(
+    common: &ContractCommon,
+    class_spec: Option<&tailwind::Spec>,
+) -> Option<ContractLayout> {
+    let mut layout = common.layout.clone().unwrap_or_default();
+    let mut changed = common.layout.is_some();
+
+    if let Some(spec) = class_spec {
+        if layout.width.is_none() {
+            if let Some(width) = spec.width.and_then(class_width) {
+                layout.width = Some(width);
+                changed = true;
+            }
+        }
+        if layout.height.is_none() {
+            if let Some(height) = spec.height.and_then(class_height) {
+                layout.height = Some(height);
+                changed = true;
+            }
+        }
+        if layout.padding.is_none() {
+            if let Some(padding) = class_padding_edges(spec.padding) {
+                layout.padding = Some(padding);
+                changed = true;
+            }
+        }
+        if layout.margin.is_none() {
+            if let Some(margin) = class_margin_edges(spec.margin) {
+                layout.margin = Some(margin);
+                changed = true;
+            }
+        }
+    }
+
+    changed.then_some(layout)
+}
+
+fn class_width(width: tailwind::Width) -> Option<ContractLength> {
+    Some(match width {
+        tailwind::Width::Full => ContractLength::Percent { value: 1.0 },
+        tailwind::Width::Pixels(value) => ContractLength::Px { value },
+        tailwind::Width::Percent(value) => ContractLength::Percent { value },
+    })
+}
+
+fn class_height(height: tailwind::Height) -> Option<ContractLength> {
+    Some(match height {
+        tailwind::Height::Full => ContractLength::Percent { value: 1.0 },
+        tailwind::Height::Pixels(value) => ContractLength::Px { value },
+        tailwind::Height::Percent(value) => ContractLength::Percent { value },
+    })
+}
+
+fn class_padding_edges(
+    edges: tailwind::SideValues<tailwind::PaddingValue>,
+) -> Option<ContractEdges> {
+    if !edges.any() {
+        return None;
+    }
+    Some(ContractEdges {
+        top: class_padding_value(edges.top),
+        right: class_padding_value(edges.right),
+        bottom: class_padding_value(edges.bottom),
+        left: class_padding_value(edges.left),
+    })
+}
+
+fn class_padding_value(value: Option<tailwind::PaddingValue>) -> f32 {
+    match value {
+        Some(tailwind::PaddingValue::Pixels(value)) => value.max(0.0),
+        Some(tailwind::PaddingValue::Percent(_)) | None => 0.0,
+    }
+}
+
+fn class_margin_edges(edges: tailwind::SideValues<f32>) -> Option<ContractEdges> {
+    if !edges.any() {
+        return None;
+    }
+    Some(ContractEdges {
+        top: edges.top.unwrap_or(0.0).max(0.0),
+        right: edges.right.unwrap_or(0.0).max(0.0),
+        bottom: edges.bottom.unwrap_or(0.0).max(0.0),
+        left: edges.left.unwrap_or(0.0).max(0.0),
+    })
+}
+
+fn class_text_color(
+    class_spec: Option<&tailwind::Spec>,
+    runtime: crate::theme::ThemeRuntime,
+) -> Option<Color32> {
+    class_spec
+        .and_then(|spec| spec.text)
+        .map(|color| tailwind::resolve_color(&runtime, color))
+}
+
+fn class_background_color(
+    class_spec: Option<&tailwind::Spec>,
+    runtime: crate::theme::ThemeRuntime,
+) -> Option<Color32> {
+    match class_spec.and_then(|spec| spec.background) {
+        Some(tailwind::UiRuntimeBackground::Solid(color)) => {
+            Some(tailwind::resolve_color(&runtime, color))
+        }
+        None => None,
+    }
+}
+
+fn class_border_stroke(
+    class_spec: Option<&tailwind::Spec>,
+    runtime: crate::theme::ThemeRuntime,
+) -> Option<Stroke> {
+    let spec = class_spec?;
+    let width = class_border_width(spec).or_else(|| spec.border_color.map(|_| 1.0))?;
+    let color = spec
+        .border_color
+        .map(|color| tailwind::resolve_color(&runtime, color))
+        .unwrap_or_else(|| tokens::separator(runtime));
+    Some(Stroke::new(width.max(0.0), color))
+}
+
+fn class_border_width(spec: &tailwind::Spec) -> Option<f32> {
+    [
+        spec.border.top,
+        spec.border.right,
+        spec.border.bottom,
+        spec.border.left,
+    ]
+    .into_iter()
+    .flatten()
+    .reduce(f32::max)
+}
+
+fn class_corner_radius(class_spec: Option<&tailwind::Spec>) -> Option<u8> {
+    class_spec
+        .and_then(|spec| spec.corner_radius)
+        .map(|radius| radius.round().clamp(0.0, 255.0) as u8)
+}
+
+fn class_label_weight(class_spec: Option<&tailwind::Spec>) -> Option<LabelWeight> {
+    match class_spec.and_then(|spec| spec.font_weight) {
+        Some(tailwind::FontWeight::Regular) => Some(LabelWeight::Regular),
+        Some(tailwind::FontWeight::Medium | tailwind::FontWeight::Semibold) => {
+            Some(LabelWeight::Semibold)
+        }
+        Some(tailwind::FontWeight::Bold) => Some(LabelWeight::Bold),
+        None => None,
+    }
+}
+
+fn class_button_label_weight(class_spec: Option<&tailwind::Spec>) -> Option<ButtonLabelWeight> {
+    match class_spec.and_then(|spec| spec.font_weight) {
+        Some(tailwind::FontWeight::Regular) => Some(ButtonLabelWeight::Regular),
+        Some(tailwind::FontWeight::Medium | tailwind::FontWeight::Semibold) => {
+            Some(ButtonLabelWeight::Medium)
+        }
+        Some(tailwind::FontWeight::Bold) => Some(ButtonLabelWeight::Bold),
+        None => None,
+    }
+}
+
+fn class_text_size(class_spec: Option<&tailwind::Spec>) -> Option<f32> {
+    let spec = class_spec?;
+    if let Some(scale) = spec.font_scale {
+        return Some((12.0 * scale).max(1.0));
+    }
+    spec.text_size.map(|size| match size {
+        tailwind::TextSize::Xs => 12.0,
+        tailwind::TextSize::Sm => 14.0,
+        tailwind::TextSize::Base => 16.0,
+        tailwind::TextSize::Lg => 18.0,
+        tailwind::TextSize::Xl => 20.0,
+        tailwind::TextSize::X2l => 24.0,
+        tailwind::TextSize::X3l => 30.0,
+    })
+}
+
 fn with_layout_scope<R>(
     ui: &mut ComponentUi<'_>,
     layout: Option<&ContractLayout>,
@@ -1683,11 +1930,46 @@ fn with_layout_scope<R>(
 
     ui.ui_mut()
         .scope(|ui| {
-            apply_layout_sizing(ui, layout);
-            let mut components = ui.components();
-            add(&mut components)
+            let render = |ui: &mut egui::Ui| {
+                apply_layout_sizing(ui, layout);
+                let mut components = ui.components();
+                add(&mut components)
+            };
+            if let Some(frame) = layout_frame(layout) {
+                frame.show(ui, render).inner
+            } else {
+                render(ui)
+            }
         })
         .inner
+}
+
+fn layout_frame(layout: Option<&ContractLayout>) -> Option<egui::Frame> {
+    let layout = layout?;
+    if layout.padding.is_none() && layout.margin.is_none() {
+        return None;
+    }
+    let mut frame = egui::Frame::new();
+    if let Some(padding) = layout.padding {
+        frame = frame.inner_margin(edges_to_margin(padding));
+    }
+    if let Some(margin) = layout.margin {
+        frame = frame.outer_margin(edges_to_margin(margin));
+    }
+    Some(frame)
+}
+
+fn edges_to_margin(edges: ContractEdges) -> Margin {
+    Margin {
+        left: edge_to_i8(edges.left),
+        right: edge_to_i8(edges.right),
+        top: edge_to_i8(edges.top),
+        bottom: edge_to_i8(edges.bottom),
+    }
+}
+
+fn edge_to_i8(value: f32) -> i8 {
+    value.round().clamp(0.0, i8::MAX as f32) as i8
 }
 
 fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>) {
@@ -1761,12 +2043,7 @@ fn render_container_children(
 }
 
 fn ignore_metadata_only_common_fields(common: &ContractCommon) {
-    let _ = (
-        &common.class,
-        &common.class_list,
-        &common.slot_classes,
-        &common.actions,
-    );
+    let _ = (&common.slot_classes, &common.actions);
 }
 
 fn container_layout_plan(
@@ -2232,18 +2509,20 @@ fn contract_toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> e
 #[cfg(test)]
 mod tests {
     use super::{
-        container_layout_plan, contract_toast_shadow, render_tree, should_emit_dialogue_closed,
+        class_background_color, class_label_weight, class_spec, class_text_color, class_text_size,
+        container_layout_plan, contract_toast_shadow, effective_layout, render_tree,
+        should_emit_dialogue_closed,
     };
-    use crate::components::ToastIntent;
+    use crate::components::{LabelWeight, ToastIntent};
     use crate::contract::{
         ContractActions, ContractAlign, ContractButton, ContractCommon, ContractDirection,
-        ContractDisplay, ContractEdges, ContractJustify, ContractLayout, ContractLength,
-        ContractNode, ContractToastItem, ContractToastViewport, ContractTrack, ContractTree,
-        EventKind,
+        ContractDisplay, ContractEdges, ContractJustify, ContractLabel, ContractLayout,
+        ContractLength, ContractNode, ContractToastItem, ContractToastViewport, ContractTrack,
+        ContractTree, EventKind,
     };
-    use crate::theme::{self, ThemeMode, ThemeSpec};
+    use crate::theme::{self, ColorRole, ThemeMode, ThemeSpec};
     use crate::ui::tokens;
-    use egui::{pos2, CentralPanel, Context, Event, Modifiers, PointerButton, RawInput};
+    use egui::{pos2, CentralPanel, Context, Event, Modifiers, PointerButton, RawInput, Shape};
     use std::collections::BTreeMap;
 
     fn run_frame(
@@ -2428,8 +2707,9 @@ mod tests {
     }
 
     #[test]
-    fn common_actions_and_classes_remain_metadata_only() {
+    fn common_actions_and_slot_classes_remain_metadata_only() {
         let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
         let mut slot_classes = BTreeMap::new();
         slot_classes.insert(String::from("icon"), String::from("text-lg"));
 
@@ -2501,6 +2781,169 @@ mod tests {
     }
 
     #[test]
+    fn class_name_styles_flow_into_label_rendering_when_props_are_absent() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+
+        let mut common = ContractCommon::new("styled-label");
+        common.class = Some(String::from("text-lg font-bold text-destructive"));
+        let tree = ContractTree::new(ContractNode::Label(ContractLabel {
+            common,
+            text: "Styled label".to_owned(),
+            tone: None,
+            weight: None,
+            size: None,
+            truncate: false,
+        }));
+
+        let frame_output = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = render_tree(ui, &tree);
+            });
+        });
+
+        let text_shape = find_text_shape(&frame_output.shapes, "Styled label")
+            .expect("styled label text shape should render");
+        let format = text_shape
+            .galley
+            .job
+            .sections
+            .first()
+            .expect("styled label should have a text section")
+            .format
+            .clone();
+        let runtime = theme::runtime_for_context(&context);
+        assert_eq!(format.font_id.size, 18.0);
+        assert_eq!(
+            format.font_id.family,
+            egui::FontFamily::Name(crate::ui::typography::BOLD_FAMILY.into())
+        );
+        assert_eq!(
+            format.color,
+            theme::resolved_color(runtime, ColorRole::Destructive)
+        );
+    }
+
+    #[test]
+    fn class_list_merges_after_class_and_explicit_label_props_win() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+
+        let mut common = ContractCommon::new("styled-label");
+        common.class = Some(String::from("text-sm font-normal text-muted-foreground"));
+        common.class_list = vec![
+            String::from("text-xl"),
+            String::from("font-bold"),
+            String::from("text-destructive"),
+        ];
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(class_text_size(Some(&spec)), Some(20.0));
+        assert_eq!(class_label_weight(Some(&spec)), Some(LabelWeight::Bold));
+        assert_eq!(
+            class_text_color(Some(&spec), runtime),
+            Some(theme::resolved_color(runtime, ColorRole::Destructive))
+        );
+
+        let tree = ContractTree::new(ContractNode::Label(ContractLabel {
+            common,
+            text: "Explicit label".to_owned(),
+            tone: Some(crate::components::LabelTone::Muted),
+            weight: Some(LabelWeight::Regular),
+            size: Some(11.0),
+            truncate: false,
+        }));
+
+        let frame_output = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = render_tree(ui, &tree);
+            });
+        });
+
+        let text_shape = find_text_shape(&frame_output.shapes, "Explicit label")
+            .expect("explicit label text shape should render");
+        let format = text_shape
+            .galley
+            .job
+            .sections
+            .first()
+            .expect("explicit label should have a text section")
+            .format
+            .clone();
+        assert_eq!(format.font_id.size, 11.0);
+        assert_eq!(format.font_id.family, egui::FontFamily::Proportional);
+        assert_eq!(format.color, tokens::text_muted(runtime));
+    }
+
+    #[test]
+    fn class_name_layout_merges_only_when_explicit_layout_is_absent() {
+        let mut common = ContractCommon::new("layout.node");
+        common.class = Some(String::from("w-[50%] h-[25%] p-2 m-1"));
+
+        let spec = class_spec(&common).expect("class spec should parse");
+        let layout = effective_layout(&common, Some(&spec)).expect("class layout");
+        assert_eq!(layout.width, Some(ContractLength::Percent { value: 0.5 }));
+        assert_eq!(layout.height, Some(ContractLength::Percent { value: 0.25 }));
+        assert_eq!(
+            layout.padding,
+            Some(ContractEdges {
+                top: 8.0,
+                right: 8.0,
+                bottom: 8.0,
+                left: 8.0,
+            })
+        );
+        assert_eq!(
+            layout.margin,
+            Some(ContractEdges {
+                top: 4.0,
+                right: 4.0,
+                bottom: 4.0,
+                left: 4.0,
+            })
+        );
+
+        common.layout = Some(ContractLayout {
+            width: Some(ContractLength::Px { value: 99.0 }),
+            padding: Some(ContractEdges {
+                top: 1.0,
+                right: 2.0,
+                bottom: 3.0,
+                left: 4.0,
+            }),
+            ..ContractLayout::default()
+        });
+        let layout = effective_layout(&common, Some(&spec)).expect("merged layout");
+        assert_eq!(layout.width, Some(ContractLength::Px { value: 99.0 }));
+        assert_eq!(
+            layout.padding,
+            Some(ContractEdges {
+                top: 1.0,
+                right: 2.0,
+                bottom: 3.0,
+                left: 4.0,
+            })
+        );
+        assert_eq!(layout.height, Some(ContractLength::Percent { value: 0.25 }));
+    }
+
+    #[test]
+    fn card_class_background_resolves_theme_roles() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+        let mut common = ContractCommon::new("styled-card");
+        common.class = Some(String::from("bg-card"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_background_color(Some(&spec), runtime),
+            Some(theme::resolved_color(runtime, ColorRole::Card))
+        );
+    }
+
+    #[test]
     fn partial_layout_plan_applies_flow_container_overrides() {
         let mut common = ContractCommon::new("layout.node");
         common.layout = Some(ContractLayout {
@@ -2526,7 +2969,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_layout_fields_are_ignored_without_breaking_interaction() {
+    fn remaining_unsupported_layout_fields_are_ignored_without_breaking_interaction() {
         let context = Context::default();
         let tree = ContractTree::new(ContractNode::Button(ContractButton {
             common: ContractCommon {
@@ -2611,5 +3054,35 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::Clicked);
+    }
+
+    fn find_text_shape<'a>(
+        shapes: &'a [egui::epaint::ClippedShape],
+        text: &str,
+    ) -> Option<&'a egui::epaint::TextShape> {
+        for clipped_shape in shapes {
+            if let Some(shape) = find_text_shape_in_shape(&clipped_shape.shape, text) {
+                return Some(shape);
+            }
+        }
+        None
+    }
+
+    fn find_text_shape_in_shape<'a>(
+        shape: &'a Shape,
+        text: &str,
+    ) -> Option<&'a egui::epaint::TextShape> {
+        match shape {
+            Shape::Text(text_shape) if text_shape.galley.job.text == text => Some(text_shape),
+            Shape::Vec(shapes) => {
+                for nested_shape in shapes {
+                    if let Some(shape) = find_text_shape_in_shape(nested_shape, text) {
+                        return Some(shape);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 }

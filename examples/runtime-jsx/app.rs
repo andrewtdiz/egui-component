@@ -1,12 +1,12 @@
 use std::{path::PathBuf, time::SystemTime};
 
+use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionFrame};
 use egui::{CentralPanel, Context, ScrollArea, TopBottomPanel};
 use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree},
     prelude::*,
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
-use egui_component_runtime_jsx::{JsxRuntimeSession, MotionFrame};
 
 use super::default_entry_path;
 

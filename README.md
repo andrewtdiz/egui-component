@@ -15,7 +15,7 @@ The crate also ships an optional host-owned declarative layer for serialized or 
 Repo-local demos and showcase helpers live under `egui_component::demos::*`. The older
 `egui_component::example_apps::*` and `egui_component::catalog::*` module paths are deprecated shims.
 
-The reusable JSX/TSX host runtime lives under `crates/runtime-jsx/`. The repo-local `examples/runtime-jsx/` app keeps the `egui` frame loop in Rust, calls that runtime crate, evaluates JSX/TSX with `deno_core`/V8 via `deno_ast`, and renders the result through the optional `egui_component::contract::*` surface.
+The host-neutral JSX/TSX runtime lives under `crates/clay-jsx-runtime/`; the egui contract bridge lives under `crates/clay-jsx-egui-bridge/`. The repo-local `examples/runtime-jsx/` app keeps the `egui` frame loop in Rust, calls the bridge crate, evaluates JSX/TSX with `deno_core`/V8 via `deno_ast`, and renders the result through the optional `egui_component::contract::*` surface.
 
 ## Install
 
@@ -220,7 +220,7 @@ The repo currently ships these examples:
 
 - `showcase`: broad catalog view for the component library
 - `contract-showcase`: optional declarative editor surface driven entirely through `egui_component::contract::*`
-- `runtime-jsx-host`: embedded JSX/TSX runtime host using the `crates/runtime-jsx` `deno_core`/V8 runtime and the contract renderer
+- `runtime-jsx-host`: embedded JSX/TSX runtime host using the `crates/clay-jsx-egui-bridge` bridge on top of the `crates/clay-jsx-runtime` `deno_core`/V8 runtime and the contract renderer
 - `runtime-jsx-motion`: focused JSX/TSX motion sync demo for opacity, translation, scale, and rotation values driven by the runtime and drawn by egui
 - `runtime-egui-host`: legacy compatibility alias for `runtime-jsx-host`
 - `theme-playground`: live `ThemeSpec`, `ThemeMode`, `theme::set_theme`, `theme::set_mode`, and `theme::with_theme`
@@ -263,7 +263,7 @@ cargo run --example runtime-jsx-motion
 
 Replace `theme-playground` with `contract-showcase`.
 
-For live JSX edits, run `runtime-jsx-host` and edit `examples/runtime-jsx/app.jsx` on disk. For a focused motion sync surface, run `runtime-jsx-motion` and edit `examples/runtime-jsx/motion-sync.tsx`. The reusable runtime is the `egui-component-runtime-jsx` workspace crate under `crates/runtime-jsx`; JSX/TSX changes commit into a Rust-owned retained host tree before rendering through `ContractTree`. `runtime-egui-host` remains as a legacy alias for the same host.
+For live JSX edits, run `runtime-jsx-host` and edit `examples/runtime-jsx/app.jsx` on disk. For a focused motion sync surface, run `runtime-jsx-motion` and edit `examples/runtime-jsx/motion-sync.tsx`. The host-neutral runtime is `clay-jsx-runtime` under `crates/clay-jsx-runtime`; the egui retained host tree and `ContractTree` materialization live in `clay-jsx-egui-bridge` under `crates/clay-jsx-egui-bridge`. `runtime-egui-host` remains as a legacy alias for the same host.
 
 In hot mode the runner watches the repo, rebuilds `showcase`, and relaunches the example process on change.
 The window is restarted on each rebuild rather than patched in place.

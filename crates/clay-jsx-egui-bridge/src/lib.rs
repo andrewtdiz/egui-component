@@ -1,9 +1,14 @@
-pub mod diagnostics;
+#![doc = "egui-component contract bridge for clay-jsx-runtime TS/TSX hosts."]
+
 pub mod host_tree;
 pub mod motion;
 mod runtime;
 
-pub use diagnostics::{
+pub const EGUI_MODULE_SOURCE: &str = include_str!("mod.js");
+pub const EGUI_JSX_RUNTIME_SOURCE: &str = include_str!("runtime_api.js");
+pub const EGUI_MOTION_REACT_SOURCE: &str = include_str!("motion_api.js");
+
+pub use clay_jsx_runtime::{
     extend_logs, push_log, RuntimeLogBuffer, LOG_HISTORY_LIMIT, LOG_MESSAGE_LIMIT_BYTES,
 };
 pub use host_tree::{HostMutation, HostMutationBatch, HostTree};
@@ -119,11 +124,52 @@ render(<App />);
     }
 
     #[test]
-    fn repository_jsx_example_still_loads_through_the_runtime_crate() {
+    fn repository_jsx_example_still_loads_through_the_bridge_crate() {
         let (_session, rendered) = JsxRuntimeSession::load(&repository_example_path())
             .expect("repository JSX file should render");
         let tree = rendered.tree.expect("initial render should return a tree");
         assert_eq!(tree.root.family_id().as_str(), "column");
+    }
+
+    #[test]
+    fn class_name_and_class_list_materialize_into_contract_common_fields() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("classes.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+
+function StyledLabel() {
+  return (
+    <label
+      id="styled"
+      text="Styled"
+      className="text-lg font-bold text-destructive"
+      classList={["bg-card", "border-border"]}
+    />
+  );
+}
+
+render(<StyledLabel />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (_session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        let tree = rendered.tree.expect("initial render should return a tree");
+        let ContractNode::Label(label) = tree.root else {
+            panic!("expected label root");
+        };
+        assert_eq!(
+            label.common.class.as_deref(),
+            Some("text-lg font-bold text-destructive")
+        );
+        assert_eq!(
+            label.common.class_list,
+            vec!["bg-card".to_owned(), "border-border".to_owned()]
+        );
     }
 
     fn repository_example_path() -> PathBuf {

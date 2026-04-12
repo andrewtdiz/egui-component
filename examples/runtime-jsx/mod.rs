@@ -57,8 +57,8 @@ pub fn run_native(entry_path: PathBuf) -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::default_entry_path;
+    use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionFrame, MotionProperty};
     use egui_component::contract::{ContractEvent, ContractNode, EventKind, EventValue, NodeId};
-    use egui_component_runtime_jsx::{JsxRuntimeSession, MotionFrame, MotionProperty};
     use tempfile::tempdir;
 
     #[test]

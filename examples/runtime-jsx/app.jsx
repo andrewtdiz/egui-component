@@ -75,6 +75,7 @@ function Primitives() {
         <label text="Primary label" tone="primary" weight="semibold" />
         <label text="Secondary label" tone="secondary" />
         <label text="Muted helper text" tone="muted" />
+        <label text="ClassName label" className="text-destructive font-bold text-lg" />
       </row>
       <row gap={10} align="center">
         <icon name="bot" size={16} />

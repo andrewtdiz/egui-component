@@ -245,21 +245,19 @@ const NODE_COMMON_FIELDS: [ContractPropSpec; 8] = [
         false,
         "Whether interaction is enabled. Defaults to true.",
     ),
-    unsupported_prop(
+    supported_prop(
         "class",
         ContractPropTypeKind::String,
         None,
         false,
         "Optional primary class string.",
-        "Declared in the model and schema only. The current Rust renderer ignores class strings.",
     ),
-    unsupported_prop(
+    supported_prop(
         "class_list",
         ContractPropTypeKind::StringList,
         None,
         false,
         "Optional expanded class token list.",
-        "Declared in the model and schema only. The current Rust renderer ignores class lists.",
     ),
     unsupported_prop(
         "slot_classes",
@@ -283,7 +281,7 @@ const NODE_COMMON_FIELDS: [ContractPropSpec; 8] = [
         Some("layout"),
         false,
         "Optional shared layout hints.",
-        "The renderer applies sizing on every node and container direction/justify/align/gap overrides on flow containers only.",
+        "The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap overrides on flow containers only.",
     ),
 ];
 
@@ -453,21 +451,20 @@ const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
         "Optional vertical gap override.",
         "Only executed by the flow-container helpers used by row, column, inset, and card.",
     ),
-    unsupported_prop(
+    partial_prop(
         "padding",
         ContractPropTypeKind::Object,
         Some("layout_edges"),
         false,
         "Optional padding edges.",
-        "Declared in the schema only. Shared layout padding is not executed by the current renderer.",
+        "Executed as an egui frame inner margin on every node. Percent class-derived padding is ignored because egui margins are pixel based.",
     ),
-    unsupported_prop(
+    supported_prop(
         "margin",
         ContractPropTypeKind::Object,
         Some("layout_edges"),
         false,
         "Optional margin edges.",
-        "Declared in the schema only. Shared layout margins are not executed by the current renderer.",
     ),
     partial_prop(
         "align",
@@ -544,37 +541,37 @@ const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
 ];
 
 const LAYOUT_EDGES_FIELDS: [ContractPropSpec; 4] = [
-    unsupported_prop(
+    partial_prop(
         "top",
         ContractPropTypeKind::Number,
         None,
         false,
         "Top edge value.",
-        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+        "Executed for shared layout padding and margin. Values are rounded and clamped to egui's margin range.",
     ),
-    unsupported_prop(
+    partial_prop(
         "right",
         ContractPropTypeKind::Number,
         None,
         false,
         "Right edge value.",
-        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+        "Executed for shared layout padding and margin. Values are rounded and clamped to egui's margin range.",
     ),
-    unsupported_prop(
+    partial_prop(
         "bottom",
         ContractPropTypeKind::Number,
         None,
         false,
         "Bottom edge value.",
-        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+        "Executed for shared layout padding and margin. Values are rounded and clamped to egui's margin range.",
     ),
-    unsupported_prop(
+    partial_prop(
         "left",
         ContractPropTypeKind::Number,
         None,
         false,
         "Left edge value.",
-        "Edge-based shared layout padding and margin are declared but not executed by the current renderer.",
+        "Executed for shared layout padding and margin. Values are rounded and clamped to egui's margin range.",
     ),
 ];
 
@@ -2915,7 +2912,7 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         "Node Common",
         ContractSharedTypeKind::Object,
         "Common fields flattened into every node.",
-        "Visible, enabled, and part of layout are executed today. Class, slot, and common action fields are metadata-only.",
+        "Visible, enabled, class, class_list, and part of layout are executed today. Slot and common action fields are metadata-only.",
         &NODE_COMMON_FIELDS,
         &EMPTY_VARIANTS,
     ),
@@ -2933,16 +2930,16 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         "Layout",
         ContractSharedTypeKind::Object,
         "Shared layout hints available on every node.",
-        "Sizing is executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers.",
+        "Sizing, padding, and margin are executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers.",
         &LAYOUT_FIELDS,
         &EMPTY_VARIANTS,
     ),
-    unsupported_shared_type(
+    partial_shared_type(
         "layout_edges",
         "Layout Edges",
         ContractSharedTypeKind::Object,
         "Top, right, bottom, and left edge values for shared layout padding and margin.",
-        "Edge-based shared padding and margin are not executed by the current renderer.",
+        "Executed for padding and margin with egui margin rounding and clamping.",
         &LAYOUT_EDGES_FIELDS,
         &EMPTY_VARIANTS,
     ),
@@ -3064,7 +3061,7 @@ pub fn reference_markdown() -> String {
     let layout = shared_type("layout").expect("layout shared type");
 
     let mut markdown = String::from(
-        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Position In The Runtime\n\n`contract::*` is an optional host-driven declarative layer.\n\n- The `egui-component-runtime-jsx` crate in `crates/runtime-jsx` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.\n- `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.\n- Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.\n\n## Shared Node Fields\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
+        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Position In The Runtime\n\n`contract::*` is an optional host-driven declarative layer.\n\n- The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.\n- `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.\n- Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.\n\n## Shared Node Fields\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
     );
 
     for field in node_common.fields {
@@ -3310,6 +3307,13 @@ mod tests {
             ]
         );
         assert_eq!(node_common.support, ContractSupportStatus::Partial);
+
+        let class = node_common
+            .fields
+            .iter()
+            .find(|field| field.name == "class")
+            .expect("class field");
+        assert_eq!(class.support, ContractSupportStatus::Supported);
     }
 
     #[test]
@@ -3345,7 +3349,14 @@ mod tests {
             .iter()
             .find(|field| field.name == "padding")
             .expect("padding field");
-        assert_eq!(padding.support, ContractSupportStatus::Unsupported);
+        assert_eq!(padding.support, ContractSupportStatus::Partial);
+
+        let margin = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "margin")
+            .expect("margin field");
+        assert_eq!(margin.support, ContractSupportStatus::Supported);
 
         let columns = layout
             .fields
