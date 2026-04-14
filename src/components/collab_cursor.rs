@@ -229,7 +229,7 @@ mod tests {
     use super::{
         collab_cursor_svg, collab_cursor_uri, CollabCursor, CURSOR_FILL_PATH, CURSOR_TRANSFORM,
     };
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::ComponentUiExt;
     use crate::theme::{self, BaseColor, ThemeMode, ThemeSpec};
     use egui::{pos2, vec2, CentralPanel, Color32, Context, Id, RawInput, Rect};
 

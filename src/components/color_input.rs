@@ -34,7 +34,7 @@ fn draw_color_input(ui: &mut Ui, value: &mut Color32, props: ColorInput) -> Resp
 #[cfg(test)]
 mod tests {
     use super::ColorInput;
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::ComponentUiExt;
     use egui::{CentralPanel, Color32, Context, RawInput, Rect};
 
     #[test]

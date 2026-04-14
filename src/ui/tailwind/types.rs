@@ -54,6 +54,7 @@ pub(crate) enum AlignItems {
     Start,
     Center,
     End,
+    Stretch,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -101,6 +102,47 @@ pub(crate) enum Height {
     Full,
     Pixels(f32),
     Percent(f32),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct CornerRadii {
+    pub nw: Option<f32>,
+    pub ne: Option<f32>,
+    pub sw: Option<f32>,
+    pub se: Option<f32>,
+}
+
+impl CornerRadii {
+    pub fn any(self) -> bool {
+        self.nw.is_some() || self.ne.is_some() || self.sw.is_some() || self.se.is_some()
+    }
+
+    pub fn set_all(&mut self, radius: f32) {
+        self.nw = Some(radius);
+        self.ne = Some(radius);
+        self.sw = Some(radius);
+        self.se = Some(radius);
+    }
+
+    pub fn set_left(&mut self, radius: f32) {
+        self.nw = Some(radius);
+        self.sw = Some(radius);
+    }
+
+    pub fn set_right(&mut self, radius: f32) {
+        self.ne = Some(radius);
+        self.se = Some(radius);
+    }
+
+    pub fn set_top(&mut self, radius: f32) {
+        self.nw = Some(radius);
+        self.ne = Some(radius);
+    }
+
+    pub fn set_bottom(&mut self, radius: f32) {
+        self.sw = Some(radius);
+        self.se = Some(radius);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -170,6 +212,13 @@ pub(crate) enum FontWeight {
     Medium,
     Semibold,
     Bold,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum SurfaceShadow {
+    Sm,
+    Md,
+    Lg,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -351,6 +400,10 @@ pub(crate) struct Spec {
     pub flex_basis: Option<FlexBasis>,
     pub width: Option<Width>,
     pub height: Option<Height>,
+    pub min_width: Option<Width>,
+    pub min_height: Option<Height>,
+    pub max_width: Option<Width>,
+    pub max_height: Option<Height>,
     pub aspect_ratio: Option<f32>,
     pub aspect_dominant_axis: Option<AspectDominantAxis>,
     pub grid_cols: Option<usize>,
@@ -361,7 +414,7 @@ pub(crate) struct Spec {
     pub padding: SideValues<PaddingValue>,
     pub border: SideValues<f32>,
     pub border_color: Option<ColorRef>,
-    pub corner_radius: Option<f32>,
+    pub corner_radii: CornerRadii,
     pub top: Option<Inset>,
     pub right: Option<Inset>,
     pub bottom: Option<Inset>,
@@ -389,6 +442,7 @@ pub(crate) struct Spec {
     pub text_shadow: Option<TextShadow>,
     pub text: Option<ColorRef>,
     pub background: Option<UiRuntimeBackground>,
+    pub shadow: Option<SurfaceShadow>,
     pub opacity: Option<f32>,
     pub scale: Option<f32>,
     pub translate: Option<Translate>,
@@ -439,6 +493,10 @@ impl Default for Spec {
             flex_basis: None,
             width: None,
             height: None,
+            min_width: None,
+            min_height: None,
+            max_width: None,
+            max_height: None,
             aspect_ratio: None,
             aspect_dominant_axis: None,
             grid_cols: None,
@@ -449,7 +507,7 @@ impl Default for Spec {
             padding: SideValues::default(),
             border: SideValues::default(),
             border_color: None,
-            corner_radius: None,
+            corner_radii: CornerRadii::default(),
             top: None,
             right: None,
             bottom: None,
@@ -477,6 +535,7 @@ impl Default for Spec {
             text_shadow: None,
             text: None,
             background: None,
+            shadow: None,
             opacity: None,
             scale: None,
             translate: None,

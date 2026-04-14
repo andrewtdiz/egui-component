@@ -1,6 +1,6 @@
 # Contract Architecture
 
-`egui_component::contract::*` is the optional host-owned declarative layer for serialized and host-driven UI surfaces.
+`egui_component::contract::*` is the active declarative render boundary for the JSX runtime and the remaining host-driven compatibility surfaces.
 
 ## Design Goals
 
@@ -11,9 +11,9 @@
 
 ## Relationship To Authored Runtimes
 
-- `egui_component::contract::*` is an egui-side declarative surface that a host can drive from any authored runtime.
+- `egui_component::contract::*` is the egui-side declarative surface driven by the active JSX runtime.
 - The `clay-jsx-runtime` crate in `crates/clay-jsx-runtime` owns host-neutral V8 lifetime, module loading, JSX/TSX transpilation through `deno_ast`, and commit/log host ops. The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` owns incremental retained host-tree commits and egui contract materialization.
-- This layer only renders host-authored trees and returns semantic events; it does not own script state or dispatch.
+- This layer renders authored trees and returns semantic events; it does not own script state or dispatch.
 - The runtime lowers JSX into Rust-owned host nodes, materializes `ContractTree` for rendering, and keeps Rust as the egui renderer.
 
 ## Runtime Shape
@@ -21,7 +21,7 @@
 - `ContractTree` and `ContractNode` are serde-friendly owned data structures.
 - Every node carries a stable `node_id`, plus shared `visible`, `enabled`, `class`, `class_list`, `slot_classes`, `actions`, and `layout` scaffolding.
 - Interactive nodes expose stable string `action_id`s rather than callback handles.
-- `render_tree` and `render_component_tree` translate the declarative tree into the existing typed builders and return `Vec<ContractEvent>` for the current frame.
+- `render_tree` and `render_component_tree` translate the declarative tree into the internal Rust runtime components and return `Vec<ContractEvent>` for the current frame.
 - These functions are host adapter entry points, not scripting runtime entry points.
 
 ## State Ownership
@@ -47,7 +47,7 @@
 
 ## When To Add A Family
 
-- Add a family when the host needs a stable semantic surface that maps cleanly onto existing typed builders.
+- Add a family when the JSX runtime needs a stable semantic surface that maps cleanly onto existing internal runtime components.
 - Add a family when state can stay host-owned and the renderer can return meaningful semantic events without leaking immediate-mode internals.
 - Add a family when the Rust registry can describe the props, variants, and events clearly enough for schema-driven runtime bridges.
 

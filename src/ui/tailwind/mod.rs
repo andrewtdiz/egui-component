@@ -12,8 +12,9 @@ use crate::theme::{ColorRole, ThemeRuntime};
 #[cfg(test)]
 use types::ThemeColorRef;
 pub(crate) use types::{
-    pack_rgba, unpack_rgba, Color, ColorAsk, ColorRef, FontWeight, Height, PaddingValue,
-    SideValues, Spec, TextSize, ThemeStyle, UiRuntimeBackground, Width,
+    pack_rgba, unpack_rgba, AlignItems, Color, ColorAsk, ColorRef, Direction, FlexBasis, FlexWrap,
+    FontWeight, Height, JustifyContent, PaddingValue, SideValues, Spec, SurfaceShadow, TextSize,
+    ThemeStyle, UiRuntimeBackground, Width,
 };
 
 const SPEC_CACHE_MAX_ENTRIES: usize = 4096;
@@ -239,6 +240,10 @@ pub fn parse(classes: &str) -> Spec {
     }
 
     spec
+}
+
+pub(crate) fn token_spec(token: &str) -> Option<Spec> {
+    parse::token_spec(token)
 }
 
 #[cfg(test)]

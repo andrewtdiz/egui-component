@@ -1,21 +1,45 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, bail, Context as AnyhowContext};
 use clay_jsx_runtime::{JsxRuntimeOptions, RuntimeSession};
 use egui_component::contract::{
-    registry, ContractChildPolicy, ContractEvent, ContractNode, ContractTree,
-    CONTRACT_MODEL_VERSION,
+    audit_tailwind_support, registry, ContractChildPolicy, ContractEvent, ContractNode,
+    ContractTree, CONTRACT_MODEL_VERSION,
 };
 
 use super::host_tree::{HostMutationBatch, HostTree};
 use super::motion::MotionFrame;
 use crate::{EGUI_JSX_RUNTIME_SOURCE, EGUI_MODULE_SOURCE, EGUI_MOTION_REACT_SOURCE};
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HotReloadState {
+    #[serde(default)]
+    pub hook_state: BTreeMap<String, Vec<serde_json::Value>>,
+}
+
 #[derive(Debug)]
 pub struct RenderedJsx {
     pub tree: Option<ContractTree>,
     pub motion: MotionFrame,
     pub logs: clay_jsx_runtime::RuntimeLogBuffer,
+}
+
+#[derive(Debug)]
+pub struct JsxRuntimeLoadFailure {
+    pub dependency_paths: Vec<PathBuf>,
+    pub error: anyhow::Error,
+}
+
+#[derive(Debug)]
+pub enum JsxRuntimeLoadOutcome {
+    Loaded {
+        session: JsxRuntimeSession,
+        rendered: RenderedJsx,
+    },
+    Failed(JsxRuntimeLoadFailure),
 }
 
 pub struct JsxRuntimeSession {
@@ -35,18 +59,74 @@ impl std::fmt::Debug for JsxRuntimeSession {
 
 impl JsxRuntimeSession {
     pub fn load(entry_path: &Path) -> anyhow::Result<(Self, RenderedJsx)> {
-        let entry_path = absolute_path(entry_path)?;
-        let mut runtime = RuntimeSession::new(egui_runtime_options())?;
-        install_contract_metadata(&mut runtime)?;
-        runtime.load_main_module(&entry_path)?;
+        Self::load_with_hot_reload_state(entry_path, None)
+    }
+
+    pub fn load_with_hot_reload_state(
+        entry_path: &Path,
+        hot_reload_state: Option<&HotReloadState>,
+    ) -> anyhow::Result<(Self, RenderedJsx)> {
+        match Self::load_with_hot_reload_state_outcome(entry_path, hot_reload_state) {
+            JsxRuntimeLoadOutcome::Loaded { session, rendered } => Ok((session, rendered)),
+            JsxRuntimeLoadOutcome::Failed(failure) => Err(failure.error),
+        }
+    }
+
+    pub fn load_with_hot_reload_state_outcome(
+        entry_path: &Path,
+        hot_reload_state: Option<&HotReloadState>,
+    ) -> JsxRuntimeLoadOutcome {
+        let entry_path = match absolute_path(entry_path) {
+            Ok(entry_path) => entry_path,
+            Err(error) => {
+                return JsxRuntimeLoadOutcome::Failed(JsxRuntimeLoadFailure {
+                    dependency_paths: Vec::new(),
+                    error,
+                });
+            }
+        };
+        let mut runtime = match RuntimeSession::new(egui_runtime_options()) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                return JsxRuntimeLoadOutcome::Failed(JsxRuntimeLoadFailure {
+                    dependency_paths: Vec::new(),
+                    error,
+                });
+            }
+        };
+
+        if let Err(error) = install_contract_metadata(&mut runtime) {
+            return load_failure(runtime, error);
+        }
+        if let Err(error) = install_hot_reload_state(&mut runtime, hot_reload_state) {
+            return load_failure(runtime, error);
+        }
+        if let Err(error) = runtime.load_main_module(&entry_path) {
+            return load_failure(runtime, error);
+        }
 
         let mut session = Self {
             entry_path,
             host_tree: HostTree::default(),
             runtime,
         };
-        let rendered = session.take_rendered()?;
-        Ok((session, rendered))
+        match session.take_rendered() {
+            Ok(rendered) => JsxRuntimeLoadOutcome::Loaded { session, rendered },
+            Err(error) => load_failure(session.runtime, error),
+        }
+    }
+
+    pub fn capture_hot_reload_state(&mut self) -> anyhow::Result<HotReloadState> {
+        self.runtime
+            .execute_json_expression_as(
+                "[egui:capture-hot-reload-state]",
+                "globalThis.__eguiCaptureHotReloadState == null ? { hook_state: {} } : globalThis.__eguiCaptureHotReloadState()",
+            )
+            .map_err(|error| anyhow!("failed to capture egui hot reload state: {error}"))
+    }
+
+    pub fn dependency_paths(&self) -> Vec<PathBuf> {
+        self.runtime.loaded_module_paths()
     }
 
     pub fn dispatch_events(&mut self, events: &[ContractEvent]) -> anyhow::Result<RenderedJsx> {
@@ -74,7 +154,7 @@ impl JsxRuntimeSession {
     fn take_rendered(&mut self) -> anyhow::Result<RenderedJsx> {
         let update = self.runtime.take_update();
         let mutation_batches_json = update.commit_batches_json;
-        let logs = update.logs;
+        let mut logs = update.logs;
 
         if mutation_batches_json.is_empty() && !self.host_tree.has_root() {
             bail!("{} did not call render(<... />)", self.entry_path.display());
@@ -114,6 +194,7 @@ impl JsxRuntimeSession {
 
         let tree = self.host_tree.materialize()?;
         validate_contract_tree(&self.entry_path, &tree)?;
+        append_tailwind_diagnostics(&tree, &mut logs);
 
         Ok(RenderedJsx {
             tree: Some(tree),
@@ -140,6 +221,19 @@ fn install_contract_metadata(runtime: &mut RuntimeSession) -> anyhow::Result<()>
         .iter()
         .map(|family| family.id.as_str())
         .collect::<Vec<_>>();
+    let family_props = registry()
+        .iter()
+        .map(|family| {
+            (
+                family.id.as_str(),
+                family
+                    .props
+                    .iter()
+                    .map(|prop| prop.name)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let families_with_children = registry()
         .iter()
         .filter(|family| family.child_policy != ContractChildPolicy::None)
@@ -148,6 +242,7 @@ fn install_contract_metadata(runtime: &mut RuntimeSession) -> anyhow::Result<()>
     let metadata = serde_json::json!({
         "version": CONTRACT_MODEL_VERSION,
         "families": families,
+        "familyProps": family_props,
         "familiesWithChildren": families_with_children,
     });
     let source = format!(
@@ -157,6 +252,23 @@ fn install_contract_metadata(runtime: &mut RuntimeSession) -> anyhow::Result<()>
     runtime
         .execute_script("[egui:contract-metadata]", source)
         .map_err(|error| anyhow!("failed to install egui contract metadata: {error}"))?;
+    Ok(())
+}
+
+fn install_hot_reload_state(
+    runtime: &mut RuntimeSession,
+    hot_reload_state: Option<&HotReloadState>,
+) -> anyhow::Result<()> {
+    let Some(hot_reload_state) = hot_reload_state else {
+        return Ok(());
+    };
+    let source = format!(
+        "globalThis.__eguiHotReloadState = {};",
+        serde_json::to_string(hot_reload_state)?
+    );
+    runtime
+        .execute_script("[egui:hot-reload-state]", source)
+        .map_err(|error| anyhow!("failed to install egui hot reload state: {error}"))?;
     Ok(())
 }
 
@@ -258,12 +370,35 @@ fn validate_contract_children(entry_path: &Path, children: &[ContractNode]) -> a
     Ok(())
 }
 
-fn absolute_path(path: &Path) -> anyhow::Result<PathBuf> {
-    if path.is_absolute() {
-        Ok(path.to_path_buf())
-    } else {
-        Ok(std::env::current_dir()
-            .context("failed to resolve current directory")?
-            .join(path))
+fn append_tailwind_diagnostics(tree: &ContractTree, logs: &mut clay_jsx_runtime::RuntimeLogBuffer) {
+    for diagnostic in audit_tailwind_support(tree) {
+        clay_jsx_runtime::push_log(
+            logs,
+            format!(
+                "warn: Tailwind {} at node \"{}\" ({}) for token \"{}\"",
+                diagnostic.reason.as_str(),
+                diagnostic.node_id,
+                diagnostic.family,
+                diagnostic.token,
+            ),
+        );
     }
+}
+
+fn absolute_path(path: &Path) -> anyhow::Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .context("failed to resolve current directory")?
+            .join(path)
+    };
+    Ok(std::fs::canonicalize(&path).unwrap_or(path))
+}
+
+fn load_failure(runtime: RuntimeSession, error: anyhow::Error) -> JsxRuntimeLoadOutcome {
+    JsxRuntimeLoadOutcome::Failed(JsxRuntimeLoadFailure {
+        dependency_paths: runtime.loaded_module_paths(),
+        error,
+    })
 }

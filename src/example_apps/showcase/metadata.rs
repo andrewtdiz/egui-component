@@ -72,10 +72,7 @@ fn showcase_section(kind: ComponentKind) -> ShowcaseSection {
         ComponentKind::CanvaEditImage => ShowcaseSection::Canva,
         ComponentKind::CanvaPosition => ShowcaseSection::Canva,
         ComponentKind::CollabCursor
-        | ComponentKind::IconToolbar
         | ComponentKind::MenuBar
-        | ComponentKind::Toolbar
-        | ComponentKind::ImageTile
         | ComponentKind::DragBoard
         | ComponentKind::FileTree
         | ComponentKind::Hierarchy
@@ -99,9 +96,6 @@ pub(crate) fn preview_surface_width(kind: ComponentKind, available_width: f32) -
         ComponentKind::DragBoard => available_width.min(560.0),
         ComponentKind::FileTree => available_width.min(360.0),
         ComponentKind::Hierarchy => available_width.min(440.0),
-        ComponentKind::IconToolbar => available_width.min(560.0),
-        ComponentKind::OpenWith => available_width.min(320.0),
-        ComponentKind::Toolbar => available_width.min(920.0),
         ComponentKind::MenuBar => available_width.min(560.0),
         ComponentKind::Sidebar => available_width.min(820.0),
         ComponentKind::Toast => available_width.min(760.0),
@@ -115,18 +109,8 @@ pub(crate) fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Color => "Circular solid color swatches.",
         ComponentKind::Image => "PNG-backed raster image rendering.",
         ComponentKind::Icon => "Lucide icon rendering.",
-        ComponentKind::IconToolbar => {
-            "Icon-first toolbar with built-in selection state and automatically scaled icons."
-        }
-        ComponentKind::Twemoji => "Color emoji rendering from vendored Twemoji SVG assets.",
-        ComponentKind::EmojiSelector => {
-            "Button-triggered emoji picker with search, categories, and Twemoji rendering."
-        }
-        ComponentKind::Kbd => "Keyboard keycaps and shortcuts.",
         ComponentKind::Input => "Single-line text input.",
-        ComponentKind::Field => "Label + input + helper text.",
         ComponentKind::Button => "Text, icon, and link button variants.",
-        ComponentKind::ButtonGroup => "Attached action button group.",
         ComponentKind::CanvaBackgrounds => {
             "Canva-style background browser with search, swatches, and a tiled result grid."
         }
@@ -148,21 +132,15 @@ pub(crate) fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::NumberInput => "Numeric entry with drag axis support.",
         ComponentKind::Select => "Single-choice selection menu.",
         ComponentKind::Tabs => "Inline, segmented, stacked, and rail tabs.",
-        ComponentKind::Separator => "Lightweight content divider.",
         ComponentKind::Card => "Framed content surface.",
-        ComponentKind::Progress => "Determinate progress indicator.",
         ComponentKind::Radio => "Single-choice control for mutually exclusive selections.",
         ComponentKind::RadioGroup => "Vertical radio list with optional descriptions.",
         ComponentKind::Popover => "Click-triggered interactive popup surface.",
         ComponentKind::Tooltip => "Hover-triggered helper content.",
         ComponentKind::DropdownMenu => "Actions, shortcuts, separators, and nested menus.",
-        ComponentKind::OpenWith => {
-            "Split editor picker with the current app on the left and a caret dropdown on the right."
-        }
         ComponentKind::ContextMenu => {
             "Right-click menu surface built on egui's built-in context popup behavior."
         }
-        ComponentKind::Collapsible => "Expandable content section.",
         ComponentKind::AudioPlayback => "Playback row with optional trailing actions.",
         ComponentKind::Combobox => "Filterable multi-select picker with checkbox menu rows.",
         ComponentKind::Command => "Searchable command list with preview mode.",
@@ -176,14 +154,9 @@ pub(crate) fn showcase_description(kind: ComponentKind) -> &'static str {
         ComponentKind::Hierarchy => {
             "Game-style hierarchy tree with selection, subtree highlighting, and cross-parent drag reparenting."
         }
-        ComponentKind::ImageTile => "Media tile with body and playback states.",
         ComponentKind::MenuBar => "Desktop-style menu bar surface.",
         ComponentKind::Sidebar => "Overlay sidebar previewed inside a host surface.",
-        ComponentKind::Skeleton => "Animated placeholder blocks for loading layouts.",
-        ComponentKind::Spinner => "Indeterminate loading spinner.",
         ComponentKind::Toast => "Stacked toast notifications with configurable placement.",
-        ComponentKind::Toolbar => "Floating tool cluster anchored in a canvas.",
-        ComponentKind::Pagination => "Previous/next pager with page numbers.",
     }
 }
 
@@ -256,9 +229,6 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.toolbar_color_index = state
         .toolbar_color_index
         .min(TOOLBAR_SWATCHES.len().saturating_sub(1));
-    state.icon_toolbar_selected_index = state
-        .icon_toolbar_selected_index
-        .min(ICON_TOOLBAR_ITEMS.len().saturating_sub(1));
     state.collab_cursor_preview_position.x = state.collab_cursor_preview_position.x.clamp(0.0, 1.0);
     state.collab_cursor_preview_position.y = state.collab_cursor_preview_position.y.clamp(0.0, 1.0);
     state.canva_position_tab_index = state
@@ -287,7 +257,6 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.rail_tab_index = state
         .rail_tab_index
         .min(RAIL_TAB_OPTIONS.len().saturating_sub(1));
-    state.pagination_page = state.pagination_page.clamp(1, PAGINATION_PAGE_COUNT);
     state.slider_value = state.slider_value.clamp(0.0, 100.0);
     state.number_x_value = state.number_x_value.clamp(0.0, 100.0);
     state.number_y_value = state.number_y_value.clamp(0.0, 100.0);
@@ -296,7 +265,6 @@ fn clamp_state(state: &mut ShowcaseApp) {
     state.canva_x_value = state.canva_x_value.clamp(-4_000.0, 4_000.0);
     state.canva_y_value = state.canva_y_value.clamp(-4_000.0, 4_000.0);
     state.canva_rotate_value = state.canva_rotate_value.clamp(-360.0, 360.0);
-    state.progress_value = state.progress_value.clamp(0.0, 1.0);
     state.sidebar_side_index = state
         .sidebar_side_index
         .min(SIDEBAR_SIDE_OPTIONS.len().saturating_sub(1));

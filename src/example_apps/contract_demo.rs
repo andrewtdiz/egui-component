@@ -1,17 +1,18 @@
-use crate::components::{
-    AudioPlaybackState, ButtonVariant, Card, ComponentUiExt, ControlSize, DialogueIntent,
-    DragBoardRegion, FileTreeItemKind, HierarchyItemKind, ImageTilePlaybackState, ImageTileSize,
-    Label, LabelTone, LabelWeight, PopoverAlign, PopoverSide, SelectVariant, ToastIntent,
-    ToastPlacement, TooltipPlacement,
-};
 use crate::contract::*;
 use crate::internal_taffy::{
     taffy,
     taffy::prelude::{auto, length, percent},
     tui, TuiBuilderLogic,
 };
+use crate::primitives::{surface_frame, ScrollAreaExt, SurfaceFrame};
+use crate::runtime_components::{
+    AudioPlaybackState, ButtonVariant, ComponentUiExt, ControlSize, DialogueIntent,
+    DragBoardRegion, FileTreeItemKind, HierarchyItemKind, Label, LabelTone, LabelWeight,
+    PopoverAlign, PopoverSide, SelectVariant, ToastIntent, ToastPlacement, TooltipPlacement,
+};
 use crate::theme::{self, BaseColor, ThemeMode, ThemeSpec};
-use egui::{CentralPanel, ScrollArea, Ui};
+use crate::ui::tokens;
+use egui::{CentralPanel, ScrollArea, Stroke, Ui};
 use std::collections::BTreeSet;
 
 pub const WINDOW_TITLE: &str = "egui-component Contract Demo";
@@ -75,6 +76,27 @@ impl Default for ContractDemoApp {
 
 pub fn install_context(ctx: &egui::Context) {
     theme::install(ctx, ThemeSpec::preset(BaseColor::Slate), ThemeMode::System);
+}
+
+fn demo_card<R>(
+    ui: &mut Ui,
+    fill: Option<egui::Color32>,
+    stroke: Option<Stroke>,
+    padding_x: i8,
+    padding_y: i8,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let runtime = theme::runtime_for_ui(ui);
+    surface_frame(
+        ui,
+        SurfaceFrame::new(
+            fill.unwrap_or(tokens::muted_surface(runtime)),
+            stroke.unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
+        )
+        .corner_radius(tokens::radius_lg(runtime))
+        .padding(padding_x, padding_y),
+        add,
+    )
 }
 
 pub fn update(app: &mut ContractDemoApp, ctx: &egui::Context) {
@@ -178,7 +200,7 @@ fn render_demo_shell(
 
 fn render_demo_header(app: &ContractDemoApp, ui: &mut Ui) {
     ui.set_width(ui.available_width().max(1.0));
-    ui.components().card(Card::new().padding(18, 16), |ui| {
+    let _ = demo_card(ui, None, None, 18, 16, |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
                 Label::new("Optional Contract Layer")
@@ -211,7 +233,7 @@ fn render_demo_header(app: &ContractDemoApp, ui: &mut Ui) {
 
 fn render_demo_main(ui: &mut Ui, tree: &ContractTree, events: &mut Vec<ContractEvent>) {
     ui.set_width(ui.available_width().max(1.0));
-    ui.components().card(Card::new().padding(16, 16), |ui| {
+    let _ = demo_card(ui, None, None, 16, 16, |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
                 Label::new("Optional Contract Surface")
@@ -226,7 +248,7 @@ fn render_demo_main(ui: &mut Ui, tree: &ContractTree, events: &mut Vec<ContractE
             );
 
             ui.add_space(12.0);
-            ScrollArea::vertical()
+            ScrollArea::vertical().no_drag_to_scroll()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     *events = render_tree(ui, tree);
@@ -237,7 +259,7 @@ fn render_demo_main(ui: &mut Ui, tree: &ContractTree, events: &mut Vec<ContractE
 
 fn render_demo_sidebar(app: &ContractDemoApp, ui: &mut Ui) {
     ui.set_width(ui.available_width().max(1.0));
-    ui.components().card(Card::new().padding(16, 16), |ui| {
+    let _ = demo_card(ui, None, None, 16, 16, |ui| {
         ui.vertical(|ui| {
             let _ = ui.components().label(
                 Label::new("Contract Mode Summary")
@@ -268,7 +290,7 @@ fn render_demo_sidebar(app: &ContractDemoApp, ui: &mut Ui) {
             render_state_row(ui, "Families", registry().len().to_string());
 
             ui.add_space(12.0);
-            let _ = ui.components().separator();
+            let _ = ui.separator();
             ui.add_space(12.0);
             let _ = ui.components().label(
                 Label::new("Recent events")
@@ -606,7 +628,7 @@ impl ContractDemoApp {
                 ContractNode::Sidebar(ContractSidebar {
                     common: common("contract-demo.sidebar"),
                     title: Some("Workspace Summary".to_owned()),
-                    side: crate::components::SidebarSide::Right,
+                    side: crate::runtime_components::SidebarSide::Right,
                     width: 320.0,
                     open: self.sidebar_open,
                     children: vec![
@@ -667,7 +689,7 @@ impl ContractDemoApp {
                         ),
                         muted_node(
                             "contract-demo.dialogue.body",
-                            "Clay can rebuild this tree from Luau every frame while Rust keeps the authoritative state and event handling."
+                            "Clay can rebuild this tree from a declarative contract every frame while Rust keeps the authoritative state and event handling."
                                 .to_owned(),
                         ),
                     ],

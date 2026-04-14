@@ -82,7 +82,7 @@ impl eframe::App for ThemePlaygroundApp {
 
         CentralPanel::default().show(ctx, |ui| {
             let ctx = ui.ctx().clone();
-            ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ScrollArea::vertical().no_drag_to_scroll().auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_min_width(1180.0);
                 ui.add_space(12.0);
 

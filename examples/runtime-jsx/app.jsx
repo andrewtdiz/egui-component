@@ -1,4 +1,50 @@
 import { eventValue, log, render, useState } from "egui";
+import {
+  AudioPlayback,
+  Button,
+  Card,
+  Checkbox,
+  CollabCursor,
+  Collapsible,
+  Color,
+  Combobox,
+  Command,
+  ContextMenu,
+  DialogueModal,
+  DragBoard,
+  DropdownMenu,
+  EmojiSelector,
+  Field,
+  FileTree,
+  Hierarchy,
+  Icon,
+  IconToolbar,
+  Image,
+  ImageTile,
+  Input,
+  Kbd,
+  Label,
+  MenuBar,
+  NumberInput,
+  OpenWith,
+  Pagination,
+  Popover,
+  Progress,
+  Radio,
+  RadioGroup,
+  Select,
+  Separator,
+  Sidebar,
+  Skeleton,
+  Slider,
+  Spinner,
+  Switch,
+  Tabs,
+  ToastViewport,
+  Toolbar,
+  Tooltip,
+  Twemoji,
+} from "./ui/components/index.tsx";
 
 const assetOptions = [
   { itemId: "material-glass", label: "Material Glass" },
@@ -48,50 +94,50 @@ const commandItems = [
 
 function Section({ title, children }) {
   return (
-    <card paddingX={14} paddingY={14}>
-      <column gap={8}>
-        <label text={title} tone="primary" weight="semibold" />
+    <Card paddingX={14} paddingY={14}>
+      <div className="flex flex-col gap-[8px]">
+        <Label text={title} tone="primary" weight="semibold" />
         {children}
-      </column>
-    </card>
+      </div>
+    </Card>
   );
 }
 
 function Swatches() {
   return (
-    <row gap={8} align="center">
-      <color fill="#23304f" size={22} stroke={{ width: 1, color: "#94a3b8" }} cornerRadius={6} />
-      <color fill="#6784a2" size={22} stroke={{ width: 1, color: "#0f172a" }} cornerRadius={6} />
-      <color fill="#7a182a" size={22} stroke={{ width: 1, color: "#fecdd3" }} cornerRadius={6} />
-      <color fill="#cea454" size={22} stroke={{ width: 1, color: "#fef3c7" }} cornerRadius={6} />
-    </row>
+    <div className="flex flex-row gap-[8px] items-center">
+      <Color fill="#23304f" size={22} stroke={{ width: 1, color: "#94a3b8" }} cornerRadius={6} />
+      <Color fill="#6784a2" size={22} stroke={{ width: 1, color: "#0f172a" }} cornerRadius={6} />
+      <Color fill="#7a182a" size={22} stroke={{ width: 1, color: "#fecdd3" }} cornerRadius={6} />
+      <Color fill="#cea454" size={22} stroke={{ width: 1, color: "#fef3c7" }} cornerRadius={6} />
+    </div>
   );
 }
 
 function Primitives() {
   return (
     <Section title="Primitives">
-      <row gap={12} align="center">
-        <label text="Primary label" tone="primary" weight="semibold" />
-        <label text="Secondary label" tone="secondary" />
-        <label text="Muted helper text" tone="muted" />
-        <label text="ClassName label" className="text-destructive font-bold text-lg" />
-      </row>
-      <row gap={10} align="center">
-        <icon name="bot" size={16} />
-        <icon name="settings-2" size={16} />
-        <icon name="sparkles" size={16} tint="#f1a84e" />
-        <twemoji emoji="🔥" size={28} />
-        <kbd text="Ctrl" minWidth={30} height={22} />
-        <kbd text="B" minWidth={22} height={22} />
-      </row>
+      <div className="flex flex-row gap-[12px] items-center">
+        <Label text="Primary label" tone="primary" weight="semibold" />
+        <Label text="Secondary label" tone="secondary" />
+        <Label text="Muted helper text" tone="muted" />
+        <Label text="ClassName label" className="text-destructive font-bold text-lg" />
+      </div>
+      <div className="flex flex-row gap-[10px] items-center">
+        <Icon name="bot" size={16} />
+        <Icon name="settings-2" size={16} />
+        <Icon name="sparkles" size={16} tint="#f1a84e" />
+        <Twemoji emoji="🔥" size={28} />
+        <Kbd text="Ctrl" minWidth={30} height={22} />
+        <Kbd text="B" minWidth={22} height={22} />
+      </div>
       <Swatches />
-      <image source="builtin:showcase-image" width={180} height={120} cornerRadius={8} />
-      <skeleton width={240} height={14} cornerRadius={7} animated={true} />
-      <row gap={12} align="center">
-        <spinner size={18} />
-        <progress value={0.72} width={260} height={10} />
-      </row>
+      <Image source="builtin:showcase-image" width={180} height={120} cornerRadius={8} />
+      <Skeleton width={240} height={14} cornerRadius={7} animated={true} />
+      <div className="flex flex-row gap-[12px] items-center">
+        <Spinner size={18} />
+        <Progress value={0.72} width={260} height={10} />
+      </div>
     </Section>
   );
 }
@@ -112,8 +158,8 @@ function Controls() {
 
   return (
     <Section title="Controls">
-      <row gap={10} align="center">
-        <input
+      <div className="flex flex-row gap-[10px] items-center">
+        <Input
           nodeId="component-name"
           value={name}
           placeholder="Component name"
@@ -121,7 +167,7 @@ function Controls() {
           leadingIcon="search"
           onChange={(event) => setName(eventValue(event) ?? "")}
         />
-        <field
+        <Field
           nodeId="owner-field"
           label="Owner"
           value={owner}
@@ -129,23 +175,23 @@ function Controls() {
           width={240}
           onChange={(event) => setOwner(eventValue(event) ?? "")}
         />
-      </row>
-      <row gap={12} align="center">
-        <checkbox
+      </div>
+      <div className="flex flex-row gap-[12px] items-center">
+        <Checkbox
           nodeId="snap-checkbox"
           label="Snap to grid"
           value={snap}
           onToggle={(event) => setSnap(Boolean(eventValue(event)))}
         />
-        <switch
+        <Switch
           nodeId="enabled-switch"
           label="Use compact handles"
           size="sm"
           value={enabled}
           onToggle={(event) => setEnabled(Boolean(eventValue(event)))}
         />
-      </row>
-      <slider
+      </div>
+      <Slider
         nodeId="rotation-slider"
         value={rotation}
         min={0}
@@ -153,7 +199,7 @@ function Controls() {
         width={260}
         onChange={(event) => setRotation(eventValue(event) ?? rotation)}
       />
-      <numberInput
+      <NumberInput
         nodeId="rotation-number"
         value={rotation}
         min={0}
@@ -164,7 +210,7 @@ function Controls() {
         axis="horizontal"
         onChange={(event) => setRotation(eventValue(event) ?? rotation)}
       />
-      <select
+      <Select
         nodeId="status-select"
         selectedItemId={status}
         width={240}
@@ -172,7 +218,7 @@ function Controls() {
         items={statusItems}
         onSelect={(event) => setStatus(event.metadata?.item_id ?? status)}
       />
-      <combobox
+      <Combobox
         nodeId="asset-combobox"
         query={comboQuery}
         selectedItemIds={selectedAssets}
@@ -183,14 +229,14 @@ function Controls() {
         onChange={(event) => setComboQuery(eventValue(event) ?? "")}
         onSelect={(event) => setSelectedAssets(eventValue(event) ?? [])}
       />
-      <radio
+      <Radio
         nodeId="publish-radio"
         value={radio}
         label="Use publish channel"
         description="Standalone radios stay selected until reset."
         onToggle={(event) => setRadio(Boolean(eventValue(event)))}
       />
-      <radioGroup
+      <RadioGroup
         nodeId="plan-radio-group"
         selectedItemId={plan}
         items={[
@@ -200,20 +246,20 @@ function Controls() {
         ]}
         onSelect={(event) => setPlan(event.metadata?.item_id ?? plan)}
       />
-      <row gap={12} align="center">
-        <emojiSelector
+      <div className="flex flex-row gap-[12px] items-center">
+        <EmojiSelector
           nodeId="emoji-selector"
           value={emoji}
           triggerVariant="secondary"
           onSelect={(event) => setEmoji(eventValue(event) ?? emoji)}
         />
-        <pagination
+        <Pagination
           nodeId="pagination"
           currentPage={page}
           pageCount={8}
           onSelect={(event) => setPage(Math.round(eventValue(event) ?? page))}
         />
-      </row>
+      </div>
     </Section>
   );
 }
@@ -250,7 +296,7 @@ function MenusAndSurfaces() {
 
   return (
     <Section title="Menus and surfaces">
-      <menuBar
+      <MenuBar
         nodeId="main-menu"
         menus={[
           { menuId: "file", label: "File", width: 220, entries: menuEntries },
@@ -266,7 +312,7 @@ function MenusAndSurfaces() {
         ]}
         onCommand={(event) => setLastAction(event.metadata?.item_label ?? "Menu action")}
       />
-      <tabs
+      <Tabs
         nodeId="main-tabs"
         style="segmented"
         selectedItemId={tab}
@@ -277,33 +323,33 @@ function MenusAndSurfaces() {
         ]}
         onSelect={(event) => setTab(event.metadata?.item_id ?? tab)}
       />
-      <row gap={8} align="center">
-        <button variant="primary" actionId="dialogue.open" onClick={() => setDialogueOpen(true)}>
+      <div className="flex flex-row gap-[8px] items-center">
+        <Button variant="primary" actionId="dialogue.open" onClick={() => setDialogueOpen(true)}>
           Open Dialogue
-        </button>
-        <button variant="secondary" actionId="sidebar.open" onClick={() => setSidebarOpen(true)}>
+        </Button>
+        <Button variant="secondary" actionId="sidebar.open" onClick={() => setSidebarOpen(true)}>
           Open Sidebar
-        </button>
-        <button variant="ghost" actionId="toast.add" onClick={() => pushToast("Changes saved", "success")}>
+        </Button>
+        <Button variant="ghost" actionId="toast.add" onClick={() => pushToast("Changes saved", "success")}>
           Add Toast
-        </button>
-      </row>
-      <row gap={8} align="center">
-        <dropdownMenu
+        </Button>
+      </div>
+      <div className="flex flex-row gap-[8px] items-center">
+        <DropdownMenu
           nodeId="dropdown-menu"
           triggerLabel="Open"
           entries={menuEntries}
           onCommand={(event) => setLastAction(event.metadata?.item_label ?? "Dropdown action")}
         />
-        <openWith
+        <OpenWith
           nodeId="open-with"
           selectedItemId="codex"
           entries={[{ itemId: "codex", label: "Codex", leadingIcon: "codex" }]}
           onCommand={(event) => setLastAction(event.metadata?.item_label ?? "Open with")}
         />
-        <tooltip triggerLabel="Hover this trigger" text="Tooltip content example" placement="top" />
-      </row>
-      <popover
+        <Tooltip triggerLabel="Hover this trigger" text="Tooltip content example" placement="top" />
+      </div>
+      <Popover
         nodeId="settings-popover"
         open={popoverOpen}
         triggerLabel="Open Popover"
@@ -313,9 +359,9 @@ function MenusAndSurfaces() {
         onOpen={() => setPopoverOpen(true)}
         onClose={() => setPopoverOpen(false)}
       >
-        <label text="Interactive popovers can host contract children." tone="muted" />
-      </popover>
-      <contextMenu
+        <Label text="Interactive popovers can host contract children." tone="muted" />
+      </Popover>
+      <ContextMenu
         nodeId="context-menu"
         width={220}
         regionWidth={420}
@@ -323,12 +369,12 @@ function MenusAndSurfaces() {
         entries={menuEntries}
         onCommand={(event) => setLastAction(event.metadata?.item_label ?? "Context menu action")}
       >
-        <column gap={6}>
-          <label text="Scene View" tone="muted" size={11} />
-          <label text="Right-click this region" tone="primary" weight="semibold" size={18} />
-        </column>
-      </contextMenu>
-      <collapsible
+        <div className="flex flex-col gap-[6px]">
+          <Label text="Scene View" tone="muted" size={11} />
+          <Label text="Right-click this region" tone="primary" weight="semibold" size={18} />
+        </div>
+      </ContextMenu>
+      <Collapsible
         nodeId="details"
         title="Transform"
         open={detailsOpen}
@@ -336,11 +382,11 @@ function MenusAndSurfaces() {
         trailingIcon="ellipsis"
         onToggle={(event) => setDetailsOpen(Boolean(eventValue(event)))}
       >
-        <label text="Position" tone="secondary" />
-        <label text="Rotation" tone="secondary" />
-        <label text="Scale" tone="secondary" />
-      </collapsible>
-      <dialogueModal
+        <Label text="Position" tone="secondary" />
+        <Label text="Rotation" tone="secondary" />
+        <Label text="Scale" tone="secondary" />
+      </Collapsible>
+      <DialogueModal
         nodeId="dialogue"
         open={dialogueOpen}
         title="Create Component"
@@ -356,9 +402,9 @@ function MenusAndSurfaces() {
         onCancel={() => setDialogueOpen(false)}
         onClose={() => setDialogueOpen(false)}
       >
-        <label text="The modal body is authored from JSX children." tone="muted" />
-      </dialogueModal>
-      <sidebar
+        <Label text="The modal body is authored from JSX children." tone="muted" />
+      </DialogueModal>
+      <Sidebar
         nodeId="sidebar"
         title="Workspace"
         side="right"
@@ -366,11 +412,11 @@ function MenusAndSurfaces() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       >
-        <button variant="primary" leadingIcon="file-plus">New Draft</button>
-        <button variant="ghost" leadingIcon="search">Command Search</button>
-        <button variant="secondary" onClick={() => setSidebarOpen(false)}>Close Sidebar</button>
-      </sidebar>
-      <toastViewport
+        <Button variant="primary" leadingIcon="file-plus">New Draft</Button>
+        <Button variant="ghost" leadingIcon="search">Command Search</Button>
+        <Button variant="secondary" onClick={() => setSidebarOpen(false)}>Close Sidebar</Button>
+      </Sidebar>
+      <ToastViewport
         nodeId="toasts"
         placement="bottomRight"
         width={300}
@@ -382,7 +428,7 @@ function MenusAndSurfaces() {
           }
         }}
       />
-      <label text={`Last action: ${lastAction}`} tone="muted" size={11} />
+      <Label text={`Last action: ${lastAction}`} tone="muted" size={11} />
     </Section>
   );
 }
@@ -403,19 +449,19 @@ function ShowcaseExamples() {
 
   return (
     <Section title="Examples">
-      <toolbar anchor="top_center" offsetY={10}>
-        <button iconOnly={true} leadingIcon="move" variant="ghost" actionId="tool.move" />
-        <button iconOnly={true} leadingIcon="rotate-ccw" variant="ghost" actionId="tool.rotate" />
-        <button iconOnly={true} leadingIcon="maximize-2" variant="ghost" actionId="tool.scale" />
-      </toolbar>
-      <iconToolbar
+      <Toolbar anchor="top_center" offsetY={10}>
+        <Button iconOnly={true} leadingIcon="move" variant="ghost" actionId="tool.move" />
+        <Button iconOnly={true} leadingIcon="rotate-ccw" variant="ghost" actionId="tool.rotate" />
+        <Button iconOnly={true} leadingIcon="maximize-2" variant="ghost" actionId="tool.scale" />
+      </Toolbar>
+      <IconToolbar
         nodeId="icon-toolbar"
         selectedItemId={selectedTool}
         items={toolbarItems}
         onSelect={(event) => setSelectedTool(event.metadata?.item_id ?? selectedTool)}
       />
-      <collabCursor name="Lisa Chen" x={96} y={34} color="#39bdf8" size={32} />
-      <fileTree
+      <CollabCursor name="Lisa Chen" x={96} y={34} color="#39bdf8" size={32} />
+      <FileTree
         nodeId="file-tree"
         selectedItemId={selectedFile}
         width={260}
@@ -439,7 +485,7 @@ function ShowcaseExamples() {
         ]}
         onSelect={(event) => setSelectedFile(event.metadata?.item_id ?? selectedFile)}
       />
-      <hierarchy
+      <Hierarchy
         nodeId="hierarchy"
         selectedItemId={selectedHierarchy}
         width={340}
@@ -460,7 +506,7 @@ function ShowcaseExamples() {
         ]}
         onSelect={(event) => setSelectedHierarchy(event.metadata?.item_id ?? selectedHierarchy)}
       />
-      <dragBoard
+      <DragBoard
         nodeId="drag-board"
         leftTitle="Backlog"
         rightTitle="Done"
@@ -477,15 +523,15 @@ function ShowcaseExamples() {
           }
         }}
       />
-      <audioPlayback
+      <AudioPlayback
         nodeId="audio-playback"
         playbackState={audioState}
         onToggle={() => setAudioState((state) => (state === "Paused" ? "Playing" : "Paused"))}
       >
-        <button iconOnly={true} leadingIcon="download" variant="ghost" size="sm" />
-        <button iconOnly={true} leadingIcon="ellipsis" variant="ghost" size="sm" />
-      </audioPlayback>
-      <imageTile
+        <Button iconOnly={true} leadingIcon="download" variant="ghost" size="sm" />
+        <Button iconOnly={true} leadingIcon="ellipsis" variant="ghost" size="sm" />
+      </AudioPlayback>
+      <ImageTile
         nodeId="image-tile"
         source="builtin:showcase-image"
         size="md"
@@ -494,10 +540,10 @@ function ShowcaseExamples() {
         onClick={() => setTileSelected((selected) => !selected)}
         onToggle={() => setTilePlayback((state) => (state === "Paused" ? "Playing" : "Paused"))}
       >
-        <label text="Ambient Preview" tone="primary" weight="semibold" />
-        <label text={`Playback: ${tilePlayback}`} tone="muted" size={11} />
-      </imageTile>
-      <command
+        <Label text="Ambient Preview" tone="primary" weight="semibold" />
+        <Label text={`Playback: ${tilePlayback}`} tone="muted" size={11} />
+      </ImageTile>
+      <Command
         nodeId="command"
         query={commandQuery}
         width={380}
@@ -514,24 +560,24 @@ function ShowcaseExamples() {
 function CanvaRecipes() {
   return (
     <Section title="Canva recipes">
-      <card paddingX={16} paddingY={16}>
-        <column gap={10}>
-          <label text="Backgrounds" tone="primary" weight="semibold" />
-          <input value="" placeholder="Search backgrounds" width={320} leadingIcon="search" />
-          <row gap={8} align="center">
-            <button iconOnly={true} leadingIcon="palette" variant="secondary" />
-            <color fill="#9ab5d0" size={32} cornerRadius={8} />
-            <color fill="#f7f6f3" size={32} cornerRadius={8} />
-            <color fill="#080808" size={32} cornerRadius={8} />
-            <button iconOnly={true} leadingIcon="chevron-right" variant="primary" />
-          </row>
-          <button variant="secondary" leadingIcon="sparkles" trailingIcon="crown">Magic Background</button>
-        </column>
-      </card>
-      <card paddingX={16} paddingY={16}>
-        <column gap={10}>
-          <label text="Brand Kit" tone="primary" weight="semibold" />
-          <tabs
+      <Card paddingX={16} paddingY={16}>
+        <div className="flex flex-col gap-[10px]">
+          <Label text="Backgrounds" tone="primary" weight="semibold" />
+          <Input value="" placeholder="Search backgrounds" width={320} leadingIcon="search" />
+          <div className="flex flex-row gap-[8px] items-center">
+            <Button iconOnly={true} leadingIcon="palette" variant="secondary" />
+            <Color fill="#9ab5d0" size={32} cornerRadius={8} />
+            <Color fill="#f7f6f3" size={32} cornerRadius={8} />
+            <Color fill="#080808" size={32} cornerRadius={8} />
+            <Button iconOnly={true} leadingIcon="chevron-right" variant="primary" />
+          </div>
+          <Button variant="secondary" leadingIcon="sparkles" trailingIcon="crown">Magic Background</Button>
+        </div>
+      </Card>
+      <Card paddingX={16} paddingY={16}>
+        <div className="flex flex-col gap-[10px]">
+          <Label text="Brand Kit" tone="primary" weight="semibold" />
+          <Tabs
             style="segmented"
             selectedItemId="logos"
             items={[
@@ -541,25 +587,25 @@ function CanvaRecipes() {
             ]}
           />
           <Swatches />
-          <button variant="secondary" leadingIcon="upload">Upload brand asset</button>
-        </column>
-      </card>
-      <card paddingX={16} paddingY={16}>
-        <column gap={10}>
-          <label text="Edit image" tone="primary" weight="semibold" />
-          <row gap={8} align="center">
-            <button variant="secondary" leadingIcon="image">All</button>
-            <button variant="ghost" leadingIcon="mouse-pointer-click">Click</button>
-            <button variant="ghost" leadingIcon="wand-sparkles">Magic</button>
-          </row>
-          <button variant="secondary" leadingIcon="sliders-horizontal">Adjust</button>
-          <button variant="secondary" leadingIcon="sparkles">BG Remover</button>
-        </column>
-      </card>
-      <card paddingX={16} paddingY={16}>
-        <column gap={10}>
-          <label text="Position" tone="primary" weight="semibold" />
-          <tabs
+          <Button variant="secondary" leadingIcon="upload">Upload brand asset</Button>
+        </div>
+      </Card>
+      <Card paddingX={16} paddingY={16}>
+        <div className="flex flex-col gap-[10px]">
+          <Label text="Edit image" tone="primary" weight="semibold" />
+          <div className="flex flex-row gap-[8px] items-center">
+            <Button variant="secondary" leadingIcon="image">All</Button>
+            <Button variant="ghost" leadingIcon="mouse-pointer-click">Click</Button>
+            <Button variant="ghost" leadingIcon="wand-sparkles">Magic</Button>
+          </div>
+          <Button variant="secondary" leadingIcon="sliders-horizontal">Adjust</Button>
+          <Button variant="secondary" leadingIcon="sparkles">BG Remover</Button>
+        </div>
+      </Card>
+      <Card paddingX={16} paddingY={16}>
+        <div className="flex flex-col gap-[10px]">
+          <Label text="Position" tone="primary" weight="semibold" />
+          <Tabs
             style="segmented"
             selectedItemId="arrange"
             items={[
@@ -567,38 +613,38 @@ function CanvaRecipes() {
               { itemId: "layers", label: "Layers" },
             ]}
           />
-          <row gap={8} align="center">
-            <numberInput value={1920} width={90} suffix="px" />
-            <numberInput value={1080} width={90} suffix="px" />
-            <numberInput value={0} width={90} suffix="deg" />
-          </row>
-        </column>
-      </card>
+          <div className="flex flex-row gap-[8px] items-center">
+            <NumberInput value={1920} width={90} suffix="px" />
+            <NumberInput value={1080} width={90} suffix="px" />
+            <NumberInput value={0} width={90} suffix="deg" />
+          </div>
+        </div>
+      </Card>
     </Section>
   );
 }
 
 function App() {
   return (
-    <column nodeId="jsx-runtime-root" gap={12}>
-      <row gap={8} align="center">
-        <label text="JSX authored egui component library" tone="primary" weight="semibold" size={22} />
-        <button nodeId="header-reload" actionId="reload" variant="secondary" size="sm">
+    <div id="jsx-runtime-root" className="flex flex-col gap-[12px]">
+      <div className="flex flex-row gap-[8px] items-center">
+        <Label text="JSX authored egui component library" tone="primary" weight="semibold" size={22} />
+        <Button nodeId="header-reload" actionId="reload" variant="secondary" size="sm">
           Runtime session
-        </button>
-      </row>
-      <label
+        </Button>
+      </div>
+      <Label
         text="Edit this file in the left panel or on disk. Events are dispatched back into V8 and hooks rebuild the contract tree."
         tone="muted"
         size={12}
       />
-      <separator nodeId="intro-separator" />
+      <Separator nodeId="intro-separator" />
       <Primitives />
       <Controls />
       <MenusAndSurfaces />
       <ShowcaseExamples />
       <CanvaRecipes />
-    </column>
+    </div>
   );
 }
 

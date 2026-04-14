@@ -31,6 +31,7 @@ pub enum Align {
     Start,
     Center,
     End,
+    Stretch,
 }
 
 impl Align {
@@ -39,6 +40,7 @@ impl Align {
             Self::Start => egui::Align::Min,
             Self::Center => egui::Align::Center,
             Self::End => egui::Align::Max,
+            Self::Stretch => egui::Align::Min,
         }
     }
 
@@ -47,6 +49,7 @@ impl Align {
             Self::Start => taffy::AlignItems::Start,
             Self::Center => taffy::AlignItems::Center,
             Self::End => taffy::AlignItems::End,
+            Self::Stretch => taffy::AlignItems::Stretch,
         }
     }
 }
@@ -63,6 +66,7 @@ pub struct Flow {
     gap: f32,
     justify: Justify,
     align: Align,
+    wrap: bool,
 }
 
 impl Flow {
@@ -75,6 +79,7 @@ impl Flow {
                 Axis::Row => Align::Center,
                 Axis::Column => Align::Start,
             },
+            wrap: false,
         }
     }
 
@@ -93,7 +98,16 @@ impl Flow {
         self
     }
 
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
+        self
+    }
+
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+        if self.wrap || self.align == Align::Stretch {
+            return self.show_with_layout(ui, add);
+        }
+
         match (self.axis, self.justify, self.align) {
             (Axis::Row, Justify::Start, Align::Center) => ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.x = self.gap;
@@ -111,30 +125,36 @@ impl Flow {
                 ui.spacing_mut().item_spacing.y = self.gap;
                 ui.vertical_centered(add).inner
             }),
-            _ => {
-                let layout = match self.axis {
-                    Axis::Row => EguiLayout::left_to_right(self.align.to_egui())
-                        .with_main_align(self.justify.to_egui())
-                        .with_cross_align(self.align.to_egui()),
-                    Axis::Column => EguiLayout::top_down(self.align.to_egui())
-                        .with_main_align(self.justify.to_egui())
-                        .with_cross_align(self.align.to_egui()),
-                };
-                let scoped = ui.scope(|ui| {
-                    match self.axis {
-                        Axis::Row => ui.spacing_mut().item_spacing.x = self.gap,
-                        Axis::Column => ui.spacing_mut().item_spacing.y = self.gap,
-                    }
-                    let inner = ui.with_layout(layout, add).inner;
-                    (inner, ui.min_rect())
-                });
-                let (inner, rect) = scoped.inner;
-                let mut response = scoped.response;
-                response.rect = rect;
-                response.interact_rect = rect;
-                InnerResponse { inner, response }
-            }
+            _ => self.show_with_layout(ui, add),
         }
+    }
+
+    fn show_with_layout<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+        let mut layout = match self.axis {
+            Axis::Row => EguiLayout::left_to_right(self.align.to_egui())
+                .with_main_align(self.justify.to_egui())
+                .with_cross_align(self.align.to_egui()),
+            Axis::Column => EguiLayout::top_down(self.align.to_egui())
+                .with_main_align(self.justify.to_egui())
+                .with_cross_align(self.align.to_egui()),
+        }
+        .with_main_wrap(self.wrap);
+
+        if self.align == Align::Stretch {
+            layout = layout.with_cross_justify(true);
+        }
+
+        let scoped = ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = self.gap;
+            ui.spacing_mut().item_spacing.y = self.gap;
+            let inner = ui.with_layout(layout, add).inner;
+            (inner, ui.min_rect())
+        });
+        let (inner, rect) = scoped.inner;
+        let mut response = scoped.response;
+        response.rect = rect;
+        response.interact_rect = rect;
+        InnerResponse { inner, response }
     }
 }
 

@@ -45,7 +45,7 @@ fn render_canva_brand_kit_layout(app: &mut ShowcaseApp, ui: &mut Ui, panel_width
                     );
 
                     ui.add_space(10.0);
-                    let _ = ui.components().separator();
+                    let _ = ui.separator();
                     ui.add_space(10.0);
                     let _ = ui.components().select(
                         &mut app.canva_brand_select_index,

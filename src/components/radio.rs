@@ -1,10 +1,11 @@
 use super::api::ComponentUi;
 use crate::ui::tokens;
-use egui::{CursorIcon, Id, Response, Sense, Stroke, Ui};
+use egui::{Align, CursorIcon, Id, Layout, Response, Sense, Stroke, Ui};
 
 const RADIO_CONTROL_SIZE: f32 = 16.0;
 const RADIO_DOT_RADIUS: f32 = 4.0;
 const RADIO_GROUP_GAP: f32 = 8.0;
+const RADIO_LABEL_GAP: f32 = 10.0;
 const RADIO_TEXT_GAP: f32 = 2.0;
 
 #[derive(Debug, Clone, Copy)]
@@ -171,42 +172,61 @@ fn draw_radio(ui: &mut Ui, selected: bool, props: Radio<'_>) -> Response {
 
     let click_id = ui.next_auto_id();
     let content = ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = 10.0;
+        let label_slot_width =
+            (ui.available_width() - RADIO_CONTROL_SIZE - RADIO_LABEL_GAP).max(0.0);
+        ui.spacing_mut().item_spacing.x = RADIO_LABEL_GAP;
         ui.horizontal(|ui| {
-            let control =
-                draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);
+            let control = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(RADIO_CONTROL_SIZE, 0.0),
+                    Layout::top_down(Align::Min),
+                    |ui| draw_radio_control(ui, selected),
+                )
+                .inner
+                .on_hover_cursor(CursorIcon::PointingHand);
             let label = ui
                 .scope(|ui| {
+                    ui.set_min_width(label_slot_width);
+                    ui.set_max_width(label_slot_width);
                     ui.style_mut().interaction.selectable_labels = false;
-                    let _ = ui.scope(|ui| {
-                        ui.spacing_mut().item_spacing.y = RADIO_TEXT_GAP;
-                        ui.vertical(|ui| {
-                            let runtime = crate::theme::runtime_for_ui(ui);
-                            if let Some(label_text) = props.label {
-                                let _ = ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(label_text)
-                                            .color(tokens::text_primary(runtime)),
-                                    )
-                                    .selectable(false),
-                                );
-                            }
-                            if let Some(description) =
-                                props.description.filter(|text| !text.is_empty())
-                            {
-                                let _ = ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(description)
-                                            .color(tokens::text_muted(runtime))
-                                            .size(12.0),
-                                    )
-                                    .selectable(false),
-                                );
-                            }
+                    ui.spacing_mut().item_spacing.y = RADIO_TEXT_GAP;
+                    ui.vertical(|ui| {
+                        let runtime = crate::theme::runtime_for_ui(ui);
+                        let mut combined: Option<Response> = None;
+                        if let Some(label_text) = props.label {
+                            let response = ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(label_text)
+                                        .color(tokens::text_primary(runtime)),
+                                )
+                                .selectable(false)
+                                .wrap(),
+                            );
+                            combined = Some(response);
+                        }
+                        if let Some(description) = props.description.filter(|text| !text.is_empty())
+                        {
+                            let response = ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(description)
+                                        .color(tokens::text_muted(runtime))
+                                        .size(12.0),
+                                )
+                                .selectable(false)
+                                .wrap(),
+                            );
+                            combined = Some(match combined.take() {
+                                Some(previous) => previous.union(response),
+                                None => response,
+                            });
+                        }
+                        combined.unwrap_or_else(|| {
+                            ui.allocate_exact_size(egui::Vec2::ZERO, Sense::hover()).1
                         })
-                    });
+                    })
+                    .inner
                 })
-                .response
+                .inner
                 .on_hover_cursor(CursorIcon::PointingHand);
 
             control.union(label)
@@ -275,10 +295,10 @@ fn draw_radio_control(ui: &mut Ui, selected: bool) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::{RadioGroup, RadioOption};
-    use crate::components::ComponentUiExt;
+    use super::{Radio, RadioGroup, RadioOption};
+    use crate::runtime_components::ComponentUiExt;
     use crate::theme::{self, ThemeMode};
-    use egui::{CentralPanel, Context, Id, RawInput};
+    use egui::{Align, CentralPanel, Context, Id, Layout, Pos2, RawInput, Response};
 
     #[test]
     fn radio_group_preserves_unselected_state_until_user_choice() {
@@ -297,5 +317,41 @@ mod tests {
         });
 
         assert_eq!(selected, None);
+    }
+
+    #[test]
+    fn labeled_radio_uses_available_width_for_text_slot() {
+        let context = Context::default();
+        theme::install(&context, theme::ThemeSpec::default(), ThemeMode::Dark);
+        let mut row_response = None;
+        let mut slot_right = 0.0;
+        let mut selected = false;
+
+        let _ = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let origin: Pos2 = ui.next_widget_position();
+                slot_right = origin.x + 280.0;
+                row_response = Some(
+                    ui.scope(|ui| {
+                        ui.set_min_width(280.0);
+                        ui.set_max_width(280.0);
+                        ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                            ui.components().radio(
+                                &mut selected,
+                                Radio::new()
+                                    .label("Starter")
+                                    .description("Explicit checked state"),
+                            )
+                        })
+                        .inner
+                    })
+                    .inner,
+                );
+            });
+        });
+
+        let row_response: Response = row_response.expect("radio row should render");
+        assert!(row_response.rect.right() <= slot_right + 0.5);
+        assert!(row_response.rect.width() >= 160.0);
     }
 }

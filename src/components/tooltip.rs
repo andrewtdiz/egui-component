@@ -4,7 +4,7 @@ use super::{
 };
 use crate::ui::tokens;
 use egui::util::IdTypeMap;
-use egui::{CursorIcon, Response, Ui};
+use egui::{CursorIcon, Response};
 
 const TOOLTIP_GAP: f32 = 6.0;
 const TOOLTIP_PADDING_X: i8 = 6;
@@ -84,11 +84,6 @@ impl ComponentUi<'_> {
     pub fn tooltip_for<'a>(&mut self, response: &Response, props: impl Into<Tooltip<'a>>) {
         show_tooltip_for_response(response, props.into(), self.overrides);
     }
-}
-
-pub(crate) fn attach_text_tooltip(ui: &mut Ui, response: &Response, text: &str) {
-    let overrides = ComponentUi::new(ui).overrides();
-    show_tooltip_for_response(response, Tooltip::text(text), overrides);
 }
 
 fn show_tooltip_for_response(
@@ -172,7 +167,8 @@ fn show_tooltip_for_response(
     let _ = tooltip.show(|ui| {
         with_component_overrides(ui, overrides, |ui| {
             let mut ui = ComponentUi::new(ui);
-            let _ = ui.label(crate::components::Label::new(props.text).tone(LabelTone::Primary));
+            let _ = ui
+                .label(crate::runtime_components::Label::new(props.text).tone(LabelTone::Primary));
         });
     });
 }
@@ -190,7 +186,7 @@ fn tooltip_frame(style: &egui::Style, runtime: crate::theme::ThemeRuntime) -> eg
 #[cfg(test)]
 mod tests {
     use super::{tooltip_frame, Tooltip, TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y};
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::ComponentUiExt;
     use crate::theme::ThemeMode;
     use crate::ui::tokens;
     use egui::{

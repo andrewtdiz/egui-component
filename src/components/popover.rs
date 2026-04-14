@@ -165,7 +165,7 @@ mod tests {
     use super::{
         popover_frame, popover_rect_align, Popover, PopoverAlign, PopoverResponse, PopoverSide,
     };
-    use crate::components::{Button, ButtonVariant, ComponentUiExt, Label, LabelTone};
+    use crate::runtime_components::{Button, ButtonVariant, ComponentUiExt, Label, LabelTone};
     use crate::theme::{self, ColorRole, ThemeMode};
     use crate::ui::tokens;
     use egui::{

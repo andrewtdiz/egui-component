@@ -1,15 +1,12 @@
 use std::ops::{Deref, DerefMut};
 
-use super::{
-    button::ButtonOverride, card::CardOverride, input::TextInputOverride, label::LabelOverride,
-};
+use super::{button::ButtonOverride, input::TextInputOverride, label::LabelOverride};
 use egui::{Id, InnerResponse, Rect, Ui, Vec2};
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ComponentOverrides {
     pub(crate) button: ButtonOverride,
-    pub(crate) card: CardOverride,
     pub(crate) label: LabelOverride,
     pub(crate) text_input: TextInputOverride,
 }
@@ -255,14 +252,13 @@ fn component_overrides_id() -> Id {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::{
+    use crate::runtime_components::{
         button::{ButtonOverride, ButtonVariant},
-        card::CardOverride,
         label::{LabelOverride, LabelTone},
     };
     use crate::theme::{self, ThemeMode};
     use crate::ui::tokens;
-    use egui::{CentralPanel, Color32, RawInput, Stroke};
+    use egui::{CentralPanel, RawInput, Stroke};
 
     #[test]
     fn tuple_override_sets_merge_by_widget_type() {
@@ -270,13 +266,11 @@ mod tests {
         (
             ButtonOverride::new().variant(ButtonVariant::Secondary),
             LabelOverride::new().tone(LabelTone::Muted),
-            CardOverride::new().fill(Color32::WHITE),
         )
             .apply_to(&mut overrides);
 
         assert_eq!(overrides.button.variant, Some(ButtonVariant::Secondary));
         assert_eq!(overrides.label.tone, Some(LabelTone::Muted));
-        assert_eq!(overrides.card.fill, Some(Color32::WHITE));
     }
 
     #[test]
@@ -287,13 +281,11 @@ mod tests {
             ButtonOverride::new()
                 .variant(ButtonVariant::Ghost)
                 .icon_size(18.0),
-            CardOverride::new().stroke(Stroke::NONE),
         )
             .apply_to(&mut overrides);
 
         assert_eq!(overrides.button.variant, Some(ButtonVariant::Ghost));
         assert_eq!(overrides.button.icon_size, Some(18.0));
-        assert_eq!(overrides.card.stroke, Some(Stroke::NONE));
     }
 
     #[test]

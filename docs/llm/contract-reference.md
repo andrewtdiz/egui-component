@@ -11,10 +11,10 @@ egui_component::contract::reference_markdown()
 
 ## Position In The Runtime
 
-`contract::*` is an optional host-driven declarative layer.
+`contract::*` is the active declarative render boundary for the JSX runtime and the remaining host-driven compatibility surfaces.
 
 - The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.
-- `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.
+- `ContractTree` is useful when the runtime or a compatibility host wants a serializable declarative surface, schema tooling, or change-driven tree materialization.
 - Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.
 
 ## Shared Node Fields
@@ -28,17 +28,17 @@ egui_component::contract::reference_markdown()
 | `class_list` | `list<string>` | `supported` | Optional expanded class token list. |
 | `slot_classes` | `map<string, string>` | `unsupported` | Optional slot-name to class-string overrides. Declared in the model and schema only. The current Rust renderer does not apply slot-specific class behavior. |
 | `actions` | `object:actions` | `unsupported` | Optional common semantic action bindings. Declared in the model and schema only. The current renderer uses family-specific action fields instead. |
-| `layout` | `object:layout` | `partial` | Optional shared layout hints. The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap overrides on flow containers only. |
+| `layout` | `object:layout` | `partial` | Optional shared layout hints. The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap/wrap overrides on flow containers only. |
 
 ## Layout Support
 
 | Field | Type | Support | Summary |
 | --- | --- | --- | --- |
-| `display` | `enum:layout_display` | `unsupported` | Optional layout mode override. Declared in the schema only. The current renderer does not execute display-mode switching. |
+| `display` | `enum:layout_display` | `partial` | Optional layout mode override. Executed by the taffy-backed flow-container renderer used by row, column, inset, and card. `overlay` remains unsupported. |
 | `direction` | `enum:layout_direction` | `partial` | Optional row or column direction override. Only executed by the flow-container helpers used by row, column, inset, and card. |
-| `grow` | `number` | `unsupported` | Optional flex grow factor. Declared in the schema only. Flex growth is not executed by the current renderer. |
-| `shrink` | `number` | `unsupported` | Optional flex shrink factor. Declared in the schema only. Flex shrink is not executed by the current renderer. |
-| `basis` | `object:layout_length` | `unsupported` | Optional flex basis length. Declared in the schema only. Flex basis is not executed by the current renderer. |
+| `grow` | `number` | `partial` | Optional flex grow factor. Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card. |
+| `shrink` | `number` | `partial` | Optional flex shrink factor. Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card. |
+| `basis` | `object:layout_length` | `partial` | Optional flex basis length. Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card. |
 | `width` | `object:layout_length` | `supported` | Optional width override. |
 | `height` | `object:layout_length` | `supported` | Optional height override. |
 | `min_width` | `object:layout_length` | `supported` | Optional minimum width override. |
@@ -51,13 +51,13 @@ egui_component::contract::reference_markdown()
 | `margin` | `object:layout_edges` | `supported` | Optional margin edges. |
 | `align` | `enum:align` | `partial` | Optional cross-axis alignment override. Only executed by the flow-container helpers used by row, column, inset, and card. |
 | `justify` | `enum:justify` | `partial` | Optional main-axis alignment override. Only executed by the flow-container helpers used by row, column, inset, and card. |
-| `wrap` | `boolean` | `unsupported` | Optional wrap hint. Declared in the schema only. Wrapping is not executed by the current renderer. |
-| `columns` | `list<object:layout_track>` | `unsupported` | Optional grid column tracks. Declared in the schema only. Grid tracks are not executed by the current renderer. |
-| `rows` | `list<object:layout_track>` | `unsupported` | Optional grid row tracks. Declared in the schema only. Grid tracks are not executed by the current renderer. |
-| `col_span` | `number` | `unsupported` | Optional grid column span. Declared in the schema only. Grid spans are not executed by the current renderer. |
-| `row_span` | `number` | `unsupported` | Optional grid row span. Declared in the schema only. Grid spans are not executed by the current renderer. |
-| `overflow_x` | `enum:layout_overflow` | `unsupported` | Optional horizontal overflow mode. Declared in the schema only. Overflow handling is not executed by the current renderer. |
-| `overflow_y` | `enum:layout_overflow` | `unsupported` | Optional vertical overflow mode. Declared in the schema only. Overflow handling is not executed by the current renderer. |
+| `wrap` | `boolean` | `partial` | Optional wrap hint. Only executed by the flow-container helpers used by row, column, inset, and card. Wrap-reverse is not represented. |
+| `columns` | `list<object:layout_track>` | `partial` | Optional grid column tracks. Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display. |
+| `rows` | `list<object:layout_track>` | `partial` | Optional grid row tracks. Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display. |
+| `col_span` | `number` | `partial` | Optional grid column span. Executed as child-item grid placement when the parent uses the taffy-backed flow-container renderer in grid mode. |
+| `row_span` | `number` | `partial` | Optional grid row span. Executed as child-item grid placement when the parent uses the taffy-backed flow-container renderer in grid mode. |
+| `overflow_x` | `enum:layout_overflow` | `partial` | Optional horizontal overflow mode. Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`. |
+| `overflow_y` | `enum:layout_overflow` | `partial` | Optional vertical overflow mode. Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`. |
 
 ## Supported Families
 
@@ -120,15 +120,15 @@ egui_component::contract::reference_markdown()
 | --- | --- | --- | --- |
 | `node_common` | `object` | `partial` | Common fields flattened into every node. Visible, enabled, class, class_list, and part of layout are executed today. Slot and common action fields are metadata-only. |
 | `actions` | `object` | `unsupported` | Optional common semantic action bindings. Declared in the schema only. The current renderer uses family-specific action fields instead. |
-| `layout` | `object` | `partial` | Shared layout hints available on every node. Sizing, padding, and margin are executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers. |
+| `layout` | `object` | `partial` | Shared layout hints available on every node. Sizing, padding, and margin are executed on every node. Display, direction, gap, justify, align, wrap, grid tracks, and overflow are executed by the taffy-backed flow-container renderer used by row, column, inset, and card. |
 | `layout_edges` | `object` | `partial` | Top, right, bottom, and left edge values for shared layout padding and margin. Executed for padding and margin with egui margin rounding and clamping. |
-| `layout_length` | `object` | `partial` | Tagged length value used by shared layout sizing fields. Supported when referenced from width, height, min, and max layout fields. Other consumers such as basis remain unsupported. |
+| `layout_length` | `object` | `partial` | Tagged length value used by shared layout sizing fields. Supported when referenced from width, height, min, max, and taffy-backed flex basis layout fields. |
 | `layout_length_kind` | `enum` | `supported` | Supported layout length kinds. |
-| `layout_track` | `object` | `unsupported` | Tagged grid track value for declared column and row tracks. Grid tracks are declared in the schema only and are not executed by the current renderer. |
+| `layout_track` | `object` | `partial` | Tagged grid track value for declared column and row tracks. Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display. |
 | `layout_track_kind` | `enum` | `supported` | Declared layout track kinds. |
-| `layout_display` | `enum` | `unsupported` | Declared layout display modes. Display-mode switching is declared in the schema only and is not executed by the current renderer. |
+| `layout_display` | `enum` | `partial` | Declared layout display modes. Executed by the taffy-backed flow-container renderer used by row, column, inset, and card. `overlay` remains unsupported. |
 | `layout_direction` | `enum` | `partial` | Row and column direction values for shared layout hints. Only executed by the current flow-container helpers used by row, column, inset, and card. |
-| `layout_overflow` | `enum` | `unsupported` | Declared overflow modes for shared layout hints. Overflow handling is declared in the schema only and is not executed by the current renderer. |
+| `layout_overflow` | `enum` | `partial` | Declared overflow modes for shared layout hints. Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`. |
 | `justify` | `enum` | `supported` | Main-axis alignment values. |
 | `align` | `enum` | `supported` | Cross-axis alignment values. |
 | `toolbar_anchor` | `enum` | `supported` | Supported toolbar anchor points. |

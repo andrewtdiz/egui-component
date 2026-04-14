@@ -3,7 +3,8 @@ use crate::internal_taffy::{
     taffy::prelude::{auto, fr, length, percent},
     tid, tui, TuiBuilderLogic,
 };
-use crate::prelude::*;
+use crate::primitives::{draw_swatch, surface_frame, ScrollAreaExt, SurfaceFrame, Swatch};
+use crate::runtime_components::*;
 use crate::theme::{self, BaseColor, ColorRole, RadiusRole, ThemeMode, ThemeSpec};
 use crate::ui::tokens;
 use crate::{component_definitions, ComponentDefinition, ComponentGroup, ComponentKind};
@@ -45,6 +46,175 @@ pub(crate) fn show_inset<R>(
     egui::Frame::new()
         .inner_margin(egui::Margin::symmetric(padding_x.max(0), padding_y.max(0)))
         .show(ui, add)
+}
+
+pub(crate) fn showcase_card<R>(
+    ui: &mut Ui,
+    fill: Option<Color32>,
+    stroke: Option<Stroke>,
+    corner_radius: Option<u8>,
+    padding_x: i8,
+    padding_y: i8,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
+    let runtime = theme::runtime_for_ui(ui);
+    surface_frame(
+        ui,
+        SurfaceFrame::new(
+            fill.unwrap_or(tokens::muted_surface(runtime)),
+            stroke.unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
+        )
+        .corner_radius(corner_radius.unwrap_or(tokens::radius_lg(runtime)))
+        .padding(padding_x, padding_y),
+        add,
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ShowcaseTabOption<'a> {
+    pub value: usize,
+    pub label: &'a str,
+    pub icon: Option<&'a str>,
+    pub icon_only: bool,
+}
+
+impl<'a> ShowcaseTabOption<'a> {
+    pub const fn new(value: usize, label: &'a str) -> Self {
+        Self {
+            value,
+            label,
+            icon: None,
+            icon_only: false,
+        }
+    }
+
+    pub const fn with_icon(value: usize, label: &'a str, icon: &'a str) -> Self {
+        Self {
+            value,
+            label,
+            icon: Some(icon),
+            icon_only: false,
+        }
+    }
+
+    pub const fn icon_only(value: usize, label: &'a str, icon: &'a str) -> Self {
+        Self {
+            value,
+            label,
+            icon: Some(icon),
+            icon_only: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ShowcaseTabsStyle {
+    Underline,
+    Segmented,
+    Stacked,
+    Rail,
+    BlenderTopbar,
+}
+
+pub(crate) fn showcase_tabs_variant(
+    ui: &mut Ui,
+    id: Id,
+    current: &mut usize,
+    options: &[ShowcaseTabOption<'_>],
+    style: ShowcaseTabsStyle,
+) {
+    if options.is_empty() {
+        return;
+    }
+
+    ui.push_id(id, |ui| {
+        let vertical = matches!(style, ShowcaseTabsStyle::Stacked | ShowcaseTabsStyle::Rail);
+        let gap = match style {
+            ShowcaseTabsStyle::BlenderTopbar => 1.0,
+            ShowcaseTabsStyle::Stacked => 8.0,
+            ShowcaseTabsStyle::Rail => 6.0,
+            ShowcaseTabsStyle::Segmented => 4.0,
+            ShowcaseTabsStyle::Underline => 6.0,
+        };
+        let draw = |ui: &mut Ui| {
+            let mut components = ui.components();
+            for option in options {
+                let selected = *current == option.value;
+                let mut button = if option.icon_only {
+                    Button::icon_only(option.icon.unwrap_or("circle"))
+                } else {
+                    Button::new(option.label)
+                };
+                if let Some(icon) = option.icon.filter(|_| !option.icon_only) {
+                    button = button.leading_icon(icon);
+                }
+                button = button
+                    .variant(match style {
+                        ShowcaseTabsStyle::Underline => {
+                            if selected {
+                                ButtonVariant::Link
+                            } else {
+                                ButtonVariant::Ghost
+                            }
+                        }
+                        _ => {
+                            if selected {
+                                ButtonVariant::Secondary
+                            } else {
+                                ButtonVariant::Ghost
+                            }
+                        }
+                    })
+                    .selected(selected);
+                if vertical {
+                    button = button.min_size(egui::vec2(96.0, 40.0));
+                }
+                if components.button(button).clicked() {
+                    *current = option.value;
+                }
+            }
+        };
+        if vertical {
+            let _ = show_column(ui, gap, draw);
+        } else {
+            let _ = show_row(ui, gap, draw);
+        }
+    });
+}
+
+pub(crate) fn showcase_swatch(ui: &mut Ui, swatch: Swatch) -> Response {
+    draw_swatch(ui, swatch)
+}
+
+pub(crate) fn showcase_menu_entries(
+    ui: &mut Ui,
+    entries: &[DropdownMenuEntry<'_>],
+    action: &mut Option<usize>,
+) {
+    for entry in entries {
+        match entry {
+            DropdownMenuEntry::Action(item) => {
+                let mut label = item.label.to_owned();
+                if let Some(shortcut) = item.shortcut {
+                    label.push_str("    ");
+                    label.push_str(shortcut);
+                }
+                let response = ui.add_enabled(item.enabled, egui::Button::new(label));
+                if response.clicked() {
+                    *action = Some(item.id);
+                    ui.close();
+                }
+            }
+            DropdownMenuEntry::Separator => {
+                ui.separator();
+            }
+            DropdownMenuEntry::Submenu(submenu) => {
+                ui.menu_button(submenu.label, |ui| {
+                    showcase_menu_entries(ui, submenu.entries, action)
+                });
+            }
+        }
+    }
 }
 
 pub(crate) fn show_width<R>(

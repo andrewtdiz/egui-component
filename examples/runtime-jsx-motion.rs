@@ -1,7 +1,12 @@
-use std::{path::PathBuf, time::SystemTime};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
 use clay_jsx_egui_bridge::{
-    extend_logs, JsxRuntimeSession, MotionFrame, MotionProperty, MotionValues, RuntimeLogBuffer,
+    extend_logs, HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame,
+    MotionProperty, MotionValues, RuntimeLogBuffer,
 };
 use eframe::egui::{
     self, pos2, vec2, Align2, CentralPanel, Color32, Context, CornerRadius, FontId, Pos2, Rect,
@@ -40,7 +45,8 @@ fn main() -> eframe::Result {
 #[derive(Debug)]
 struct MotionSyncApp {
     entry_path: PathBuf,
-    last_seen_modified: Option<SystemTime>,
+    dependency_stamps: Vec<DependencyStamp>,
+    hot_reload_state: Option<HotReloadState>,
     session: Option<JsxRuntimeSession>,
     rendered: Option<ContractTree>,
     motion: MotionFrame,
@@ -52,7 +58,8 @@ impl Default for MotionSyncApp {
     fn default() -> Self {
         let mut app = Self {
             entry_path: default_entry_path(),
-            last_seen_modified: None,
+            dependency_stamps: collect_dependency_stamps([default_entry_path()]),
+            hot_reload_state: None,
             session: None,
             rendered: None,
             motion: MotionFrame::default(),
@@ -197,17 +204,32 @@ impl MotionSyncApp {
     }
 
     fn reload_external_changes(&mut self, ctx: &Context) {
-        let modified = modified_time(&self.entry_path);
-        if modified.is_some() && modified != self.last_seen_modified {
+        if dependency_stamps_changed(&self.dependency_stamps) {
             self.reload_runtime();
             ctx.request_repaint();
         }
     }
 
     fn reload_runtime(&mut self) {
-        self.last_seen_modified = modified_time(&self.entry_path);
-        match JsxRuntimeSession::load(&self.entry_path) {
-            Ok((session, rendered)) => {
+        if self.error.is_none() {
+            if let Some(session) = self.session.as_mut() {
+                if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
+                    self.hot_reload_state = Some(hot_reload_state);
+                }
+            }
+        }
+
+        match JsxRuntimeSession::load_with_hot_reload_state_outcome(
+            &self.entry_path,
+            self.hot_reload_state.as_ref(),
+        ) {
+            JsxRuntimeLoadOutcome::Loaded { session, rendered } => {
+                self.dependency_stamps = collect_dependency_stamps(
+                    session
+                        .dependency_paths()
+                        .into_iter()
+                        .chain([self.entry_path.clone()]),
+                );
                 self.session = Some(session);
                 self.rendered = rendered.tree;
                 self.motion = rendered.motion;
@@ -215,11 +237,14 @@ impl MotionSyncApp {
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
             }
-            Err(error) => {
+            JsxRuntimeLoadOutcome::Failed(failure) => {
                 self.session = None;
                 self.rendered = None;
                 self.motion = MotionFrame::default();
-                self.error = Some(error.to_string());
+                self.logs.clear();
+                self.error = Some(failure.error.to_string());
+                self.dependency_stamps =
+                    collect_failure_dependency_stamps(failure.dependency_paths, &self.entry_path);
             }
         }
     }
@@ -403,6 +428,42 @@ fn default_entry_path() -> PathBuf {
         .join("examples")
         .join("runtime-jsx")
         .join("motion-sync.tsx")
+}
+
+#[derive(Debug, Clone)]
+struct DependencyStamp {
+    path: PathBuf,
+    modified: Option<SystemTime>,
+}
+
+fn dependency_stamps_changed(stamps: &[DependencyStamp]) -> bool {
+    stamps
+        .iter()
+        .any(|stamp| modified_time(&stamp.path) != stamp.modified)
+}
+
+fn collect_dependency_stamps(paths: impl IntoIterator<Item = PathBuf>) -> Vec<DependencyStamp> {
+    paths
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|path| DependencyStamp {
+            modified: modified_time(&path),
+            path,
+        })
+        .collect()
+}
+
+fn collect_failure_dependency_stamps(
+    dependency_paths: Vec<PathBuf>,
+    entry_path: &Path,
+) -> Vec<DependencyStamp> {
+    let paths = if dependency_paths.is_empty() {
+        vec![entry_path.to_path_buf()]
+    } else {
+        dependency_paths
+    };
+    collect_dependency_stamps(paths)
 }
 
 fn modified_time(path: &std::path::Path) -> Option<SystemTime> {

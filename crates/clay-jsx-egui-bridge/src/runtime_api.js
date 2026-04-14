@@ -4,9 +4,50 @@ export const Fragment = Symbol.for("egui-component.fragment");
 const contractMetadata = globalThis.__eguiContract ?? {};
 const knownFamilies = new Set(contractMetadata.families ?? []);
 const familiesWithChildren = new Set(contractMetadata.familiesWithChildren ?? []);
+const familyPropNames = new Map(
+  Object.entries(contractMetadata.familyProps ?? {}).map(([family, props]) => [
+    family,
+    new Set(Array.isArray(props) ? props : []),
+  ]),
+);
 const compactFamilyAliases = Object.fromEntries(
   [...knownFamilies].map((family) => [family.replace(/-/g, ""), family]),
 );
+
+const sharedLayoutPropNames = new Set([
+  "display",
+  "direction",
+  "grow",
+  "shrink",
+  "basis",
+  "width",
+  "height",
+  "min_width",
+  "min_height",
+  "max_width",
+  "max_height",
+  "padding",
+  "margin",
+  "align",
+  "justify",
+  "wrap",
+  "columns",
+  "rows",
+  "col_span",
+  "row_span",
+  "overflow_x",
+  "overflow_y",
+]);
+
+const contractLengthPropNames = new Set([
+  "basis",
+  "width",
+  "height",
+  "min_width",
+  "min_height",
+  "max_width",
+  "max_height",
+]);
 
 const motionPropNames = new Set([
   "initial",
@@ -51,17 +92,25 @@ const supportedMotionValueProps = new Set([
   "corner_radius",
 ]);
 
+const nonSerializableValue = Symbol("egui-component.non-serializable");
+
 let rootElement = null;
 let rootInstance = null;
 let isDispatching = false;
 let currentHookKey = null;
 let hookCursor = 0;
 
-const hookState = new Map();
+const hotReloadSeed = takeHotReloadSeed(globalThis.__eguiHotReloadState);
+const hookState = hotReloadSeed.hookState;
+let restoredHookCounts = hotReloadSeed.hookCounts;
+let lastRenderedHookKeys = new Set();
 let eventHandlers = new Map();
+
+globalThis.__eguiCaptureHotReloadState = captureHotReloadState;
 
 const handlerEventKinds = {
   onClick: "clicked",
+  onInput: "changed",
   onChange: "changed",
   onChanged: "changed",
   onSubmit: "submitted",
@@ -83,9 +132,101 @@ const handlerEventKinds = {
   onEvent: "*",
 };
 
+const htmlHostElements = new Set([
+  "a",
+  "article",
+  "aside",
+  "button",
+  "code",
+  "dialog",
+  "div",
+  "em",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "img",
+  "input",
+  "kbd",
+  "label",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "progress",
+  "section",
+  "small",
+  "span",
+  "strong",
+  "textarea",
+  "ul",
+]);
+
+const htmlContainerElements = new Set([
+  "article",
+  "aside",
+  "div",
+  "footer",
+  "form",
+  "header",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "section",
+  "ul",
+]);
+
+const htmlTextElements = new Set([
+  "a",
+  "code",
+  "em",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "p",
+  "pre",
+  "small",
+  "span",
+  "strong",
+]);
+
+const htmlElementFamilies = {
+  button: "button",
+  dialog: "dialogue-modal",
+  hr: "separator",
+  img: "image",
+  kbd: "kbd",
+  label: "label",
+  progress: "progress",
+  textarea: "input",
+};
+
+const deprecatedHostElementWarnings = new Set();
+
 const familyAliases = {
   box: "sized-box",
   sizedbox: "sized-box",
+  img: "image",
+  hr: "separator",
+  section: "column",
+  main: "column",
+  header: "column",
+  footer: "column",
+  nav: "column",
+  article: "column",
+  aside: "column",
   dialog: "dialogue-modal",
   dialogue: "dialogue-modal",
   dialogueModal: "dialogue-modal",
@@ -102,6 +243,10 @@ const propAliases = {
   className: "class",
   classNames: "class",
   classList: "class_list",
+  checked: "value",
+  defaultChecked: "value",
+  htmlFor: "for",
+  src: "source",
   nodeId: "node_id",
   actionId: "action_id",
   selectedItemId: "selected_item_id",
@@ -150,6 +295,116 @@ const propAliases = {
   durationSecs: "duration_secs",
   cornerRadius: "corner_radius",
 };
+
+function takeHotReloadSeed(rawState) {
+  delete globalThis.__eguiHotReloadState;
+
+  const nextHookState = new Map();
+  if (!isPlainObject(rawState) || !isPlainObject(rawState.hook_state)) {
+    return { hookState: nextHookState, hookCounts: new Map() };
+  }
+
+  for (const [hookKey, hooks] of Object.entries(rawState.hook_state)) {
+    const clonedHooks = cloneSerializableValue(hooks);
+    if (!Array.isArray(clonedHooks)) {
+      continue;
+    }
+    nextHookState.set(String(hookKey), clonedHooks);
+  }
+
+  return {
+    hookState: nextHookState,
+    hookCounts: new Map(
+      [...nextHookState.entries()].map(([hookKey, hooks]) => [hookKey, hooks.length]),
+    ),
+  };
+}
+
+function captureHotReloadState() {
+  const snapshot = {};
+  for (const hookKey of lastRenderedHookKeys) {
+    const hooks = hookState.get(hookKey);
+    if (hooks == null) {
+      continue;
+    }
+    const clonedHooks = cloneSerializableValue(hooks);
+    if (!Array.isArray(clonedHooks)) {
+      continue;
+    }
+    snapshot[hookKey] = clonedHooks;
+  }
+  return { hook_state: snapshot };
+}
+
+function consumeRestoredHookMismatches(renderedHookCounts) {
+  const mismatched = [];
+  for (const [hookKey, actualCount] of renderedHookCounts) {
+    if (!restoredHookCounts.has(hookKey)) {
+      continue;
+    }
+    const expectedCount = restoredHookCounts.get(hookKey);
+    if (expectedCount !== actualCount) {
+      mismatched.push(hookKey);
+      continue;
+    }
+    restoredHookCounts.delete(hookKey);
+  }
+  return mismatched;
+}
+
+function cloneSerializableValue(value, stack = new Set()) {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : nonSerializableValue;
+  }
+
+  if (Array.isArray(value)) {
+    if (stack.has(value)) {
+      return nonSerializableValue;
+    }
+    stack.add(value);
+    const out = [];
+    for (const item of value) {
+      const cloned = cloneSerializableValue(item, stack);
+      if (cloned === nonSerializableValue) {
+        stack.delete(value);
+        return nonSerializableValue;
+      }
+      out.push(cloned);
+    }
+    stack.delete(value);
+    return out;
+  }
+
+  if (!isPlainObject(value) || isElement(value)) {
+    return nonSerializableValue;
+  }
+
+  if (stack.has(value)) {
+    return nonSerializableValue;
+  }
+  stack.add(value);
+
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const cloned = cloneSerializableValue(entry, stack);
+    if (cloned === nonSerializableValue) {
+      stack.delete(value);
+      return nonSerializableValue;
+    }
+    out[key] = cloned;
+  }
+
+  stack.delete(value);
+  return out;
+}
 
 export function jsx(type, props, key) {
   const nextProps = props == null ? {} : props;
@@ -237,12 +492,28 @@ function rerenderRoot() {
     throw new Error("render(<... />) must be called before dispatching events.");
   }
 
-  eventHandlers = new Map();
-  const context = { seenNodeIds: new Set() };
-  const rootDescriptor = describeNode(rootElement, "root", context);
-  if (rootDescriptor == null) {
-    throw new Error("render() expected a JSX element.");
+  let { context, rootDescriptor } = renderRootDescriptor();
+  let mismatchedHookKeys = consumeRestoredHookMismatches(context.renderedHookCounts);
+  if (mismatchedHookKeys.length > 0) {
+    for (const hookKey of mismatchedHookKeys) {
+      hookState.delete(hookKey);
+    }
+
+    restoredHookCounts = new Map(
+      [...restoredHookCounts.entries()].filter(
+        ([hookKey]) => !mismatchedHookKeys.includes(hookKey),
+      ),
+    );
+
+    ({ context, rootDescriptor } = renderRootDescriptor());
+    mismatchedHookKeys = consumeRestoredHookMismatches(context.renderedHookCounts);
+    if (mismatchedHookKeys.length > 0) {
+      throw new Error("render() could not restore compatible hook state.");
+    }
   }
+
+  restoredHookCounts = new Map();
+  lastRenderedHookKeys = new Set(context.renderedHookCounts.keys());
 
   const mutations = [];
   rootInstance = reconcileRoot(rootInstance, rootDescriptor, mutations);
@@ -251,6 +522,16 @@ function rerenderRoot() {
       JSON.stringify({ version: contractMetadata.version ?? 1, mutations }),
     );
   }
+}
+
+function renderRootDescriptor() {
+  eventHandlers = new Map();
+  const context = { seenNodeIds: new Set(), renderedHookCounts: new Map() };
+  const rootDescriptor = describeNode(rootElement, "root", context);
+  if (rootDescriptor == null) {
+    throw new Error("render() expected a JSX element.");
+  }
+  return { context, rootDescriptor };
 }
 
 function reconcileRoot(previous, descriptor, mutations) {
@@ -503,8 +784,8 @@ function describeNode(value, path, context) {
         );
   }
 
-  const family = normalizeFamilyName(value.type);
   const props = value.props ?? {};
+  const family = normalizeFamilyName(value.type, props);
   const motion = props.__motion_host === true ? normalizeMotionSpec(props) : null;
   const node = {
     family,
@@ -516,6 +797,16 @@ function describeNode(value, path, context) {
       rawName === "children" ||
       rawName === "key" ||
       rawName === "id" ||
+      rawName === "type" ||
+      rawName === "role" ||
+      rawName === "data-slot" ||
+      rawName === "dataSlot" ||
+      rawName === "aria-label" ||
+      rawName === "ariaLabel" ||
+      rawName === "aria-hidden" ||
+      rawName === "ariaHidden" ||
+      rawName === "aria-busy" ||
+      rawName === "ariaBusy" ||
       rawName === "__motion_host"
     ) {
       continue;
@@ -535,6 +826,16 @@ function describeNode(value, path, context) {
 
     const propName = normalizePropName(rawName);
     if (propName === "node_id") {
+      continue;
+    }
+    if (propName === "layout") {
+      node.layout = mergeLayoutProps(node.layout, normalizeLayoutObject(rawValue));
+      continue;
+    }
+    if (shouldHoistPropToLayout(family, propName)) {
+      node.layout = mergeLayoutProps(node.layout, {
+        [propName]: normalizeLayoutPropValue(propName, rawValue),
+      });
       continue;
     }
     node[propName] = normalizePropValue(family, propName, rawValue);
@@ -569,6 +870,7 @@ function describeFunctionComponent(value, path, context) {
   try {
     return describeNode(value.type({ ...(value.props ?? {}) }), path, context);
   } finally {
+    context.renderedHookCounts.set(hookKey, hookCursor);
     currentHookKey = previousHookKey;
     hookCursor = previousHookCursor;
   }
@@ -814,11 +1116,16 @@ function normalizeMotionValueName(name) {
   return motionPropAliases[name] ?? camelToSnake(name);
 }
 
-function normalizeFamilyName(type) {
+function normalizeFamilyName(type, props = {}) {
   if (typeof type !== "string") {
     throw new Error(`Unsupported JSX element type ${String(type)}.`);
   }
   const typeName = String(type);
+  const nativeFamily = nativeFamilyForElement(typeName, props);
+  if (nativeFamily != null) {
+    return nativeFamily;
+  }
+
   const kebabName = camelToKebab(typeName);
   const compactName = kebabName.replace(/-/g, "");
   const family = knownFamilies.has(typeName)
@@ -831,11 +1138,206 @@ function normalizeFamilyName(type) {
   if (knownFamilies.size > 0 && !knownFamilies.has(family)) {
     throw new Error(`Unknown contract family "${family}" from JSX element "${typeName}".`);
   }
+  warnDeprecatedHostElement(typeName, family);
+  return family;
+}
+
+function nativeFamilyForElement(typeName, props) {
+  if (!htmlHostElements.has(typeName)) {
+    return null;
+  }
+
+  const slotFamily = nativeSlotFamily(props);
+  if (slotFamily != null) {
+    return slotFamily;
+  }
+
+  if (typeName === "input") {
+    return nativeInputFamily(props);
+  }
+
+  if (htmlContainerElements.has(typeName)) {
+    return nativeContainerFamily(props);
+  }
+
+  if (htmlTextElements.has(typeName)) {
+    return "label";
+  }
+
+  return htmlElementFamilies[typeName] ?? null;
+}
+
+function nativeInputFamily(props) {
+  if (String(props?.role ?? "").toLowerCase() === "switch") {
+    return "switch";
+  }
+
+  const inputType = String(props?.type ?? "text").toLowerCase();
+  if (inputType === "checkbox") {
+    return "checkbox";
+  }
+  if (inputType === "radio") {
+    return "radio";
+  }
+  if (inputType === "range") {
+    return "slider";
+  }
+  if (inputType === "number") {
+    return "number-input";
+  }
+  return "input";
+}
+
+function warnDeprecatedHostElement(typeName, family) {
+  if (htmlHostElements.has(typeName)) {
+    return;
+  }
+  const warningKey = `${typeName}:${family}`;
+  if (deprecatedHostElementWarnings.has(warningKey)) {
+    return;
+  }
+  deprecatedHostElementWarnings.add(warningKey);
+  log(
+    "warn",
+    `Deprecated JSX host element <${typeName}> lowered to contract family "${family}". Use an HTML tag with data-slot="${family}" instead.`,
+  );
+}
+
+function nativeContainerFamily(props) {
+  const tokens = classTokens(props);
+  if (tokens.has("flex-col")) {
+    return "column";
+  }
+  if (tokens.has("flex") || tokens.has("flex-row")) {
+    return "row";
+  }
+  return "column";
+}
+
+function classTokens(props) {
+  const parts = [];
+  for (const name of ["class", "className", "classNames"]) {
+    const value = props?.[name];
+    if (typeof value === "string") {
+      parts.push(value);
+    }
+  }
+  if (Array.isArray(props?.classList)) {
+    for (const value of props.classList) {
+      if (typeof value === "string") {
+        parts.push(value);
+      }
+    }
+  }
+  return new Set(parts.flatMap((value) => value.split(/\s+/)).filter(Boolean));
+}
+
+function nativeSlotFamily(props) {
+  const rawSlotName = props?.["data-slot"] ?? props?.dataSlot;
+  if (rawSlotName == null) {
+    return null;
+  }
+
+  const slotName = String(rawSlotName).trim();
+  if (slotName === "") {
+    return null;
+  }
+
+  const family = normalizeSlotFamilyName(slotName);
+  if (family == null) {
+    throw new Error(`Unknown contract family "${slotName}" from data-slot.`);
+  }
+  return family;
+}
+
+function normalizeSlotFamilyName(slotName) {
+  const kebabName = camelToKebab(slotName);
+  const compactName = kebabName.replace(/-/g, "");
+  const family = knownFamilies.has(slotName)
+    ? slotName
+    : familyAliases[slotName] ??
+      familyAliases[kebabName] ??
+      compactFamilyAliases[slotName.toLowerCase()] ??
+      compactFamilyAliases[compactName] ??
+      kebabName;
+  if (knownFamilies.size > 0 && !knownFamilies.has(family)) {
+    return null;
+  }
   return family;
 }
 
 function normalizePropName(name) {
   return propAliases[name] ?? camelToSnake(name);
+}
+
+function shouldHoistPropToLayout(family, propName) {
+  return sharedLayoutPropNames.has(propName) && !familyOwnsProp(family, propName);
+}
+
+function familyOwnsProp(family, propName) {
+  return familyPropNames.get(family)?.has(propName) === true;
+}
+
+function mergeLayoutProps(previousLayout, nextLayout) {
+  if (!isPlainObject(nextLayout) || isElement(nextLayout)) {
+    return previousLayout;
+  }
+  return { ...(isPlainObject(previousLayout) ? previousLayout : {}), ...nextLayout };
+}
+
+function normalizeLayoutObject(value) {
+  if (!isPlainObject(value) || isElement(value)) {
+    throw new Error('Shared "layout" props must be plain objects.');
+  }
+  const out = {};
+  for (const [rawName, rawValue] of Object.entries(value)) {
+    if (rawValue === undefined) {
+      continue;
+    }
+    const propName = normalizePropName(rawName);
+    out[propName] = normalizeLayoutPropValue(propName, rawValue);
+  }
+  return out;
+}
+
+function normalizeLayoutPropValue(propName, value) {
+  const normalized = normalizePropValue("layout", propName, value);
+  if (contractLengthPropNames.has(propName)) {
+    return normalizeContractLength(propName, normalized);
+  }
+  if (propName === "display" || propName === "direction" || propName === "overflow_x" || propName === "overflow_y") {
+    return camelToKebab(normalized);
+  }
+  return normalized;
+}
+
+function normalizeContractLength(propName, value) {
+  if (value == null) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Layout prop "${propName}" must be a finite number.`);
+    }
+    return { kind: "px", value };
+  }
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (text === "auto") {
+      return { kind: "auto" };
+    }
+    if (/^-?\\d+(?:\\.\\d+)?%$/.test(text)) {
+      return { kind: "percent", value: Number(text.slice(0, -1)) / 100 };
+    }
+    if (/^-?\\d+(?:\\.\\d+)?$/.test(text)) {
+      return { kind: "px", value: Number(text) };
+    }
+    throw new Error(`Layout prop "${propName}" must be a number, "auto", or a percentage string.`);
+  }
+  if (isPlainObject(value) && typeof value.kind === "string") {
+    return value;
+  }
+  throw new Error(`Layout prop "${propName}" must be a contract length value.`);
 }
 
 function normalizePropValue(family, propName, value) {

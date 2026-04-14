@@ -1,5 +1,6 @@
 import { render, useState } from "egui";
 import { motion } from "motion/react";
+import { Button, Label } from "./ui/components/index.tsx";
 
 type MotionNodeProps = {
   open: boolean;
@@ -50,19 +51,19 @@ function MotionNodes(props: MotionNodeProps) {
 function App() {
   const [open, setOpen] = useState(false);
   return (
-    <column id="motion-root" gap={10}>
-      <label
+    <div id="motion-root" className="flex flex-col gap-[10px]">
+      <Label
         id="motion-title"
         text="JSX-authored motion nodes"
         weight="semibold"
       />
-      <button
+      <Button
         id="motion-toggle"
         label={open ? "Reset motion" : "Run motion"}
         onClick={() => setOpen((value: boolean) => !value)}
       />
       <MotionNodes open={open} />
-    </column>
+    </div>
   );
 }
 

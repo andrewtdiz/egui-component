@@ -144,7 +144,7 @@ fn draw_image(ui: &mut Ui, props: Image<'_>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::Image;
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::ComponentUiExt;
     use egui::{vec2, Align, CentralPanel, Context, Layout, RawInput, Rect};
 
     const SHOWCASE_PNG_BYTES: &[u8] = include_bytes!("../../assets/images/showcase-image.png");

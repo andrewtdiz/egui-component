@@ -1,5 +1,0 @@
-{
-  "languageMode": "strict",
-  "lintErrors": true,
-  "globals": ["app", "ui"]
-}

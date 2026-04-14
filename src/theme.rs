@@ -407,13 +407,6 @@ impl ThemeRuntime {
     pub const fn palette(self) -> ThemePalette {
         self.spec.palette(self.mode)
     }
-
-    pub const fn with_mode(self, mode: ThemeMode) -> Self {
-        Self {
-            spec: self.spec,
-            mode,
-        }
-    }
 }
 
 impl Default for ThemeRuntime {
@@ -550,7 +543,7 @@ impl ThemeUiRef for Ui {
     }
 }
 
-impl ThemeUiRef for crate::components::ComponentUi<'_> {
+impl ThemeUiRef for crate::runtime_components::ComponentUi<'_> {
     fn theme_ui(&self) -> &Ui {
         self.ui()
     }

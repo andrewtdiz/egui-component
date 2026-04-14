@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use crate::primitives::ScrollAreaExt;
 use egui::util::IdTypeMap;
 use egui::{Pos2, Response, Ui, UiBuilder};
 use parking_lot::{ArcMutexGuard, RawMutex};
@@ -451,6 +452,7 @@ impl Tui {
                 let container_width = full_container_without_border.width();
                 let container_height = full_container_without_border.height();
                 let mut scroll = egui::ScrollArea::new(scroll_in_directions)
+                    .no_drag_to_scroll()
                     .max_height(container_height)
                     .max_width(container_width);
 

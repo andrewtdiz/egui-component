@@ -166,7 +166,7 @@ struct AudioPlaybackStyle {
 fn draw_audio_playback_actions(
     ui: &mut Ui,
     row_rect: Rect,
-    overrides: crate::components::api::ComponentOverrides,
+    overrides: crate::runtime_components::api::ComponentOverrides,
     add_actions: impl FnOnce(&mut Ui),
 ) -> Option<Rect> {
     let mut actions_rect = Rect::NOTHING;
@@ -357,7 +357,7 @@ mod tests {
         AudioPlayback, AudioPlaybackProgressMemory, AudioPlaybackResult, AudioPlaybackState,
         AUDIO_PLAYBACK_BUTTON_SIZE, AUDIO_PLAYBACK_DURATION_SECS,
     };
-    use crate::components::{Button, ButtonVariant, ComponentUiExt, ControlSize};
+    use crate::runtime_components::{Button, ButtonVariant, ComponentUiExt, ControlSize};
     use egui::{
         pos2, vec2, CentralPanel, Context, Event, Id, Modifiers, PointerButton, Pos2, RawInput,
         Rect,
@@ -406,7 +406,7 @@ mod tests {
                 actions_rect = super::draw_audio_playback_actions(
                     ui,
                     row_rect,
-                    crate::components::api::ComponentOverrides::default(),
+                    crate::runtime_components::api::ComponentOverrides::default(),
                     |ui| {
                         let mut ui = ui.components();
                         let _ = ui.button(

@@ -10,7 +10,6 @@ pub(crate) const SPACING_INTERACT_HEIGHT: f32 = 34.0;
 pub(crate) const LAYOUT_GAP_XS: f32 = 4.0;
 pub(crate) const LAYOUT_GAP_SM: f32 = 5.0;
 pub(crate) const INPUT_PADDING_X: i8 = 10;
-pub(crate) const INPUT_PADDING_Y: i8 = 6;
 
 fn role(runtime: ThemeRuntime, role: ColorRole) -> Color32 {
     theme::resolved_color(runtime, role)
@@ -52,6 +51,7 @@ pub(crate) fn row_hover_bg(runtime: ThemeRuntime) -> Color32 {
     )
 }
 
+#[cfg(test)]
 pub(crate) fn row_active_bg(runtime: ThemeRuntime) -> Color32 {
     row_hover_bg(runtime)
 }
@@ -174,18 +174,6 @@ pub(crate) fn primary_fg(runtime: ThemeRuntime) -> Color32 {
 
 pub(crate) fn button_primary_fill_fg(runtime: ThemeRuntime) -> Color32 {
     role(runtime, ColorRole::PrimaryForeground)
-}
-
-pub(crate) fn image_tile_selected_fill(runtime: ThemeRuntime) -> Color32 {
-    mix(
-        role(runtime, ColorRole::Primary),
-        role(runtime, ColorRole::Accent),
-        0.2,
-    )
-}
-
-pub(crate) fn image_tile_selected_stroke(runtime: ThemeRuntime) -> Color32 {
-    role(runtime, ColorRole::Ring)
 }
 
 pub(crate) fn row_selected_bg(runtime: ThemeRuntime) -> Color32 {

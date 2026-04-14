@@ -20,17 +20,16 @@ Read these files in order:
 
 ## What This Library Is
 
-`egui-component` is a small component library on top of `egui`.
+`egui-component` is now a JSX-first runtime on top of `egui`.
 
-The public runtime surface is built around three ideas:
+The active public runtime surface is built around three ideas:
 
 - `theme::install(&Context, ThemeSpec, ThemeMode)` installs the shared fonts, visuals, semantic theme, and icon loading.
 - `theme::set_theme`, `theme::set_mode`, and `theme::with_theme` are the only supported theme mutation paths.
 - `layout::*` expresses flow layout with explicit gap, padding, alignment, and sizing primitives.
-- `ui.components()` exposes the typed widget facade for a given `egui::Ui`.
-- `contract::*` exposes an optional host-driven declarative contract layer, semantic event model, and schema export.
+- `contract::*` exposes the active declarative render boundary, semantic event model, and schema export used by the JSX runtime.
 - The host-neutral authored-runtime crate lives in `crates/clay-jsx-runtime`, the egui bridge lives in `crates/clay-jsx-egui-bridge`, and the active example in `examples/runtime-jsx` feeds JSX/TSX-authored trees into `contract::*`.
-- Each component method accepts a typed builder; new work should keep shorthand forms minimal.
+- `ui.components()` and the typed builders in `src/components/*.rs` remain as deprecated compatibility shims over the internal runtime renderer implementation. Keep shorthand forms minimal when touching that internal layer.
 
 ## Non-Negotiable Design Contract
 
@@ -58,7 +57,7 @@ Current global layout/style anchors:
 Use these files as the source of truth:
 
 - `src/components/api.rs`
-  Defines `ComponentUiExt`, the typed facade, and scoped override plumbing.
+  Defines the deprecated direct-Rust compatibility facade and scoped override plumbing used by the internal renderer.
 - `src/layout.rs`
   Public flow-layout helpers used for row, column, inset, alignment, sized boxes, and spacers.
 - `src/primitives/*.rs`
@@ -72,13 +71,13 @@ Use these files as the source of truth:
 - `src/ui/style.rs`
   Global component-theme defaults.
 - `src/catalog.rs`
-  Public component registry used by the showcase and parser helpers.
+  Legacy component registry used by the deprecated Rust showcase and parser helpers.
 - `src/contract/*.rs`
   Declarative contract model, registry, renderer, and schema export.
 - `src/example_apps/showcase.rs`
-  Canonical typed-component examples.
+  Legacy typed-component examples for the deprecated Rust facade.
 - `src/example_apps/contract_demo.rs`
-  Canonical optional contract-layer example that renders every registered family from a host-authored tree.
+  Legacy host-authored contract demo that renders every registered family from a Rust-built tree.
 - `docs/llm/components/*.md`
   Per-component authoring stubs used to build the generated reference.
 - `docs/llm/contract-*.md`
@@ -87,6 +86,9 @@ Use these files as the source of truth:
   Family guides and the component stub template used by `cargo xtask new-component`.
 
 ## Surface Summary
+
+These component names now describe the internal Rust runtime implementations and deprecated direct-Rust shims. The active user-facing layer lives under `examples/runtime-jsx/ui/components`.
+
 
 Primitive-ish building blocks:
 
@@ -124,7 +126,7 @@ Wrapper utilities:
 - `LabelOverride`
 - `TextInputOverride`
 
-## Typical Usage
+## Legacy Direct Rust Authoring (Deprecated)
 
 ```rust
 use egui_component::prelude::*;
@@ -168,15 +170,15 @@ The expected implementation path is:
 4. Update the generated doc stub in `docs/llm/components/`.
 5. Run sync and validation before finishing.
 
-## If You Add A New Component
+## If You Add A New Runtime Component
 
-Do all of this in the same change:
+Do all of this in the same change when the JSX runtime needs new Rust-side rendering support:
 
 1. Add `src/components/<name>.rs`.
 2. Export it from `src/components/mod.rs`.
-3. Re-export it from `src/lib.rs::prelude`.
-4. Add it to `src/catalog.rs`.
-5. Add a showcase example in `src/dev/showcase/component_showcase.rs`.
+3. Wire it into `src/contract/model.rs`, `src/contract/renderer.rs`, and `src/contract/registry.rs` if JSX needs to reach it.
+4. Add or update the authored TSX wrapper in `examples/runtime-jsx/ui/components/` when the surface is user-facing.
+5. Update `examples/runtime-jsx/ui/migration-manifest.ts` and the JSX catalog preview coverage as needed.
 6. Add or refine the component stub in `docs/llm/components/`.
 7. Reuse existing tokens and primitives before creating new visual rules.
 

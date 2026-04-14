@@ -281,7 +281,7 @@ const NODE_COMMON_FIELDS: [ContractPropSpec; 8] = [
         Some("layout"),
         false,
         "Optional shared layout hints.",
-        "The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap overrides on flow containers only.",
+        "The renderer applies sizing, padding, and margin on every node and container direction/justify/align/gap/wrap overrides on flow containers only.",
     ),
 ];
 
@@ -353,13 +353,13 @@ const ACTIONS_FIELDS: [ContractPropSpec; 8] = [
 ];
 
 const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
-    unsupported_prop(
+    partial_prop(
         "display",
         ContractPropTypeKind::Enum,
         Some("layout_display"),
         false,
         "Optional layout mode override.",
-        "Declared in the schema only. The current renderer does not execute display-mode switching.",
+        "Executed by the taffy-backed flow-container renderer used by row, column, inset, and card. `overlay` remains unsupported.",
     ),
     partial_prop(
         "direction",
@@ -369,29 +369,29 @@ const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
         "Optional row or column direction override.",
         "Only executed by the flow-container helpers used by row, column, inset, and card.",
     ),
-    unsupported_prop(
+    partial_prop(
         "grow",
         ContractPropTypeKind::Number,
         None,
         false,
         "Optional flex grow factor.",
-        "Declared in the schema only. Flex growth is not executed by the current renderer.",
+        "Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card.",
     ),
-    unsupported_prop(
+    partial_prop(
         "shrink",
         ContractPropTypeKind::Number,
         None,
         false,
         "Optional flex shrink factor.",
-        "Declared in the schema only. Flex shrink is not executed by the current renderer.",
+        "Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card.",
     ),
-    unsupported_prop(
+    partial_prop(
         "basis",
         ContractPropTypeKind::Object,
         Some("layout_length"),
         false,
         "Optional flex basis length.",
-        "Declared in the schema only. Flex basis is not executed by the current renderer.",
+        "Executed as child-item layout when the node is placed inside the taffy-backed flow-container renderer used by row, column, inset, and card.",
     ),
     supported_prop(
         "width",
@@ -482,61 +482,61 @@ const LAYOUT_FIELDS: [ContractPropSpec; 24] = [
         "Optional main-axis alignment override.",
         "Only executed by the flow-container helpers used by row, column, inset, and card.",
     ),
-    unsupported_prop(
+    partial_prop(
         "wrap",
         ContractPropTypeKind::Boolean,
         None,
         false,
         "Optional wrap hint.",
-        "Declared in the schema only. Wrapping is not executed by the current renderer.",
+        "Only executed by the flow-container helpers used by row, column, inset, and card. Wrap-reverse is not represented.",
     ),
-    unsupported_prop(
+    partial_prop(
         "columns",
         ContractPropTypeKind::ObjectList,
         Some("layout_track"),
         false,
         "Optional grid column tracks.",
-        "Declared in the schema only. Grid tracks are not executed by the current renderer.",
+        "Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display.",
     ),
-    unsupported_prop(
+    partial_prop(
         "rows",
         ContractPropTypeKind::ObjectList,
         Some("layout_track"),
         false,
         "Optional grid row tracks.",
-        "Declared in the schema only. Grid tracks are not executed by the current renderer.",
+        "Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display.",
     ),
-    unsupported_prop(
+    partial_prop(
         "col_span",
         ContractPropTypeKind::Number,
         None,
         false,
         "Optional grid column span.",
-        "Declared in the schema only. Grid spans are not executed by the current renderer.",
+        "Executed as child-item grid placement when the parent uses the taffy-backed flow-container renderer in grid mode.",
     ),
-    unsupported_prop(
+    partial_prop(
         "row_span",
         ContractPropTypeKind::Number,
         None,
         false,
         "Optional grid row span.",
-        "Declared in the schema only. Grid spans are not executed by the current renderer.",
+        "Executed as child-item grid placement when the parent uses the taffy-backed flow-container renderer in grid mode.",
     ),
-    unsupported_prop(
+    partial_prop(
         "overflow_x",
         ContractPropTypeKind::Enum,
         Some("layout_overflow"),
         false,
         "Optional horizontal overflow mode.",
-        "Declared in the schema only. Overflow handling is not executed by the current renderer.",
+        "Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`.",
     ),
-    unsupported_prop(
+    partial_prop(
         "overflow_y",
         ContractPropTypeKind::Enum,
         Some("layout_overflow"),
         false,
         "Optional vertical overflow mode.",
-        "Declared in the schema only. Overflow handling is not executed by the current renderer.",
+        "Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`.",
     ),
 ];
 
@@ -973,7 +973,7 @@ const JUSTIFY_VARIANTS: [ContractVariantSpec; 3] = [
     },
 ];
 
-const ALIGN_VARIANTS: [ContractVariantSpec; 3] = [
+const ALIGN_VARIANTS: [ContractVariantSpec; 4] = [
     ContractVariantSpec {
         id: "start",
         label: "Start",
@@ -988,6 +988,11 @@ const ALIGN_VARIANTS: [ContractVariantSpec; 3] = [
         id: "end",
         label: "End",
         summary: "Align content to the trailing cross-axis edge.",
+    },
+    ContractVariantSpec {
+        id: "stretch",
+        label: "Stretch",
+        summary: "Stretch content along the cross axis when the egui container can justify it.",
     },
 ];
 
@@ -2930,7 +2935,7 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         "Layout",
         ContractSharedTypeKind::Object,
         "Shared layout hints available on every node.",
-        "Sizing, padding, and margin are executed on every node. Direction, gap, justify, and align are only executed by the current flow-container helpers.",
+        "Sizing, padding, and margin are executed on every node. Display, direction, gap, justify, align, wrap, grid tracks, and overflow are executed by the taffy-backed flow-container renderer used by row, column, inset, and card.",
         &LAYOUT_FIELDS,
         &EMPTY_VARIANTS,
     ),
@@ -2948,7 +2953,7 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         "Layout Length",
         ContractSharedTypeKind::Object,
         "Tagged length value used by shared layout sizing fields.",
-        "Supported when referenced from width, height, min, and max layout fields. Other consumers such as basis remain unsupported.",
+        "Supported when referenced from width, height, min, max, and taffy-backed flex basis layout fields.",
         &LAYOUT_LENGTH_FIELDS,
         &EMPTY_VARIANTS,
     ),
@@ -2960,12 +2965,12 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         &EMPTY_PROPS,
         &LAYOUT_LENGTH_KIND_VARIANTS,
     ),
-    unsupported_shared_type(
+    partial_shared_type(
         "layout_track",
         "Layout Track",
         ContractSharedTypeKind::Object,
         "Tagged grid track value for declared column and row tracks.",
-        "Grid tracks are declared in the schema only and are not executed by the current renderer.",
+        "Executed when the taffy-backed flow-container renderer used by row, column, inset, and card is switched to grid display.",
         &LAYOUT_TRACK_FIELDS,
         &EMPTY_VARIANTS,
     ),
@@ -2977,12 +2982,12 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         &EMPTY_PROPS,
         &LAYOUT_TRACK_KIND_VARIANTS,
     ),
-    unsupported_shared_type(
+    partial_shared_type(
         "layout_display",
         "Layout Display",
         ContractSharedTypeKind::Enum,
         "Declared layout display modes.",
-        "Display-mode switching is declared in the schema only and is not executed by the current renderer.",
+        "Executed by the taffy-backed flow-container renderer used by row, column, inset, and card. `overlay` remains unsupported.",
         &EMPTY_PROPS,
         &LAYOUT_DISPLAY_VARIANTS,
     ),
@@ -2995,12 +3000,12 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
         &EMPTY_PROPS,
         &LAYOUT_DIRECTION_VARIANTS,
     ),
-    unsupported_shared_type(
+    partial_shared_type(
         "layout_overflow",
         "Layout Overflow",
         ContractSharedTypeKind::Enum,
         "Declared overflow modes for shared layout hints.",
-        "Overflow handling is declared in the schema only and is not executed by the current renderer.",
+        "Executed by the taffy-backed flow-container renderer used by row, column, inset, and card for `visible`, `hidden`, and `scroll`.",
         &EMPTY_PROPS,
         &LAYOUT_OVERFLOW_VARIANTS,
     ),
@@ -3061,7 +3066,7 @@ pub fn reference_markdown() -> String {
     let layout = shared_type("layout").expect("layout shared type");
 
     let mut markdown = String::from(
-        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Position In The Runtime\n\n`contract::*` is an optional host-driven declarative layer.\n\n- The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.\n- `ContractTree` is useful when a host wants a serializable declarative surface, schema tooling, or change-driven host-authored trees.\n- Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.\n\n## Shared Node Fields\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
+        "# Contract Reference\n\nGenerated from `egui_component::contract::registry()` and `egui_component::contract::shared_types()`.\n\nExport the schema and human-readable reference from Rust with:\n\n```rust\negui_component::contract::schema_json_pretty()\negui_component::contract::reference_markdown()\n```\n\n## Position In The Runtime\n\n`contract::*` is the active declarative render boundary for the JSX runtime and the remaining host-driven compatibility surfaces.\n\n- The `clay-jsx-egui-bridge` crate in `crates/clay-jsx-egui-bridge` lowers authored JSX/TSX into Rust-owned host nodes, then materializes this contract tree before Rust renders it.\n- `ContractTree` is useful when the runtime or a compatibility host wants a serializable declarative surface, schema tooling, or change-driven tree materialization.\n- Renderer ownership stays in Rust; the contract tree is the data boundary, not a separate JS renderer.\n\n## Shared Node Fields\n\n| Field | Type | Support | Summary |\n| --- | --- | --- | --- |\n",
     );
 
     for field in node_common.fields {
@@ -3342,7 +3347,7 @@ mod tests {
             .iter()
             .find(|field| field.name == "display")
             .expect("display field");
-        assert_eq!(display.support, ContractSupportStatus::Unsupported);
+        assert_eq!(display.support, ContractSupportStatus::Partial);
 
         let padding = layout
             .fields
@@ -3363,14 +3368,21 @@ mod tests {
             .iter()
             .find(|field| field.name == "columns")
             .expect("columns field");
-        assert_eq!(columns.support, ContractSupportStatus::Unsupported);
+        assert_eq!(columns.support, ContractSupportStatus::Partial);
+
+        let wrap = layout
+            .fields
+            .iter()
+            .find(|field| field.name == "wrap")
+            .expect("wrap field");
+        assert_eq!(wrap.support, ContractSupportStatus::Partial);
 
         let overflow = layout
             .fields
             .iter()
             .find(|field| field.name == "overflow_y")
             .expect("overflow_y field");
-        assert_eq!(overflow.support, ContractSupportStatus::Unsupported);
+        assert_eq!(overflow.support, ContractSupportStatus::Partial);
     }
 
     #[test]

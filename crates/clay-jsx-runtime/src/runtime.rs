@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -12,11 +12,12 @@ use deno_ast::{
     JsxRuntime, MediaType, ParseParams, SourceMapOption, TranspileModuleOptions, TranspileOptions,
 };
 use deno_core::{
-    extension, op2, resolve_import, JsRuntime, ModuleLoadOptions, ModuleLoadReferrer,
+    extension, op2, resolve_import, serde_v8, v8, JsRuntime, ModuleLoadOptions, ModuleLoadReferrer,
     ModuleLoadResponse, ModuleLoader, ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType,
     OpState, ResolutionKind, RuntimeOptions as DenoRuntimeOptions,
 };
 use deno_error::JsErrorBox;
+use serde::de::DeserializeOwned;
 
 use crate::diagnostics::{push_log, RuntimeLogBuffer};
 
@@ -109,6 +110,7 @@ struct JsxModuleLoader {
     virtual_sources: HashMap<String, String>,
     jsx_import_source: String,
     source_maps: SourceMapStore,
+    loaded_modules: Rc<RefCell<BTreeSet<PathBuf>>>,
 }
 
 impl JsxModuleLoader {
@@ -133,7 +135,12 @@ impl JsxModuleLoader {
             virtual_sources,
             jsx_import_source: options.jsx_import_source,
             source_maps: Rc::new(RefCell::new(HashMap::new())),
+            loaded_modules: Rc::new(RefCell::new(BTreeSet::new())),
         })
+    }
+
+    fn loaded_module_paths(&self) -> Vec<PathBuf> {
+        self.loaded_modules.borrow().iter().cloned().collect()
     }
 }
 
@@ -159,6 +166,7 @@ impl ModuleLoader for JsxModuleLoader {
     ) -> ModuleLoadResponse {
         ModuleLoadResponse::Sync(load_module(
             Rc::clone(&self.source_maps),
+            Rc::clone(&self.loaded_modules),
             &self.virtual_sources,
             &self.jsx_import_source,
             module_specifier,
@@ -175,6 +183,7 @@ impl ModuleLoader for JsxModuleLoader {
 
 pub struct RuntimeSession {
     entry_path: Option<PathBuf>,
+    module_loader: Rc<JsxModuleLoader>,
     js_runtime: JsRuntime,
     tokio_runtime: tokio::runtime::Runtime,
 }
@@ -190,8 +199,9 @@ impl std::fmt::Debug for RuntimeSession {
 
 impl RuntimeSession {
     pub fn new(options: JsxRuntimeOptions) -> anyhow::Result<Self> {
+        let module_loader = Rc::new(JsxModuleLoader::new(options)?);
         let js_runtime = JsRuntime::new(DenoRuntimeOptions {
-            module_loader: Some(Rc::new(JsxModuleLoader::new(options)?)),
+            module_loader: Some(module_loader.clone()),
             extensions: vec![clay_jsx_host::init()],
             ..Default::default()
         });
@@ -207,6 +217,7 @@ impl RuntimeSession {
 
         Ok(Self {
             entry_path: None,
+            module_loader,
             js_runtime,
             tokio_runtime,
         })
@@ -223,7 +234,7 @@ impl RuntimeSession {
     }
 
     pub fn load_main_module(&mut self, entry_path: &Path) -> anyhow::Result<()> {
-        let entry_path = absolute_path(entry_path)?;
+        let entry_path = normalize_file_path(entry_path)?;
         let main_module = ModuleSpecifier::from_file_path(&entry_path).map_err(|_| {
             anyhow!(
                 "entry path is not a valid file URL: {}",
@@ -248,6 +259,47 @@ impl RuntimeSession {
         Ok(())
     }
 
+    pub fn execute_script_as<T: DeserializeOwned>(
+        &mut self,
+        name: &'static str,
+        source: impl Into<String>,
+    ) -> anyhow::Result<T> {
+        let value = self
+            .js_runtime
+            .execute_script(name, source.into())
+            .map_err(|error| anyhow!("failed to execute script {name}: {error}"))?;
+        self.run_event_loop()?;
+
+        deno_core::scope!(scope, &mut self.js_runtime);
+        let local = v8::Local::new(scope, value);
+        serde_v8::from_v8(scope, local)
+            .map_err(|error| anyhow!("failed to deserialize script result {name}: {error}"))
+    }
+
+    pub fn execute_json_expression_as<T: DeserializeOwned>(
+        &mut self,
+        name: &'static str,
+        expression: &str,
+    ) -> anyhow::Result<T> {
+        let source = format!(
+            "(() => {{ const __clayResult = ({expression}); return JSON.stringify(__clayResult); }})()"
+        );
+        let value = self
+            .js_runtime
+            .execute_script(name, source)
+            .map_err(|error| anyhow!("failed to execute script {name}: {error}"))?;
+        self.run_event_loop()?;
+
+        deno_core::scope!(scope, &mut self.js_runtime);
+        let local = value.open(scope);
+        let json = local
+            .to_string(scope)
+            .ok_or_else(|| anyhow!("script result {name} could not be stringified"))?
+            .to_rust_string_lossy(scope);
+        serde_json::from_str(&json)
+            .map_err(|error| anyhow!("failed to deserialize JSON script result {name}: {error}"))
+    }
+
     pub fn take_update(&mut self) -> RuntimeUpdate {
         let op_state = self.js_runtime.op_state();
         let mut op_state = op_state.borrow_mut();
@@ -260,6 +312,10 @@ impl RuntimeSession {
 
     pub fn entry_path(&self) -> Option<&Path> {
         self.entry_path.as_deref()
+    }
+
+    pub fn loaded_module_paths(&self) -> Vec<PathBuf> {
+        self.module_loader.loaded_module_paths()
     }
 
     fn evaluate_main_module(&mut self, main_module: &ModuleSpecifier) -> anyhow::Result<()> {
@@ -281,6 +337,7 @@ impl RuntimeSession {
 
 fn load_module(
     source_maps: SourceMapStore,
+    loaded_modules: Rc<RefCell<BTreeSet<PathBuf>>>,
     virtual_sources: &HashMap<String, String>,
     jsx_import_source: &str,
     module_specifier: &ModuleSpecifier,
@@ -292,6 +349,9 @@ fn load_module(
     let path = module_specifier.to_file_path().map_err(|_| {
         JsErrorBox::generic("Only file:// and configured virtual modules are supported.")
     })?;
+    let path =
+        normalize_file_path(&path).map_err(|error| JsErrorBox::generic(error.to_string()))?;
+    loaded_modules.borrow_mut().insert(path.clone());
     let media_type = MediaType::from_path(&path);
     let (module_type, should_transpile) = match media_type {
         MediaType::JavaScript | MediaType::Mjs | MediaType::Cjs => (ModuleType::JavaScript, false),
@@ -400,6 +460,11 @@ fn absolute_path(path: &Path) -> anyhow::Result<PathBuf> {
     }
 }
 
+fn normalize_file_path(path: &Path) -> anyhow::Result<PathBuf> {
+    let path = absolute_path(path)?;
+    Ok(std::fs::canonicalize(&path).unwrap_or(path))
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
@@ -428,6 +493,82 @@ render(<box answer={42} />);
             serde_json::from_str::<serde_json::Value>(&update.commit_batches_json[0])
                 .expect("commit should be json"),
             serde_json::json!({ "type": "box", "props": { "answer": 42 } })
+        );
+    }
+
+    #[test]
+    fn tracks_transitive_loaded_module_paths() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("app.tsx");
+        let child_path = dir.path().join("child.ts");
+        let grandchild_path = dir.path().join("grandchild.ts");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "clay";
+import { answer } from "./child.ts";
+
+render(<box answer={answer} />);
+"#,
+        )
+        .expect("entry file should be written");
+        std::fs::write(
+            &child_path,
+            r#"
+import { answerValue } from "./grandchild.ts";
+
+export const answer = answerValue;
+"#,
+        )
+        .expect("child file should be written");
+        std::fs::write(&grandchild_path, "export const answerValue = 42;")
+            .expect("grandchild file should be written");
+
+        let (session, _update) =
+            RuntimeSession::load(&entry_path, test_options()).expect("tsx should load");
+        assert_eq!(
+            session.loaded_module_paths(),
+            vec![entry_path, child_path, grandchild_path]
+        );
+    }
+
+    #[test]
+    fn failed_load_tracks_attempted_dependency_paths_for_missing_transitive_imports() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("app.tsx");
+        let child_path = dir.path().join("child.ts");
+        let missing_path = dir.path().join("missing.ts");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "clay";
+import { answer } from "./child.ts";
+
+render(<box answer={answer} />);
+"#,
+        )
+        .expect("entry file should be written");
+        std::fs::write(
+            &child_path,
+            r#"
+import { answerValue } from "./missing.ts";
+
+export const answer = answerValue;
+"#,
+        )
+        .expect("child file should be written");
+
+        let mut session = RuntimeSession::new(test_options()).expect("runtime should be created");
+        let error = session
+            .load_main_module(&entry_path)
+            .expect_err("missing transitive import should fail");
+        assert!(
+            !error.to_string().trim().is_empty(),
+            "expected missing transitive import to produce an error"
+        );
+        assert_eq!(
+            session.loaded_module_paths(),
+            vec![entry_path, child_path, missing_path]
         );
     }
 

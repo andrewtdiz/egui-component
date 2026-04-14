@@ -1,8 +1,8 @@
-use crate::components::{
+use crate::runtime_components::{
     AudioPlaybackState, ButtonVariant, ControlSize, DialogueIntent, DragBoardRegion,
-    FileTreeItemKind, HierarchyIconStyle, HierarchyItemKind, HierarchyStyle,
-    ImageTilePlaybackState, ImageTileSize, LabelTone, LabelWeight, NumberInputAxis, PopoverAlign,
-    PopoverSide, SelectVariant, SidebarSide, ToastIntent, ToastPlacement, TooltipPlacement,
+    FileTreeItemKind, HierarchyIconStyle, HierarchyItemKind, HierarchyStyle, LabelTone,
+    LabelWeight, NumberInputAxis, PopoverAlign, PopoverSide, SelectVariant, SidebarSide,
+    ToastIntent, ToastPlacement, TooltipPlacement,
 };
 use std::{collections::BTreeMap, fmt};
 
@@ -226,6 +226,7 @@ pub enum ContractAlign {
     Start,
     Center,
     End,
+    Stretch,
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -241,6 +242,21 @@ pub enum ContractAnchor {
     BottomLeft,
     BottomCenter,
     BottomRight,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum ImageTileSize {
+    Sm,
+    Md,
+    Lg,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum ImageTilePlaybackState {
+    Paused,
+    Playing,
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -1953,8 +1969,8 @@ mod tests {
             common: ContractCommon::new("contract.button"),
             label: "Save".to_owned(),
             action_id: Some("button.save".into()),
-            variant: Some(crate::components::ButtonVariant::Primary),
-            size: Some(crate::components::ControlSize::Md),
+            variant: Some(crate::runtime_components::ButtonVariant::Primary),
+            size: Some(crate::runtime_components::ControlSize::Md),
             leading_icon: Some("save".to_owned()),
             trailing_text: None,
             trailing_icon: None,

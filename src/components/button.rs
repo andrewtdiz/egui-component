@@ -1,8 +1,8 @@
 use super::{
     api::{ComponentOverride, ComponentOverrides, ComponentUi},
-    color::{paint_color, Color},
     common::ControlSize,
 };
+use crate::primitives::{paint_swatch, Swatch};
 use crate::ui::{icons, tokens, typography};
 use egui::{pos2, Color32, CursorIcon, FontId, Id, Rect, RichText, Stroke, Ui, Vec2};
 
@@ -32,7 +32,7 @@ pub struct Button<'a> {
     pub size: ControlSize,
     pub leading_icon: Option<&'a str>,
     pub icon_size: f32,
-    pub color: Option<Color>,
+    pub color: Option<Swatch>,
     pub label_color: Option<Color32>,
     pub icon_tint: Option<Color32>,
     pub icon_only: bool,
@@ -87,7 +87,7 @@ impl<'a> Button<'a> {
         }
     }
 
-    pub fn color_only(color: Color) -> Self {
+    pub fn color_only(color: Swatch) -> Self {
         Self {
             id: None,
             label: "",
@@ -123,7 +123,7 @@ impl<'a> Button<'a> {
         self
     }
 
-    pub fn color(mut self, color: impl Into<Color>) -> Self {
+    pub fn color(mut self, color: impl Into<Swatch>) -> Self {
         self.color = Some(color.into());
         self
     }
@@ -339,7 +339,7 @@ fn resolve_button_style(
     runtime: crate::theme::ThemeRuntime,
     variant: ButtonVariant,
     size: ControlSize,
-    color_override: Option<Color>,
+    color_override: Option<Swatch>,
     label_color_override: Option<Color32>,
     icon_tint_override: Option<Color32>,
 ) -> ResolvedButtonStyle {
@@ -686,7 +686,7 @@ fn draw_button_inner(ui: &mut Ui, props: Button<'_>) -> egui::Response {
         }
         .on_hover_cursor(CursorIcon::PointingHand);
         if let Some(color) = props.color.filter(|_| swatch_only) {
-            paint_color(ui.painter(), response.rect, color);
+            paint_swatch(ui.painter(), response.rect, color);
         }
         if let Some(icon_name) = props
             .trailing_icon
@@ -767,7 +767,8 @@ mod tests {
         ButtonLabelWeight, ButtonVariant, ResolvedButtonStyle,
         BUTTON_ICON_LABEL_LEFT_PADDING_REDUCTION,
     };
-    use crate::components::{Color, ComponentUiExt, ControlSize};
+    use crate::primitives::Swatch;
+    use crate::runtime_components::{ComponentUiExt, ControlSize};
     use crate::ui::{tokens, typography};
     use egui::{vec2, CentralPanel, Color32, Context, RawInput, Rect, Stroke};
 
@@ -781,7 +782,7 @@ mod tests {
                 rect = ui
                     .components()
                     .button(
-                        Button::color_only(Color::new(Color32::from_rgb(17, 24, 39)).size(18.0))
+                        Button::color_only(Swatch::new(Color32::from_rgb(17, 24, 39)).size(18.0))
                             .variant(ButtonVariant::Ghost)
                             .size(ControlSize::Sm),
                     )

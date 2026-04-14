@@ -486,8 +486,8 @@ mod tests {
         draw_toast, draw_toast_viewport, toast_shadow, Toast, ToastIntent, ToastPlacement,
         ToastStack, ToastViewport,
     };
-    use crate::components::api::ComponentOverrides;
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::api::ComponentOverrides;
+    use crate::runtime_components::ComponentUiExt;
     use crate::ui::tokens;
     use egui::{Align, CentralPanel, Context, Id, Layout, RawInput, Rect, UiBuilder};
 

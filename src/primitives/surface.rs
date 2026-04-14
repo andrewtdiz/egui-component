@@ -4,7 +4,7 @@ use egui::{Color32, CornerRadius, InnerResponse, Margin, Shadow, Stroke, Ui};
 pub struct SurfaceFrame {
     fill: Color32,
     stroke: Stroke,
-    corner_radius: u8,
+    corner_radius: CornerRadius,
     padding_x: i8,
     padding_y: i8,
     shadow: Shadow,
@@ -15,15 +15,15 @@ impl SurfaceFrame {
         Self {
             fill,
             stroke,
-            corner_radius: 0,
+            corner_radius: CornerRadius::ZERO,
             padding_x: 0,
             padding_y: 0,
             shadow: Shadow::NONE,
         }
     }
 
-    pub fn corner_radius(mut self, corner_radius: u8) -> Self {
-        self.corner_radius = corner_radius;
+    pub fn corner_radius(mut self, corner_radius: impl Into<CornerRadius>) -> Self {
+        self.corner_radius = corner_radius.into();
         self
     }
 
@@ -51,7 +51,7 @@ pub fn surface_frame_builder(frame: SurfaceFrame) -> egui::Frame {
     egui::Frame::new()
         .fill(frame.fill)
         .stroke(frame.stroke)
-        .corner_radius(CornerRadius::same(frame.corner_radius))
+        .corner_radius(frame.corner_radius)
         .inner_margin(Margin::symmetric(frame.padding_x, frame.padding_y))
         .shadow(frame.shadow)
 }

@@ -2,6 +2,7 @@ use super::{
     api::{with_component_overrides, ComponentUi, ComponentUiExt},
     Button, ButtonVariant, Label, LabelTone, LabelWeight,
 };
+use crate::primitives::ScrollAreaExt;
 use crate::theme::ColorRole;
 use crate::ui::tokens;
 use egui::{Color32, CornerRadius, Id, Key, Margin, Order, Stroke, StrokeKind, Ui};
@@ -217,11 +218,12 @@ fn draw_sidebar_in(
                         if let Some(title) = props.title {
                             draw_sidebar_header(ui, title, runtime, &mut close_requested);
                             ui.add_space(10.0);
-                            let _ = ui.components().separator();
+                            let _ = ui.separator();
                             ui.add_space(10.0);
                         }
                         let body_max_height = ui.available_height().max(1.0);
                         let _ = egui::ScrollArea::vertical()
+                            .no_drag_to_scroll()
                             .auto_shrink([false, false])
                             .max_height(body_max_height)
                             .show(ui, |ui| add(ui, &mut close_requested));
@@ -322,7 +324,7 @@ fn sidebar_corner_radius(side: SidebarSide, radius: u8) -> CornerRadius {
 #[cfg(test)]
 mod tests {
     use super::{sidebar_panel_rect, Sidebar, SidebarSide};
-    use crate::components::{Button, ButtonVariant, ComponentUiExt};
+    use crate::runtime_components::{Button, ButtonVariant, ComponentUiExt};
     use crate::theme::{self, ThemeMode};
     use egui::{pos2, vec2, CentralPanel, Context, Id, RawInput, Rect, SidePanel};
 

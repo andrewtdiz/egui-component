@@ -3,7 +3,7 @@ use crate::ui::tailwind::tokens::{
     BORDER_WIDTH_DEFAULT, DIMENSION_UNIT, RADIUS_TOKENS, SPACING_UNIT,
 };
 use crate::ui::tailwind::types::{
-    AspectDominantAxis, FlexBasis, Inset, PaddingValue, SideTarget, Spec,
+    AspectDominantAxis, FlexBasis, Height, Inset, PaddingValue, SideTarget, Spec, Width,
 };
 
 enum SizeAxisValue {
@@ -11,74 +11,68 @@ enum SizeAxisValue {
     Percent(f32),
 }
 
-pub fn handle_width(spec: &mut Spec, suffix: &str) {
-    if suffix == "full" || suffix == "screen" {
-        spec.width = Some(crate::ui::tailwind::types::Width::Full);
-        return;
-    }
-    if suffix == "px" {
-        spec.width = Some(crate::ui::tailwind::types::Width::Pixels(1.0));
-        return;
-    }
-    if let Some(value) = parse_bracket_size_value(suffix) {
-        spec.width = Some(match value {
-            SizeAxisValue::Pixels(px) => crate::ui::tailwind::types::Width::Pixels(px),
-            SizeAxisValue::Percent(fraction) => {
-                crate::ui::tailwind::types::Width::Percent(fraction)
-            }
-        });
-        return;
-    }
-    let value = parse_float(suffix);
-    if let Some(value) = value {
-        if value >= 0.0 {
-            spec.width = Some(crate::ui::tailwind::types::Width::Pixels(
-                value * DIMENSION_UNIT,
-            ));
-        }
-    }
+pub fn handle_width(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(width) = parse_width_value(suffix) else {
+        return false;
+    };
+    spec.width = Some(width);
+    true
 }
 
-pub fn handle_height(spec: &mut Spec, suffix: &str) {
-    if suffix == "full" || suffix == "screen" {
-        spec.height = Some(crate::ui::tailwind::types::Height::Full);
-        return;
-    }
-    if suffix == "px" {
-        spec.height = Some(crate::ui::tailwind::types::Height::Pixels(1.0));
-        return;
-    }
-    if let Some(value) = parse_bracket_size_value(suffix) {
-        spec.height = Some(match value {
-            SizeAxisValue::Pixels(px) => crate::ui::tailwind::types::Height::Pixels(px),
-            SizeAxisValue::Percent(fraction) => {
-                crate::ui::tailwind::types::Height::Percent(fraction)
-            }
-        });
-        return;
-    }
-    let value = parse_float(suffix);
-    if let Some(value) = value {
-        if value >= 0.0 {
-            spec.height = Some(crate::ui::tailwind::types::Height::Pixels(
-                value * DIMENSION_UNIT,
-            ));
-        }
-    }
+pub fn handle_height(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(height) = parse_height_value(suffix) else {
+        return false;
+    };
+    spec.height = Some(height);
+    true
 }
 
-pub fn handle_aspect(spec: &mut Spec, suffix: &str) {
+pub fn handle_min_width(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(width) = parse_width_value(suffix) else {
+        return false;
+    };
+    spec.min_width = Some(width);
+    true
+}
+
+pub fn handle_min_height(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(height) = parse_height_value(suffix) else {
+        return false;
+    };
+    spec.min_height = Some(height);
+    true
+}
+
+pub fn handle_max_width(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(width) = parse_width_value(suffix) else {
+        return false;
+    };
+    spec.max_width = Some(width);
+    true
+}
+
+pub fn handle_max_height(spec: &mut Spec, suffix: &str) -> bool {
+    let Some(height) = parse_height_value(suffix) else {
+        return false;
+    };
+    spec.max_height = Some(height);
+    true
+}
+
+pub fn handle_aspect(spec: &mut Spec, suffix: &str) -> bool {
     if suffix == "width" {
         spec.aspect_dominant_axis = Some(AspectDominantAxis::Width);
-        return;
+        return true;
     }
     if suffix == "height" {
         spec.aspect_dominant_axis = Some(AspectDominantAxis::Height);
-        return;
+        return true;
     }
     if let Some(value) = parse_aspect_ratio_value(suffix) {
         spec.aspect_ratio = Some(value);
+        return true;
     }
+    false
 }
 
 pub fn handle_gap(spec: &mut Spec, token: &str) -> bool {
@@ -127,7 +121,6 @@ pub fn handle_grid(spec: &mut Spec, token: &str) -> bool {
         };
         spec.is_grid = true;
         spec.grid_cols = Some(count);
-        spec.grid_rows = None;
         return true;
     }
 
@@ -137,7 +130,6 @@ pub fn handle_grid(spec: &mut Spec, token: &str) -> bool {
         };
         spec.is_grid = true;
         spec.grid_rows = Some(count);
-        spec.grid_cols = None;
         return true;
     }
 
@@ -523,11 +515,99 @@ pub fn handle_border(spec: &mut Spec, token: &str) -> bool {
 pub fn handle_rounded(spec: &mut Spec, token: &str) -> bool {
     for rule in RADIUS_TOKENS {
         if token == rule.token {
-            spec.corner_radius = Some(rule.radius);
+            spec.corner_radii.set_all(rule.radius);
             return true;
         }
     }
+
+    if let Some(radius) = parse_segmented_radius(token, "rounded-l", "rounded-l-") {
+        spec.corner_radii.set_left(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-r", "rounded-r-") {
+        spec.corner_radii.set_right(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-t", "rounded-t-") {
+        spec.corner_radii.set_top(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-b", "rounded-b-") {
+        spec.corner_radii.set_bottom(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-tl", "rounded-tl-") {
+        spec.corner_radii.nw = Some(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-tr", "rounded-tr-") {
+        spec.corner_radii.ne = Some(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-bl", "rounded-bl-") {
+        spec.corner_radii.sw = Some(radius);
+        return true;
+    }
+    if let Some(radius) = parse_segmented_radius(token, "rounded-br", "rounded-br-") {
+        spec.corner_radii.se = Some(radius);
+        return true;
+    }
+
     false
+}
+
+fn parse_width_value(suffix: &str) -> Option<Width> {
+    if suffix == "full" || suffix == "screen" {
+        return Some(Width::Full);
+    }
+    if suffix == "px" {
+        return Some(Width::Pixels(1.0));
+    }
+    if let Some(value) = parse_bracket_size_value(suffix) {
+        return Some(match value {
+            SizeAxisValue::Pixels(px) => Width::Pixels(px),
+            SizeAxisValue::Percent(fraction) => Width::Percent(fraction),
+        });
+    }
+    let value = parse_float(suffix)?;
+    (value >= 0.0).then_some(Width::Pixels(value * DIMENSION_UNIT))
+}
+
+fn parse_height_value(suffix: &str) -> Option<Height> {
+    if suffix == "full" || suffix == "screen" {
+        return Some(Height::Full);
+    }
+    if suffix == "px" {
+        return Some(Height::Pixels(1.0));
+    }
+    if let Some(value) = parse_bracket_size_value(suffix) {
+        return Some(match value {
+            SizeAxisValue::Pixels(px) => Height::Pixels(px),
+            SizeAxisValue::Percent(fraction) => Height::Percent(fraction),
+        });
+    }
+    let value = parse_float(suffix)?;
+    (value >= 0.0).then_some(Height::Pixels(value * DIMENSION_UNIT))
+}
+
+fn parse_radius_value(suffix: &str) -> Option<f32> {
+    if suffix.is_empty() {
+        return RADIUS_TOKENS
+            .iter()
+            .find(|rule| rule.token == "rounded")
+            .map(|rule| rule.radius);
+    }
+    RADIUS_TOKENS
+        .iter()
+        .find(|rule| rule.token.strip_prefix("rounded-") == Some(suffix))
+        .map(|rule| rule.radius)
+}
+
+fn parse_segmented_radius(token: &str, exact: &str, prefixed: &str) -> Option<f32> {
+    if token == exact {
+        return parse_radius_value("");
+    }
+    token.strip_prefix(prefixed).and_then(parse_radius_value)
 }
 
 pub fn handle_inset(spec: &mut Spec, token: &str) -> bool {
@@ -772,6 +852,12 @@ fn parse_spacing_value(token: &str) -> Option<f32> {
     }
     if token == "px" {
         return Some(1.0);
+    }
+    if let Some(value) = parse_bracket_axis_value(token, false) {
+        return match value {
+            SizeAxisValue::Pixels(px) => Some(px),
+            SizeAxisValue::Percent(_) => None,
+        };
     }
     let value = parse_float(token)?;
     if value < 0.0 {

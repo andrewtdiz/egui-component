@@ -6,50 +6,36 @@ pub enum ComponentKind {
     CanvaBrandKit,
     CanvaEditImage,
     Button,
-    ButtonGroup,
     CanvaPosition,
     Card,
     Checkbox,
     CollabCursor,
     Color,
-    Collapsible,
     Combobox,
     Command,
     ContextMenu,
     Dialogue,
     DragBoard,
     DropdownMenu,
-    EmojiSelector,
-    Field,
     FileTree,
     Hierarchy,
     Icon,
-    IconToolbar,
     Image,
-    ImageTile,
     Input,
-    Kbd,
     Label,
     MenuBar,
     NumberInput,
-    Pagination,
     Popover,
-    Progress,
     Radio,
     RadioGroup,
     Select,
-    Separator,
     Sidebar,
     Slider,
-    Skeleton,
-    Spinner,
     Switch,
     Tabs,
     Toast,
-    Toolbar,
     Tooltip,
-    Twemoji,
-    OpenWith,
+    // xtask:component-kinds:end
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -102,46 +88,10 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::IconToolbar,
-        id: "icon-toolbar",
-        label: "Icon Toolbar",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Twemoji,
-        id: "twemoji",
-        label: "Twemoji",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Kbd,
-        id: "kbd",
-        label: "Kbd",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Input,
         id: "input",
         label: "Input",
         group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Field,
-        id: "field",
-        label: "Field",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Hierarchy,
-        id: "hierarchy",
-        label: "Hierarchy",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::FileTree,
-        id: "file-tree",
-        label: "FileTree",
-        group: ComponentGroup::Composed,
     },
     ComponentDefinition {
         kind: ComponentKind::Button,
@@ -150,46 +100,10 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::ButtonGroup,
-        id: "button-group",
-        label: "Button Group",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::CanvaBackgrounds,
-        id: "canva-backgrounds",
-        label: "Backgrounds",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::CanvaBrandKit,
-        id: "canva-brand-kit",
-        label: "Brand Kit",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::CanvaEditImage,
-        id: "canva-edit-image",
-        label: "Edit Image",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::CanvaPosition,
-        id: "canva-position",
-        label: "Position",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Checkbox,
         id: "checkbox",
         label: "Checkbox",
         group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::CollabCursor,
-        id: "collab-cursor",
-        label: "Collab Cursor",
-        group: ComponentGroup::Composed,
     },
     ComponentDefinition {
         kind: ComponentKind::Switch,
@@ -222,39 +136,15 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::Separator,
-        id: "separator",
-        label: "Separator",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Card,
         id: "card",
         label: "Card",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::Progress,
-        id: "progress",
-        label: "Progress",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
         kind: ComponentKind::Radio,
         id: "radio",
         label: "Radio",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Skeleton,
-        id: "skeleton",
-        label: "Skeleton",
-        group: ComponentGroup::Primitive,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Spinner,
-        id: "spinner",
-        label: "Spinner",
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
@@ -276,21 +166,45 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Primitive,
     },
     ComponentDefinition {
-        kind: ComponentKind::OpenWith,
-        id: "open-with",
-        label: "Open With",
+        kind: ComponentKind::CanvaBackgrounds,
+        id: "canva-backgrounds",
+        label: "Backgrounds",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
-        kind: ComponentKind::EmojiSelector,
-        id: "emoji-selector",
-        label: "Emoji Selector",
+        kind: ComponentKind::CanvaBrandKit,
+        id: "canva-brand-kit",
+        label: "Brand Kit",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
-        kind: ComponentKind::Collapsible,
-        id: "collapsible",
-        label: "Collapsible",
+        kind: ComponentKind::CanvaEditImage,
+        id: "canva-edit-image",
+        label: "Edit Image",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CanvaPosition,
+        id: "canva-position",
+        label: "Position",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::CollabCursor,
+        id: "collab-cursor",
+        label: "Collab Cursor",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::Hierarchy,
+        id: "hierarchy",
+        label: "Hierarchy",
+        group: ComponentGroup::Composed,
+    },
+    ComponentDefinition {
+        kind: ComponentKind::FileTree,
+        id: "file-tree",
+        label: "FileTree",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -336,21 +250,9 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
-        kind: ComponentKind::ImageTile,
-        id: "image-tile",
-        label: "Image Tile",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
         kind: ComponentKind::MenuBar,
         id: "menu-bar",
         label: "Menu Bar",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Pagination,
-        id: "pagination",
-        label: "Pagination",
         group: ComponentGroup::Composed,
     },
     ComponentDefinition {
@@ -363,12 +265,6 @@ const COMPONENT_DEFINITIONS: &[ComponentDefinition] = &[
         kind: ComponentKind::Toast,
         id: "toast",
         label: "Toast",
-        group: ComponentGroup::Composed,
-    },
-    ComponentDefinition {
-        kind: ComponentKind::Toolbar,
-        id: "toolbar",
-        label: "Toolbar",
         group: ComponentGroup::Composed,
     },
     // xtask:component-definitions:end
@@ -428,29 +324,22 @@ mod tests {
         let ids = component_definitions()
             .map(|definition| definition.id)
             .collect::<Vec<_>>();
-        assert!(ids.len() >= 26);
+        assert!(ids.len() >= 24);
         assert!(ids.contains(&"button"));
         assert!(ids.contains(&"collab-cursor"));
         assert!(ids.contains(&"color"));
         assert!(ids.contains(&"icon"));
         assert!(ids.contains(&"image"));
-        assert!(ids.contains(&"kbd"));
         assert!(ids.contains(&"number-input"));
         assert!(ids.contains(&"popover"));
         assert!(ids.contains(&"dropdown-menu"));
-        assert!(ids.contains(&"open-with"));
         assert!(ids.contains(&"context-menu"));
         assert!(ids.contains(&"menu-bar"));
-        assert!(ids.contains(&"emoji-selector"));
         assert!(ids.contains(&"file-tree"));
         assert!(ids.contains(&"radio"));
         assert!(ids.contains(&"radio-group"));
         assert!(ids.contains(&"sidebar"));
-        assert!(ids.contains(&"skeleton"));
-        assert!(ids.contains(&"spinner"));
         assert!(ids.contains(&"toast"));
-        assert!(ids.contains(&"toolbar"));
-        assert!(ids.contains(&"twemoji"));
         assert!(!ids.contains(&"alert-dialogue"));
         assert!(!ids.contains(&"accordion"));
     }
@@ -458,20 +347,12 @@ mod tests {
     #[test]
     fn parser_accepts_alias_variants() {
         assert_eq!(
-            parse_component_kind("button_group"),
-            Some(ComponentKind::ButtonGroup)
-        );
-        assert_eq!(
             parse_component_kind("collab_cursor"),
             Some(ComponentKind::CollabCursor)
         );
         assert_eq!(
             parse_component_kind("dialogue"),
             Some(ComponentKind::Dialogue)
-        );
-        assert_eq!(
-            parse_component_kind("emoji_selector"),
-            Some(ComponentKind::EmojiSelector)
         );
         assert_eq!(
             parse_component_kind("file_tree"),
@@ -483,20 +364,8 @@ mod tests {
         );
         assert_eq!(parse_component_kind("icon"), Some(ComponentKind::Icon));
         assert_eq!(
-            parse_component_kind("icon_toolbar"),
-            Some(ComponentKind::IconToolbar)
-        );
-        assert_eq!(
-            parse_component_kind("twemoji"),
-            Some(ComponentKind::Twemoji)
-        );
-        assert_eq!(
             parse_component_kind("popover"),
             Some(ComponentKind::Popover)
-        );
-        assert_eq!(
-            parse_component_kind("toolbar"),
-            Some(ComponentKind::Toolbar)
         );
         assert_eq!(
             parse_component_kind("contextmenu"),
@@ -506,10 +375,6 @@ mod tests {
         assert_eq!(
             parse_component_kind("menu_bar"),
             Some(ComponentKind::MenuBar)
-        );
-        assert_eq!(
-            parse_component_kind("open_with"),
-            Some(ComponentKind::OpenWith)
         );
         assert_eq!(parse_component_kind("alertdialogue"), None);
         assert_eq!(parse_component_kind("agentchat"), None);
@@ -524,7 +389,7 @@ mod tests {
             .filter(|definition| definition.group == ComponentGroup::Composed)
             .count();
         assert_eq!(primitive + composed, component_definitions().count());
-        assert!(primitive >= 20);
-        assert!(composed >= 6);
+        assert!(primitive >= 12);
+        assert!(composed >= 8);
     }
 }

@@ -165,7 +165,7 @@ fn switch_metrics(size: ControlSize) -> SwitchMetrics {
 #[cfg(test)]
 mod tests {
     use super::Switch;
-    use crate::components::{ComponentUiExt, ControlSize};
+    use crate::runtime_components::{ComponentUiExt, ControlSize};
     use egui::{Align, CentralPanel, Context, Layout, Pos2, RawInput, Response};
 
     #[test]

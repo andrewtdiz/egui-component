@@ -3,7 +3,8 @@ use crate::ui::tailwind::parse_layout as layout;
 use crate::ui::tailwind::tokens::{Z_INDEX_DEFAULT, Z_LAYER_TOKENS};
 use crate::ui::tailwind::types::{
     AlignContent, AlignItems, AlignSelf, Animation, ClipStrategy, Cursor, Direction,
-    EasingDirection, EasingStyle, FlexWrap, JustifyContent, Position, Spec, TextAlign, TextAlignY,
+    EasingDirection, EasingStyle, FlexWrap, JustifyContent, Position, Spec, SurfaceShadow,
+    TextAlign, TextAlignY,
 };
 
 #[derive(Clone, Copy)]
@@ -20,6 +21,7 @@ enum LiteralKind {
     AlignItemsStart,
     AlignItemsCenter,
     AlignItemsEnd,
+    AlignItemsStretch,
     AlignContentStart,
     AlignContentCenter,
     AlignContentEnd,
@@ -65,6 +67,7 @@ const LITERAL_RULES: &[(&str, LiteralKind)] = &[
     ("items-start", LiteralKind::AlignItemsStart),
     ("items-center", LiteralKind::AlignItemsCenter),
     ("items-end", LiteralKind::AlignItemsEnd),
+    ("items-stretch", LiteralKind::AlignItemsStretch),
     ("content-start", LiteralKind::AlignContentStart),
     ("content-center", LiteralKind::AlignContentCenter),
     ("content-end", LiteralKind::AlignContentEnd),
@@ -107,87 +110,45 @@ pub fn parse(classes: &str) -> Spec {
         if token.is_empty() {
             continue;
         }
-        if handle_hover(&mut spec, token) {
-            continue;
-        }
-        if handle_group_hover(&mut spec, token) {
-            continue;
-        }
-        if handle_literal(&mut spec, token) {
-            continue;
-        }
-        if handle_anchor(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_flex(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_grid(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_spacing(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_inset(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_gap(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_scale(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_translate(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_rotation(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_border(&mut spec, token) {
-            continue;
-        }
-        if layout::handle_rounded(&mut spec, token) {
-            continue;
-        }
-        if color::handle_typography(&mut spec, token) {
-            continue;
-        }
-        if color::handle_font_token(&mut spec, token) {
-            continue;
-        }
-        if color::handle_text_tracking(&mut spec, token) {
-            continue;
-        }
-        if color::handle_text_leading(&mut spec, token) {
-            continue;
-        }
-        if color::handle_line_clamp(&mut spec, token) {
-            continue;
-        }
-        if color::handle_opacity(&mut spec, token) {
-            continue;
-        }
-        if handle_z_index(&mut spec, token) {
-            continue;
-        }
-        if handle_cursor(&mut spec, token) {
-            continue;
-        }
-        if handle_animation(&mut spec, token) {
-            continue;
-        }
-        if handle_transition(&mut spec, token) {
-            continue;
-        }
-        if handle_duration(&mut spec, token) {
-            continue;
-        }
-        if handle_ease(&mut spec, token) {
-            continue;
-        }
-        let _ = handle_prefixed(&mut spec, token);
+        let _ = apply_token(&mut spec, token);
     }
     spec
+}
+
+pub(crate) fn token_spec(token: &str) -> Option<Spec> {
+    let mut spec = Spec::default();
+    apply_token(&mut spec, token).then_some(spec)
+}
+
+pub(crate) fn apply_token(spec: &mut Spec, token: &str) -> bool {
+    handle_hover(spec, token)
+        || handle_group_hover(spec, token)
+        || handle_literal(spec, token)
+        || handle_anchor(spec, token)
+        || layout::handle_flex(spec, token)
+        || layout::handle_grid(spec, token)
+        || layout::handle_spacing(spec, token)
+        || layout::handle_inset(spec, token)
+        || layout::handle_gap(spec, token)
+        || layout::handle_scale(spec, token)
+        || layout::handle_translate(spec, token)
+        || layout::handle_rotation(spec, token)
+        || layout::handle_border(spec, token)
+        || layout::handle_rounded(spec, token)
+        || handle_shadow(spec, token)
+        || color::handle_typography(spec, token)
+        || color::handle_font_token(spec, token)
+        || color::handle_text_tracking(spec, token)
+        || color::handle_text_leading(spec, token)
+        || color::handle_line_clamp(spec, token)
+        || color::handle_opacity(spec, token)
+        || handle_z_index(spec, token)
+        || handle_cursor(spec, token)
+        || handle_animation(spec, token)
+        || handle_transition(spec, token)
+        || handle_duration(spec, token)
+        || handle_ease(spec, token)
+        || handle_prefixed(spec, token)
 }
 
 fn handle_hover(spec: &mut Spec, token: &str) -> bool {
@@ -195,27 +156,14 @@ fn handle_hover(spec: &mut Spec, token: &str) -> bool {
         return false;
     };
     if inner.is_empty() {
-        return true;
+        return false;
     }
-    if color::handle_hover_opacity(spec, inner) {
-        return true;
-    }
-    if layout::handle_hover_spacing(spec, inner) {
-        return true;
-    }
-    if layout::handle_hover_border(spec, inner) {
-        return true;
-    }
-    if layout::handle_hover_scale(spec, inner) {
-        return true;
-    }
-    if handle_hover_cursor(spec, inner) {
-        return true;
-    }
-    if handle_hover_prefixed(spec, inner) {
-        return true;
-    }
-    true
+    color::handle_hover_opacity(spec, inner)
+        || layout::handle_hover_spacing(spec, inner)
+        || layout::handle_hover_border(spec, inner)
+        || layout::handle_hover_scale(spec, inner)
+        || handle_hover_cursor(spec, inner)
+        || handle_hover_prefixed(spec, inner)
 }
 
 fn handle_group_hover(spec: &mut Spec, token: &str) -> bool {
@@ -223,49 +171,32 @@ fn handle_group_hover(spec: &mut Spec, token: &str) -> bool {
         return false;
     };
     if inner.is_empty() {
-        return true;
+        return false;
     }
-    if color::handle_group_hover_opacity(spec, inner) {
-        return true;
-    }
-    if layout::handle_group_hover_spacing(spec, inner) {
-        return true;
-    }
-    if layout::handle_group_hover_border(spec, inner) {
-        return true;
-    }
-    if layout::handle_group_hover_scale(spec, inner) {
-        return true;
-    }
-    if handle_group_hover_cursor(spec, inner) {
-        return true;
-    }
-    if handle_group_hover_prefixed(spec, inner) {
-        return true;
-    }
-    true
+    color::handle_group_hover_opacity(spec, inner)
+        || layout::handle_group_hover_spacing(spec, inner)
+        || layout::handle_group_hover_border(spec, inner)
+        || layout::handle_group_hover_scale(spec, inner)
+        || handle_group_hover_cursor(spec, inner)
+        || handle_group_hover_prefixed(spec, inner)
 }
 
 fn handle_hover_prefixed(spec: &mut Spec, token: &str) -> bool {
     if let Some(suffix) = token.strip_prefix("bg-") {
-        color::handle_hover_background(spec, suffix);
-        return true;
+        return color::handle_hover_background(spec, suffix);
     }
     if let Some(suffix) = token.strip_prefix("text-") {
-        color::handle_hover_text(spec, suffix);
-        return true;
+        return color::handle_hover_text(spec, suffix);
     }
     false
 }
 
 fn handle_group_hover_prefixed(spec: &mut Spec, token: &str) -> bool {
     if let Some(suffix) = token.strip_prefix("bg-") {
-        color::handle_group_hover_background(spec, suffix);
-        return true;
+        return color::handle_group_hover_background(spec, suffix);
     }
     if let Some(suffix) = token.strip_prefix("text-") {
-        color::handle_group_hover_text(spec, suffix);
-        return true;
+        return color::handle_group_hover_text(spec, suffix);
     }
     false
 }
@@ -328,35 +259,60 @@ fn parse_anchor_token(token: &str) -> Option<[f32; 2]> {
 fn handle_prefixed(spec: &mut Spec, token: &str) -> bool {
     if let Some(suffix) = token.strip_prefix("bg-") {
         if !suffix.is_empty() {
-            color::handle_background(spec, suffix);
-            return true;
+            return color::handle_background(spec, suffix);
         }
     }
     if let Some(suffix) = token.strip_prefix("text-") {
         if !suffix.is_empty() {
-            color::handle_text(spec, suffix);
-            return true;
+            return color::handle_text(spec, suffix);
         }
     }
     if let Some(suffix) = token.strip_prefix("w-") {
         if !suffix.is_empty() {
-            layout::handle_width(spec, suffix);
-            return true;
+            return layout::handle_width(spec, suffix);
         }
     }
     if let Some(suffix) = token.strip_prefix("h-") {
         if !suffix.is_empty() {
-            layout::handle_height(spec, suffix);
-            return true;
+            return layout::handle_height(spec, suffix);
+        }
+    }
+    if let Some(suffix) = token.strip_prefix("min-w-") {
+        if !suffix.is_empty() {
+            return layout::handle_min_width(spec, suffix);
+        }
+    }
+    if let Some(suffix) = token.strip_prefix("min-h-") {
+        if !suffix.is_empty() {
+            return layout::handle_min_height(spec, suffix);
+        }
+    }
+    if let Some(suffix) = token.strip_prefix("max-w-") {
+        if !suffix.is_empty() {
+            return layout::handle_max_width(spec, suffix);
+        }
+    }
+    if let Some(suffix) = token.strip_prefix("max-h-") {
+        if !suffix.is_empty() {
+            return layout::handle_max_height(spec, suffix);
         }
     }
     if let Some(suffix) = token.strip_prefix("aspect-") {
         if !suffix.is_empty() {
-            layout::handle_aspect(spec, suffix);
-            return true;
+            return layout::handle_aspect(spec, suffix);
         }
     }
     false
+}
+
+fn handle_shadow(spec: &mut Spec, token: &str) -> bool {
+    spec.shadow = Some(match token {
+        "shadow-sm" => SurfaceShadow::Sm,
+        "shadow-md" => SurfaceShadow::Md,
+        "shadow-lg" => SurfaceShadow::Lg,
+        _ => return false,
+    });
+    true
 }
 
 fn apply_literal(spec: &mut Spec, kind: LiteralKind) {
@@ -373,6 +329,7 @@ fn apply_literal(spec: &mut Spec, kind: LiteralKind) {
         LiteralKind::AlignItemsStart => spec.align_items = Some(AlignItems::Start),
         LiteralKind::AlignItemsCenter => spec.align_items = Some(AlignItems::Center),
         LiteralKind::AlignItemsEnd => spec.align_items = Some(AlignItems::End),
+        LiteralKind::AlignItemsStretch => spec.align_items = Some(AlignItems::Stretch),
         LiteralKind::AlignContentStart => spec.align_content = Some(AlignContent::Start),
         LiteralKind::AlignContentCenter => spec.align_content = Some(AlignContent::Center),
         LiteralKind::AlignContentEnd => spec.align_content = Some(AlignContent::End),
@@ -630,10 +587,10 @@ fn handle_ease(spec: &mut Spec, token: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    use super::{parse, token_spec};
     use crate::ui::tailwind::types::{
-        AlignContent, AlignSelf, ClipStrategy, ColorAsk, ColorRef, Cursor, FlexBasis, FlexWrap,
-        TextUnit, ThemeStyle, UiRuntimeBackground,
+        AlignContent, AlignItems, AlignSelf, ClipStrategy, ColorAsk, ColorRef, Cursor, FlexBasis,
+        FlexWrap, Height, TextUnit, ThemeStyle, UiRuntimeBackground, Width,
     };
 
     #[test]
@@ -675,7 +632,7 @@ mod tests {
     }
 
     #[test]
-    fn hover_prefix_consumes_unknown_inner() {
+    fn hover_prefix_rejects_unknown_inner_tokens() {
         let spec = parse("hover:unknown-token bg-content");
         assert_eq!(
             spec.background,
@@ -686,6 +643,8 @@ mod tests {
                 },
             )))
         );
+        assert_eq!(token_spec("hover:unknown-token"), None);
+        assert_eq!(token_spec("group-hover:unknown-token"), None);
     }
 
     #[test]
@@ -698,6 +657,14 @@ mod tests {
     fn parser_preserves_flex_no_wrap() {
         let spec = parse("flex-nowrap");
         assert_eq!(spec.flex_wrap, Some(FlexWrap::NoWrap));
+    }
+
+    #[test]
+    fn parser_reads_arbitrary_gap_spacing_tokens() {
+        let spec = parse("gap-[10px] m-[12px]");
+        assert_eq!(spec.gap_col, Some(10.0));
+        assert_eq!(spec.gap_row, Some(10.0));
+        assert_eq!(spec.margin.top, Some(12.0));
     }
 
     #[test]
@@ -730,12 +697,44 @@ mod tests {
         );
         assert_eq!(spec.align_content, Some(AlignContent::Between));
 
-        let bracket = parse("grid-rows-[3]");
+        let bracket = parse("grid-cols-4 grid-rows-[3]");
         assert!(bracket.is_grid);
         assert_eq!(bracket.grid_rows, Some(3));
-        assert_eq!(bracket.grid_cols, None);
+        assert_eq!(bracket.grid_cols, Some(4));
     }
 
+    #[test]
+    fn parser_reads_min_and_max_size_tokens() {
+        let spec = parse("min-w-44 min-h-[25%] max-w-full max-h-32");
+        assert_eq!(spec.min_width, Some(Width::Pixels(176.0)));
+        assert_eq!(spec.min_height, Some(Height::Percent(0.25)));
+        assert_eq!(spec.max_width, Some(Width::Full));
+        assert_eq!(spec.max_height, Some(Height::Pixels(128.0)));
+    }
+
+    #[test]
+    fn parser_reads_segmented_radius_tokens() {
+        let spec = parse("rounded-lg rounded-l-none rounded-tr-xl");
+        assert_eq!(spec.corner_radii.nw, Some(0.0));
+        assert_eq!(spec.corner_radii.sw, Some(0.0));
+        assert_eq!(spec.corner_radii.ne, Some(12.0));
+        assert_eq!(spec.corner_radii.se, Some(8.0));
+    }
+
+    #[test]
+    fn parser_reads_plain_segmented_radius_tokens() {
+        let spec = parse("rounded-l rounded-tr rounded-br-none");
+        assert_eq!(spec.corner_radii.nw, Some(4.0));
+        assert_eq!(spec.corner_radii.sw, Some(4.0));
+        assert_eq!(spec.corner_radii.ne, Some(4.0));
+        assert_eq!(spec.corner_radii.se, Some(0.0));
+    }
+
+    #[test]
+    fn parser_reads_items_stretch() {
+        let spec = parse("items-stretch");
+        assert_eq!(spec.align_items, Some(AlignItems::Stretch));
+    }
     #[test]
     fn parser_reads_align_self_tokens() {
         let spec = parse("self-start self-center self-end self-auto self-stretch");

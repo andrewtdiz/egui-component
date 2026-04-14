@@ -4,8 +4,8 @@ Use these rules when you add or revise a component.
 
 ## Runtime Contract
 
-- Keep the typed runtime surface centered on `theme::install`, `theme::set_mode`, `ui.components()`, and typed component builders.
-- Keep existing shipped builder entry points working unless the user explicitly asks for a public API break.
+- Keep the active public runtime surface centered on `theme::*`, `layout::*`, `contract::*`, and the JSX runtime crates under `crates/clay-jsx-runtime` and `crates/clay-jsx-egui-bridge`.
+- Treat `ui.components()` and the typed builders as deprecated compatibility shims over the internal runtime renderer. Keep them working, but do not expand that public surface unless explicitly asked.
 - Do not add new multi-field tuple shorthand permutations. Prefer one dominant shorthand at most.
 
 ## Authoring Contract
@@ -30,6 +30,6 @@ Use these rules when you add or revise a component.
 
 ## Registry Contract
 
-- Every public component must be exported from `src/components/mod.rs`.
-- Every public component must be re-exported from `src/lib.rs::prelude`.
-- Every public component must have a catalog definition, a showcase metadata entry, a showcase render arm, and a `docs/llm/components/<id>.md` stub.
+- Every internal runtime component must be exported from `src/components/mod.rs`.
+- The deprecated `src/lib.rs::components` and `src/lib.rs::prelude` shims should continue to point at the same implementation unless the user explicitly requests a break.
+- Every user-facing JSX surface must have migration-manifest coverage and a JSX catalog preview; keep the Rust showcase wiring only when maintaining the deprecated demo surface or internal renderer tests.

@@ -170,7 +170,7 @@ fn context_menu_region_fill(
 #[cfg(test)]
 mod tests {
     use super::{context_menu_region_fill, ContextMenu};
-    use crate::components::{ComponentUiExt, DropdownMenuEntry, Label, LabelTone};
+    use crate::runtime_components::{ComponentUiExt, DropdownMenuEntry, Label, LabelTone};
     use crate::theme::{self, ThemeMode};
     use crate::ui::tokens;
     use egui::{

@@ -1,22 +1,21 @@
 use super::*;
-use crate::components::{
-    AudioPlayback, AudioPlaybackState, Button, ButtonGroup, ButtonLabelWeight, ButtonVariant, Card,
-    Checkbox, CollabCursor, Collapsible, Color, Combobox, Command, CommandItem, ComponentUi,
-    ComponentUiExt, ContextMenu, ControlSize, DialogueHeader, DialogueModal, DragBoard,
-    DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction, DropdownMenuEntry,
-    EmojiSelector, Field, FileTree, FileTreeNode, Hierarchy as HierarchyWidget,
-    HierarchyNode as HierarchyWidgetNode, Icon, IconToolbar, IconToolbarItem, Image, ImageTile,
-    Kbd, Label, LabelTone, LabelWeight, MenuBar, MenuBarItem, NumberInput, OpenWith, Pagination,
-    Popover, Progress, Radio, RadioGroup, RadioOption, Select, Sidebar, Skeleton, Slider, Spinner,
-    Switch, TabOption, TextInput, ToastIntent, ToastPlacement, Toolbar, Tooltip, Twemoji,
+use crate::layout::{taffy, tui, TuiBuilderLogic};
+use crate::primitives::{draw_swatch, surface_frame, ScrollAreaExt, SurfaceFrame, Swatch};
+use crate::runtime_components::{
+    AudioPlayback, AudioPlaybackState, Button, ButtonLabelWeight, ButtonVariant, Checkbox,
+    CollabCursor, ComponentUi, ComponentUiExt, ContextMenu, ControlSize, DialogueHeader,
+    DialogueModal, DragBoard, DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction,
+    DropdownMenuEntry, FileTree, FileTreeNode, Hierarchy as HierarchyWidget,
+    HierarchyNode as HierarchyWidgetNode, Icon, Image, Label, LabelTone, LabelWeight, NumberInput,
+    Popover, Radio, RadioGroup, RadioOption, Select, Sidebar, Slider, Switch, TextInput,
+    ToastIntent, ToastPlacement, Tooltip,
 };
-use crate::layout::{
-    column as layout_column, row as layout_row, Align as FlowAlign, Justify as FlowJustify,
-};
-use crate::primitives::{surface_frame, SurfaceFrame};
 use crate::theme::ColorRole;
-use crate::ui::{tailwind, tokens};
-use egui::{Align, Align2, Color32, Id, Key, Layout, Margin, Order, Stroke, Vec2};
+use crate::ui::{tailwind, tokens, twemoji};
+use egui::{
+    Align, Align2, Color32, CornerRadius, Id, Key, Layout, Margin, Order, Sense, Stroke,
+    StrokeKind, Vec2,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../assets/images/showcase-image.png");
@@ -69,15 +68,41 @@ struct ToastPalette {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+enum LayoutScopeMode {
+    Full,
+    TaffyItem,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaffyDisplay {
+    Flex,
+    Grid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct ContainerLayoutPlan {
+    display: TaffyDisplay,
     direction: ContractDirection,
     justify: ContractJustify,
     align: ContractAlign,
-    gap: f32,
+    gap_x: f32,
+    gap_y: f32,
+    wrap: bool,
+    overflow_x: ContractOverflow,
+    overflow_y: ContractOverflow,
 }
 
 impl FrameRenderer {
     fn render_node(&mut self, ui: &mut ComponentUi<'_>, node: &ContractNode) {
+        self.render_node_with_layout_mode(ui, node, LayoutScopeMode::Full);
+    }
+
+    fn render_node_with_layout_mode(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        node: &ContractNode,
+        scope_mode: LayoutScopeMode,
+    ) {
         let common = node.common();
         if !common.visible {
             return;
@@ -92,14 +117,14 @@ impl FrameRenderer {
         let layout = effective_layout(common, class_spec.as_ref());
 
         if common.enabled {
-            with_layout_scope(ui, layout.as_ref(), |ui| {
-                self.render_node_inner(ui, node, class_spec.as_ref());
+            with_layout_scope(ui, layout.as_ref(), scope_mode, |ui| {
+                self.render_node_inner(ui, node, class_spec.as_ref(), layout.as_ref());
             });
         } else {
             ui.ui_mut().add_enabled_ui(false, |ui| {
                 let mut ui = ui.components();
-                with_layout_scope(&mut ui, layout.as_ref(), |ui| {
-                    self.render_node_inner(ui, node, class_spec.as_ref());
+                with_layout_scope(&mut ui, layout.as_ref(), scope_mode, |ui| {
+                    self.render_node_inner(ui, node, class_spec.as_ref(), layout.as_ref());
                 });
             });
         }
@@ -110,14 +135,15 @@ impl FrameRenderer {
         ui: &mut ComponentUi<'_>,
         node: &ContractNode,
         class_spec: Option<&tailwind::Spec>,
+        layout: Option<&ContractLayout>,
     ) {
         match node {
-            ContractNode::Row(props) => self.render_row(ui, props),
-            ContractNode::Column(props) => self.render_column(ui, props),
-            ContractNode::Inset(props) => self.render_inset(ui, props),
+            ContractNode::Row(props) => self.render_row(ui, props, layout),
+            ContractNode::Column(props) => self.render_column(ui, props, layout),
+            ContractNode::Inset(props) => self.render_inset(ui, props, layout),
             ContractNode::SizedBox(props) => self.render_sized_box(ui, props),
             ContractNode::Spacer(props) => self.render_spacer(ui, props),
-            ContractNode::Card(props) => self.render_card(ui, props, class_spec),
+            ContractNode::Card(props) => self.render_card(ui, props, class_spec, layout),
             ContractNode::Sidebar(props) => self.render_sidebar(ui, props),
             ContractNode::Toolbar(props) => self.render_toolbar(ui, props),
             ContractNode::MenuBar(props) => self.render_menu_bar(ui, props),
@@ -138,17 +164,19 @@ impl FrameRenderer {
             ContractNode::DialogueModal(props) => self.render_dialogue_modal(ui, props),
             ContractNode::Hierarchy(props) => self.render_hierarchy(ui, props),
             ContractNode::Spinner(props) => {
-                let _ = ui.spinner(Spinner::new().size(props.size));
+                let _ = ui
+                    .ui_mut()
+                    .add(egui::Spinner::new().size(props.size.max(1.0)));
             }
             ContractNode::Progress(props) => {
-                let _ = ui.progress(
-                    props.value,
-                    Progress::new().width(props.width).height(props.height),
+                let _ = ui.ui_mut().add_sized(
+                    egui::vec2(props.width.max(1.0), props.height.max(2.0)),
+                    egui::ProgressBar::new(props.value.clamp(0.0, 1.0)),
                 );
             }
             ContractNode::ToastViewport(props) => self.render_toast_viewport(ui, props),
             ContractNode::Color(props) => self.render_color(ui, props),
-            ContractNode::Icon(props) => self.render_icon(ui, props),
+            ContractNode::Icon(props) => self.render_icon(ui, props, class_spec),
             ContractNode::Image(props) => self.render_image(ui, props),
             ContractNode::Twemoji(props) => self.render_twemoji(ui, props),
             ContractNode::Kbd(props) => self.render_kbd(ui, props),
@@ -181,49 +209,187 @@ impl FrameRenderer {
         }
     }
 
-    fn render_row(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRow) {
+    fn render_taffy_container(
+        &mut self,
+        ui: &mut egui::Ui,
+        common: &ContractCommon,
+        children: &[ContractNode],
+        layout: Option<&ContractLayout>,
+        default_direction: ContractDirection,
+        default_gap: f32,
+        default_justify: ContractJustify,
+        default_align: ContractAlign,
+    ) {
+        let plan = container_layout_plan(
+            layout,
+            default_direction,
+            default_gap,
+            default_justify,
+            default_align,
+        );
+        let available_space = taffy::Size {
+            width: taffy::AvailableSpace::Definite(ui.available_width().max(0.0)),
+            height: taffy::AvailableSpace::Definite(ui.available_height().max(0.0)),
+        };
+
+        tui(ui, make_id(&common.node_id, "layout"))
+            .with_available_space(available_space)
+            .style(container_taffy_style(layout, plan))
+            .show(|tui| {
+                for child in children {
+                    self.render_taffy_child(tui, child);
+                }
+            });
+    }
+
+    fn render_taffy_child(&mut self, tui: &mut crate::layout::Tui, child: &ContractNode) {
+        let common = child.common();
+        let class_spec = class_spec(common);
+        let layout = effective_layout(common, class_spec.as_ref());
+        let builder = tui
+            .id(common.node_id.as_str())
+            .style(taffy_item_style(child, layout.as_ref()));
+
+        if matches!(child, ContractNode::Spacer(_)) {
+            builder.add_empty();
+            return;
+        }
+
+        if let ContractNode::Label(props) = child {
+            builder.ui_manual(|ui, _container| {
+                let (response, outer_size) = if common.enabled {
+                    self.render_taffy_label_item(ui, props, class_spec.as_ref(), layout.as_ref())
+                } else {
+                    ui.add_enabled_ui(false, |ui| {
+                        self.render_taffy_label_item(
+                            ui,
+                            props,
+                            class_spec.as_ref(),
+                            layout.as_ref(),
+                        )
+                    })
+                    .inner
+                };
+                let response_size = response.rect.size();
+                let padding = egui::vec2(
+                    (outer_size.x - response_size.x).max(0.0),
+                    (outer_size.y - response_size.y).max(0.0),
+                );
+                let intrinsic_size = response.intrinsic_size.map(|intrinsic| {
+                    egui::vec2(
+                        intrinsic.x + padding.x,
+                        intrinsic.y.max(response_size.y) + padding.y,
+                    )
+                });
+                let max_size = intrinsic_size.unwrap_or(outer_size).max(outer_size);
+                crate::layout::TuiContainerResponse {
+                    inner: (),
+                    min_size: outer_size,
+                    intrinsic_size,
+                    max_size,
+                    infinite: egui::Vec2b::FALSE,
+                }
+            });
+            return;
+        }
+
+        builder.ui_manual(|ui, _container| {
+            let mut ui = ui.components();
+            self.render_node_with_layout_mode(&mut ui, child, LayoutScopeMode::TaffyItem);
+            crate::layout::TuiContainerResponse {
+                inner: (),
+                min_size: ui.ui().min_size(),
+                intrinsic_size: None,
+                max_size: ui.ui().min_size(),
+                infinite: egui::Vec2b::FALSE,
+            }
+        });
+    }
+
+    fn render_taffy_label_item(
+        &mut self,
+        ui: &mut egui::Ui,
+        props: &ContractLabel,
+        class_spec: Option<&tailwind::Spec>,
+        layout: Option<&ContractLayout>,
+    ) -> (egui::Response, egui::Vec2) {
+        if let Some(frame) = layout_frame(layout, LayoutScopeMode::TaffyItem) {
+            let rendered = frame.show(ui, |ui| {
+                let mut components = ui.components();
+                self.draw_contract_label(&mut components, props, class_spec)
+            });
+            return (rendered.inner, rendered.response.rect.size());
+        }
+
+        ui.scope(|ui| {
+            let mut components = ui.components();
+            let response = self.draw_contract_label(&mut components, props, class_spec);
+            (response, ui.min_rect().size())
+        })
+        .inner
+    }
+
+    fn render_row(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &ContractRow,
+        layout: Option<&ContractLayout>,
+    ) {
         let _ = ui.ui_mut().scope(|ui| {
-            render_container_children(
+            self.render_taffy_container(
                 ui,
                 &props.common,
+                &props.children,
+                layout,
                 ContractDirection::Row,
                 props.gap,
                 props.justify,
                 props.align,
-                |ui| self.render_children(ui, &props.children),
             );
         });
     }
 
-    fn render_column(&mut self, ui: &mut ComponentUi<'_>, props: &ContractColumn) {
+    fn render_column(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &ContractColumn,
+        layout: Option<&ContractLayout>,
+    ) {
         let _ = ui.ui_mut().scope(|ui| {
-            render_container_children(
+            self.render_taffy_container(
                 ui,
                 &props.common,
+                &props.children,
+                layout,
                 ContractDirection::Column,
                 props.gap,
                 props.justify,
                 props.align,
-                |ui| self.render_children(ui, &props.children),
             );
         });
     }
 
-    fn render_inset(&mut self, ui: &mut ComponentUi<'_>, props: &ContractInset) {
+    fn render_inset(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &ContractInset,
+        layout: Option<&ContractLayout>,
+    ) {
         let _ = egui::Frame::new()
             .inner_margin(egui::Margin::symmetric(
                 props.padding_x as i8,
                 props.padding_y as i8,
             ))
             .show(ui.ui_mut(), |ui| {
-                render_container_children(
+                self.render_taffy_container(
                     ui,
                     &props.common,
+                    &props.children,
+                    layout,
                     ContractDirection::Column,
                     0.0,
                     ContractJustify::Start,
                     ContractAlign::Start,
-                    |ui| self.render_children(ui, &props.children),
                 );
             });
     }
@@ -264,30 +430,31 @@ impl FrameRenderer {
         ui: &mut ComponentUi<'_>,
         props: &crate::contract::ContractCard,
         class_spec: Option<&tailwind::Spec>,
+        layout: Option<&ContractLayout>,
     ) {
-        let mut card = Card::new().padding(props.padding_x as i8, props.padding_y as i8);
         let runtime = crate::theme::runtime_for_ui(ui.raw());
-        if let Some(fill) = class_background_color(class_spec, runtime) {
-            card = card.fill(fill);
-        }
-        if let Some(stroke) = class_border_stroke(class_spec, runtime) {
-            card = card.stroke(stroke);
-        }
-        if let Some(corner_radius) = class_corner_radius(class_spec) {
-            card = card.corner_radius(corner_radius);
-        }
-
-        let _ = ui.card(card, |ui| {
-            render_container_children(
-                ui,
-                &props.common,
-                ContractDirection::Column,
-                0.0,
-                ContractJustify::Start,
-                ContractAlign::Start,
-                |ui| self.render_children(ui, &props.children),
-            );
-        });
+        let default_corner_radius = CornerRadius::same(tokens::radius_lg(runtime));
+        let _ = compat_card_frame(
+            ui,
+            class_background_color(class_spec, runtime),
+            class_border_stroke(class_spec, runtime),
+            class_corner_radius(class_spec, default_corner_radius),
+            class_shadow(class_spec, runtime),
+            props.padding_x as i8,
+            props.padding_y as i8,
+            |ui| {
+                self.render_taffy_container(
+                    ui,
+                    &props.common,
+                    &props.children,
+                    layout,
+                    ContractDirection::Column,
+                    0.0,
+                    ContractJustify::Start,
+                    ContractAlign::Start,
+                );
+            },
+        );
     }
 
     fn render_sidebar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSidebar) {
@@ -307,50 +474,61 @@ impl FrameRenderer {
     }
 
     fn render_toolbar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractToolbar) {
-        let toolbar = Toolbar::new(make_id(&props.common.node_id, "toolbar"))
-            .anchor(map_anchor(props.anchor))
-            .offset(egui::vec2(props.offset_x, props.offset_y));
-        let _ = ui.toolbar(toolbar, |ui| {
-            self.render_children(ui, &props.children);
-        });
+        let runtime = crate::theme::runtime_for_ui(ui.raw());
+        let parent_rect = ui.ui_mut().max_rect();
+        let anchor = map_anchor(props.anchor);
+        let anchor_pos =
+            compat_anchored_pos(parent_rect, anchor) + egui::vec2(props.offset_x, props.offset_y);
+        let _ = egui::Area::new(make_id(&props.common.node_id, "toolbar_area"))
+            .order(Order::Foreground)
+            .pivot(anchor)
+            .fixed_pos(anchor_pos)
+            .constrain_to(parent_rect)
+            .fade_in(false)
+            .show(ui.ctx(), |ui| {
+                let _ = surface_frame(
+                    ui,
+                    SurfaceFrame::new(
+                        tokens::card_background(runtime),
+                        Stroke::new(1.0, tokens::separator(runtime)),
+                    )
+                    .corner_radius(crate::theme::radius(ui, crate::theme::RadiusRole::Xl))
+                    .padding(8, 6)
+                    .shadow(tokens::tailwind_shadow_sm(runtime)),
+                    |ui| {
+                        ui.scope(|ui| {
+                            ui.spacing_mut().item_spacing.x = tokens::LAYOUT_GAP_XS;
+                            ui.horizontal(|ui| {
+                                let mut components = ui.components();
+                                self.render_children(components.ui_mut(), &props.children);
+                            })
+                            .inner
+                        })
+                        .inner
+                    },
+                );
+            });
     }
 
     fn render_menu_bar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractMenuBar) {
-        let mut action_bindings = Vec::new();
-        let runtime_entries = props
-            .menus
-            .iter()
-            .map(|menu| {
-                let mut entries = Vec::new();
-                append_runtime_menu_entries(&menu.entries, &mut entries, &mut action_bindings);
-                entries
-            })
-            .collect::<Vec<_>>();
-
-        let runtime_menus = props
-            .menus
-            .iter()
-            .zip(runtime_entries.iter())
-            .map(|(menu, entries)| {
-                MenuBarItem::new(menu.label.as_str(), entries.as_slice()).width(menu.width)
-            })
-            .collect::<Vec<_>>();
-
-        let (_, state) = ui.menu_bar(MenuBar::new(
-            make_id(&props.common.node_id, "menu_bar"),
-            runtime_menus.as_slice(),
-        ));
-
-        if let Some(action_index) = state.action {
-            if let Some(binding) = action_bindings.get(action_index) {
-                self.emit_item(
-                    &props.common.node_id,
-                    EventKind::CommandInvoked,
-                    binding.action_id,
-                    binding.item_id,
-                    binding.label,
-                );
+        let mut selected = None;
+        ui.ui_mut().horizontal(|ui| {
+            for menu in &props.menus {
+                ui.menu_button(menu.label.as_str(), |ui| {
+                    ui.set_min_width(menu.width.max(160.0));
+                    render_contract_menu_entries(ui, menu.entries.as_slice(), &mut selected);
+                });
             }
+        });
+
+        if let Some(binding) = selected {
+            self.emit_item(
+                &props.common.node_id,
+                EventKind::CommandInvoked,
+                binding.action_id,
+                binding.item_id,
+                binding.label,
+            );
         }
     }
 
@@ -365,33 +543,66 @@ impl FrameRenderer {
             .and_then(|item_id| props.items.iter().position(|item| item.item_id == item_id))
             .unwrap_or(0);
         let previous = current;
-        let runtime_options = props
-            .items
-            .iter()
-            .enumerate()
-            .map(
-                |(index, item)| match (item.icon.as_deref(), item.icon_only) {
-                    (Some(icon), true) => TabOption::icon_only(index, item.label.as_str(), icon)
-                        .tooltip(item.label.as_str()),
-                    (Some(icon), false) => TabOption::with_icon(index, item.label.as_str(), icon),
-                    (None, _) => TabOption::new(index, item.label.as_str()),
-                },
-            )
-            .collect::<Vec<_>>();
-        let id = make_id(&props.common.node_id, "tabs");
+        let vertical = matches!(
+            props.style,
+            ContractTabsStyle::Stacked | ContractTabsStyle::Rail
+        );
+        let gap = match props.style {
+            ContractTabsStyle::BlenderTopbar => 1.0,
+            ContractTabsStyle::Stacked => 8.0,
+            ContractTabsStyle::Rail => 6.0,
+            ContractTabsStyle::Segmented => 4.0,
+            ContractTabsStyle::Underline => 6.0,
+        };
+        let draw = |ui: &mut egui::Ui, current: &mut usize| {
+            let mut components = ui.components();
+            for (index, item) in props.items.iter().enumerate() {
+                let selected = *current == index;
+                let mut button = if item.icon_only {
+                    Button::icon_only(item.icon.as_deref().unwrap_or("circle"))
+                } else {
+                    Button::new(item.label.as_str())
+                };
+                if let Some(icon) = item.icon.as_deref().filter(|_| !item.icon_only) {
+                    button = button.leading_icon(icon);
+                }
+                button = button
+                    .variant(match props.style {
+                        ContractTabsStyle::Underline => {
+                            if selected {
+                                ButtonVariant::Link
+                            } else {
+                                ButtonVariant::Ghost
+                            }
+                        }
+                        _ => {
+                            if selected {
+                                ButtonVariant::Secondary
+                            } else {
+                                ButtonVariant::Ghost
+                            }
+                        }
+                    })
+                    .selected(selected);
+                if vertical {
+                    button = button.min_size(egui::vec2(96.0, 40.0));
+                }
+                if components.button(button).clicked() {
+                    *current = index;
+                }
+            }
+        };
 
-        match props.style {
-            ContractTabsStyle::Underline => ui.tabs(id, &mut current, runtime_options.as_slice()),
-            ContractTabsStyle::Segmented => {
-                ui.segmented_tabs(id, &mut current, runtime_options.as_slice())
-            }
-            ContractTabsStyle::BlenderTopbar => {
-                ui.blender_topbar_tabs(id, &mut current, runtime_options.as_slice())
-            }
-            ContractTabsStyle::Stacked => {
-                ui.stacked_tabs(id, &mut current, runtime_options.as_slice())
-            }
-            ContractTabsStyle::Rail => ui.rail_tabs(id, &mut current, runtime_options.as_slice()),
+        if vertical {
+            ui.ui_mut().scope(|ui| {
+                ui.spacing_mut().item_spacing.y = gap;
+                ui.vertical(|ui| draw(ui, &mut current)).inner
+            });
+        } else {
+            ui.ui_mut().scope(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                ui.horizontal(|ui| draw(ui, &mut current)).inner
+            });
         }
 
         if current != previous {
@@ -413,6 +624,15 @@ impl FrameRenderer {
         props: &crate::contract::ContractLabel,
         class_spec: Option<&tailwind::Spec>,
     ) {
+        let _ = self.draw_contract_label(ui, props, class_spec);
+    }
+
+    fn draw_contract_label(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &crate::contract::ContractLabel,
+        class_spec: Option<&tailwind::Spec>,
+    ) -> egui::Response {
         let mut label = Label::new(props.text.as_str());
         let runtime = crate::theme::runtime_for_ui(ui.raw());
         if props.tone.is_none() {
@@ -442,7 +662,7 @@ impl FrameRenderer {
         if props.truncate {
             label = label.truncate();
         }
-        let _ = ui.label(label);
+        ui.label(label)
     }
 
     fn render_button(
@@ -503,25 +723,31 @@ impl FrameRenderer {
         if props.items.is_empty() {
             return;
         }
-        let labels = props
-            .items
-            .iter()
-            .map(|item| item.label.as_str())
-            .collect::<Vec<_>>();
-        if let Some(index) = ui.button_group(ButtonGroup::new(
-            make_id(&props.common.node_id, "button_group"),
-            labels.as_slice(),
-        )) {
-            if let Some(item) = props.items.get(index) {
-                self.emit_item(
-                    &props.common.node_id,
-                    EventKind::CommandInvoked,
-                    item.action_id.as_ref(),
-                    item.item_id.as_str(),
-                    item.label.as_str(),
-                );
-            }
-        }
+
+        let _ = compat_card_frame(ui, None, None, None, None, 4, 4, |ui| {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.horizontal(|ui| {
+                    let mut components = ui.components();
+                    for item in &props.items {
+                        if components
+                            .button(Button::new(item.label.as_str()).variant(ButtonVariant::Ghost))
+                            .clicked()
+                        {
+                            self.emit_item(
+                                &props.common.node_id,
+                                EventKind::CommandInvoked,
+                                item.action_id.as_ref(),
+                                item.item_id.as_str(),
+                                item.label.as_str(),
+                            );
+                        }
+                    }
+                })
+                .inner
+            })
+            .inner
+        });
     }
 
     fn render_input(&mut self, ui: &mut ComponentUi<'_>, props: &ContractInput) {
@@ -671,42 +897,67 @@ impl FrameRenderer {
 
     fn render_field(&mut self, ui: &mut ComponentUi<'_>, props: &ContractField) {
         let mut value = props.value.clone();
-        let mut field = Field::new(props.label.as_str()).width(props.width);
-        if let Some(helper_text) = props.helper_text.as_deref() {
-            field = field.helper_text(helper_text);
-        }
-        if let Some(placeholder) = props.placeholder.as_deref() {
-            field = field.placeholder(placeholder);
-        }
-        let _ = ui.field(&mut value, field);
-        if value != props.value {
-            self.emit_value(
-                &props.common.node_id,
-                EventKind::Changed,
-                props.action_id.as_ref(),
-                Some(EventValue::Text(value)),
-                None,
+        ui.ui_mut().vertical(|ui| {
+            let mut components = ui.components();
+            let _ = components.label(
+                Label::new(props.label.as_str())
+                    .tone(LabelTone::Secondary)
+                    .weight(LabelWeight::Semibold),
             );
-        }
+            let response = components.text_input(
+                &mut value,
+                TextInput::new()
+                    .width(props.width)
+                    .placeholder(props.placeholder.as_deref().unwrap_or_default()),
+            );
+            if let Some(helper_text) = props.helper_text.as_deref() {
+                components.add_space(4.0);
+                let _ = components.label(
+                    Label::new(helper_text)
+                        .tone(LabelTone::Muted)
+                        .weight(LabelWeight::Regular)
+                        .size(12.0),
+                );
+            }
+            if value != props.value {
+                self.emit_value(
+                    &props.common.node_id,
+                    EventKind::Changed,
+                    props.action_id.as_ref(),
+                    Some(EventValue::Text(value.clone())),
+                    None,
+                );
+            }
+            let _ = response;
+        });
     }
 
     fn render_collapsible(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCollapsible) {
-        let mut open = props.open;
-        let mut collapsible = Collapsible::new(
-            make_id(&props.common.node_id, "collapsible"),
-            props.title.as_str(),
-        );
-        if let Some(icon) = props.leading_icon.as_deref() {
-            collapsible = collapsible.leading_icon(icon);
-        }
-        if let Some(icon) = props.trailing_icon.as_deref() {
-            collapsible = collapsible.trailing_icon(icon);
-        }
-        let _ = ui.collapsible(&mut open, collapsible, |ui| {
-            self.render_children(ui, &props.children);
+        let mut toggled = None;
+        let _ = compat_card_frame(ui, None, None, None, None, 12, 12, |ui| {
+            let mut components = ui.components();
+            let leading_icon = props.leading_icon.as_deref().unwrap_or(if props.open {
+                "chevron-down"
+            } else {
+                "chevron-right"
+            });
+            let mut trigger = Button::new(props.title.as_str())
+                .variant(ButtonVariant::Ghost)
+                .selected(props.open)
+                .leading_icon(leading_icon);
+            if let Some(trailing_icon) = props.trailing_icon.as_deref() {
+                trigger = trigger.trailing_icon(trailing_icon);
+            }
+            if components.button(trigger).clicked() {
+                toggled = Some(!props.open);
+            }
+            if props.open {
+                components.add_space(8.0);
+                self.render_children(components.ui_mut(), &props.children);
+            }
         });
 
-        if open != props.open {
+        if let Some(open) = toggled {
             self.emit_value(
                 &props.common.node_id,
                 EventKind::Toggled,
@@ -741,7 +992,7 @@ impl FrameRenderer {
                         .intent(
                             props
                                 .intent
-                                .unwrap_or(crate::components::DialogueIntent::Default),
+                                .unwrap_or(crate::runtime_components::DialogueIntent::Default),
                         ),
                     close_requested,
                 );
@@ -996,20 +1247,26 @@ impl FrameRenderer {
     }
 
     fn render_color(&mut self, ui: &mut ComponentUi<'_>, props: &ContractColor) {
-        let mut color = Color::new(parse_contract_color(&props.fill).unwrap_or(Color32::WHITE))
+        let mut swatch = Swatch::new(parse_contract_color(&props.fill).unwrap_or(Color32::WHITE))
             .size(props.size);
         if let Some(stroke) = props.stroke.as_ref().and_then(parse_contract_stroke) {
-            color = color.stroke(stroke);
+            swatch = swatch.stroke(stroke);
         }
         if let Some(corner_radius) = props.corner_radius {
-            color = color.rounded(corner_radius);
+            swatch = swatch.rounded(corner_radius);
         }
-        let _ = ui.color(color);
+        let _ = draw_swatch(ui.raw_mut(), swatch);
     }
 
-    fn render_icon(&mut self, ui: &mut ComponentUi<'_>, props: &ContractIcon) {
+    fn render_icon(
+        &mut self,
+        ui: &mut ComponentUi<'_>,
+        props: &ContractIcon,
+        class_spec: Option<&tailwind::Spec>,
+    ) {
         let mut icon = Icon::new(props.name.as_str()).size(props.size);
-        if let Some(tint) = props.tint.as_ref().and_then(parse_contract_color) {
+        let runtime = crate::theme::runtime_for_ui(ui.raw());
+        if let Some(tint) = resolved_icon_tint(props, class_spec, runtime) {
             icon = icon.tint(tint);
         }
         let _ = ui.icon(icon);
@@ -1025,29 +1282,39 @@ impl FrameRenderer {
     }
 
     fn render_twemoji(&mut self, ui: &mut ComponentUi<'_>, props: &ContractTwemoji) {
-        let _ = ui.twemoji(Twemoji::new(props.emoji.as_str()).size(props.size));
+        if let Some(image) = twemoji::image(props.emoji.as_str(), props.size) {
+            let _ = ui.ui_mut().add(image);
+        } else {
+            let _ = ui.ui_mut().allocate_exact_size(
+                egui::vec2(props.size.max(1.0), props.size.max(1.0)),
+                Sense::hover(),
+            );
+        }
     }
 
     fn render_kbd(&mut self, ui: &mut ComponentUi<'_>, props: &ContractKbd) {
-        let _ = ui.kbd(
-            Kbd::new(props.text.as_str())
-                .min_width(props.min_width)
-                .height(props.height),
+        let _ = draw_compat_keycap(
+            ui.ui_mut(),
+            props.text.as_str(),
+            props.min_width,
+            props.height,
+            None,
+            None,
+            None,
+            10.0,
+            4.0,
         );
     }
 
     fn render_skeleton(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSkeleton) {
-        let mut skeleton = Skeleton::new()
-            .width(props.width)
-            .height(props.height)
-            .animated(props.animated);
-        if props.circle {
-            skeleton = skeleton.circle(props.width.min(props.height).max(1.0));
-        }
-        if let Some(corner_radius) = props.corner_radius {
-            skeleton = skeleton.corner_radius(corner_radius);
-        }
-        let _ = ui.skeleton(skeleton);
+        draw_compat_skeleton(
+            ui.ui_mut(),
+            props.width,
+            props.height,
+            props.corner_radius,
+            props.circle,
+            props.animated,
+        );
     }
 
     fn render_slider(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSlider) {
@@ -1135,39 +1402,53 @@ impl FrameRenderer {
     }
 
     fn render_combobox(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCombobox) {
-        let options = props
-            .items
-            .iter()
-            .map(|item| item.label.as_str())
-            .collect::<Vec<_>>();
         let mut query = props.query.clone();
-        let mut selected_indices = props
-            .selected_item_ids
-            .iter()
-            .filter_map(|item_id| props.items.iter().position(|item| item.item_id == *item_id))
-            .collect::<Vec<_>>();
-        let previous_indices = selected_indices.clone();
         let previous_query = query.clone();
-        let mut combobox = Combobox::new(
-            make_id(&props.common.node_id, "combobox"),
-            options.as_slice(),
-        )
-        .width(props.width)
-        .max_height(props.max_height)
-        .searchable(props.searchable);
-        if let Some(placeholder) = props.placeholder.as_deref() {
-            combobox = combobox.placeholder(placeholder);
-        }
-        if let Some(filter_placeholder) = props.filter_placeholder.as_deref() {
-            combobox = combobox.filter_placeholder(filter_placeholder);
-        }
-        let _ = ui.combobox(&mut query, &mut selected_indices, combobox);
-        if selected_indices != previous_indices {
-            let selected_item_ids = selected_indices
-                .iter()
-                .filter_map(|index| props.items.get(*index))
-                .map(|item| item.item_id.clone())
-                .collect::<Vec<_>>();
+        let mut selected_item_ids = props.selected_item_ids.clone();
+        let previous_item_ids = selected_item_ids.clone();
+        let summary = compat_combobox_summary(selected_item_ids.as_slice(), props);
+
+        ui.ui_mut().menu_button(summary, |ui| {
+            ui.set_min_width(props.width.max(180.0));
+            if props.searchable {
+                let mut components = ui.components();
+                let _ = components.text_input(
+                    &mut query,
+                    TextInput::new()
+                        .width(props.width.max(180.0))
+                        .placeholder(props.filter_placeholder.as_deref().unwrap_or("Filter")),
+                );
+                components.add_space(6.0);
+            }
+
+            let query_lower = query.trim().to_ascii_lowercase();
+            for item in &props.items {
+                if !query_lower.is_empty()
+                    && !item
+                        .label
+                        .to_ascii_lowercase()
+                        .contains(query_lower.as_str())
+                {
+                    continue;
+                }
+
+                let selected = selected_item_ids.iter().any(|value| value == &item.item_id);
+                let label = if selected {
+                    format!("✓ {}", item.label)
+                } else {
+                    item.label.clone()
+                };
+                if ui.button(label).clicked() {
+                    if selected {
+                        selected_item_ids.retain(|value| value != &item.item_id);
+                    } else {
+                        selected_item_ids.push(item.item_id.clone());
+                    }
+                }
+            }
+        });
+
+        if selected_item_ids != previous_item_ids {
             self.emit_value(
                 &props.common.node_id,
                 EventKind::Selected,
@@ -1187,18 +1468,20 @@ impl FrameRenderer {
     }
 
     fn render_emoji_selector(&mut self, ui: &mut ComponentUi<'_>, props: &ContractEmojiSelector) {
-        let mut value = props.value.clone();
-        let mut selector = EmojiSelector::new(make_id(&props.common.node_id, "emoji_selector"))
-            .popup_width(props.popup_width)
-            .popup_max_height(props.popup_max_height);
-        if let Some(placeholder) = props.placeholder.as_deref() {
-            selector = selector.placeholder(placeholder);
-        }
-        if let Some(trigger_variant) = props.trigger_variant {
-            selector = selector.trigger_variant(trigger_variant);
-        }
-        let _ = ui.emoji_selector(&mut value, selector);
-        if value != props.value {
+        const COMPAT_EMOJIS: &[&str] = &[
+            "😀", "😁", "😂", "🙂", "😍", "😎", "🤔", "😢", "🔥", "✨", "🎉", "🚀",
+        ];
+        let label = props.placeholder.as_deref().unwrap_or(props.value.as_str());
+        let mut next_value = None;
+        let _ = ui.ui_mut().menu_button(label, |ui| {
+            for emoji in COMPAT_EMOJIS {
+                if ui.button(*emoji).clicked() {
+                    next_value = Some((*emoji).to_owned());
+                    ui.close();
+                }
+            }
+        });
+        if let Some(value) = next_value.filter(|value| value != &props.value) {
             self.emit_value(
                 &props.common.node_id,
                 EventKind::Selected,
@@ -1210,24 +1493,82 @@ impl FrameRenderer {
     }
 
     fn render_pagination(&mut self, ui: &mut ComponentUi<'_>, props: &ContractPagination) {
-        let mut current_page = props.current_page;
-        let _ = ui.pagination(
-            &mut current_page,
-            Pagination::new(
-                make_id(&props.common.node_id, "pagination"),
-                props.page_count,
-            )
-            .sibling_count(props.sibling_count),
+        let pages = compat_pagination_items(
+            props.current_page.max(1),
+            props.page_count.max(1),
+            props.sibling_count,
         );
-        if current_page != props.current_page {
-            self.emit_value(
-                &props.common.node_id,
-                EventKind::Selected,
-                props.action_id.as_ref(),
-                Some(EventValue::Number(current_page as f32)),
-                None,
-            );
-        }
+        ui.ui_mut().horizontal(|ui| {
+            let mut components = ui.components();
+            if props.current_page > 1
+                && components
+                    .button(
+                        Button::new("Previous")
+                            .variant(ButtonVariant::Ghost)
+                            .leading_icon("chevron-left"),
+                    )
+                    .clicked()
+            {
+                self.emit_value(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    props.action_id.as_ref(),
+                    Some(EventValue::Number((props.current_page - 1) as f32)),
+                    None,
+                );
+            }
+            for page in pages {
+                match page {
+                    CompatPaginationItem::Ellipsis => {
+                        let _ = components.label(
+                            Label::new("...")
+                                .tone(LabelTone::Muted)
+                                .weight(LabelWeight::Regular),
+                        );
+                    }
+                    CompatPaginationItem::Page(page) => {
+                        let selected = page == props.current_page;
+                        if components
+                            .button(
+                                Button::new(page.to_string().as_str())
+                                    .variant(if selected {
+                                        ButtonVariant::Secondary
+                                    } else {
+                                        ButtonVariant::Ghost
+                                    })
+                                    .selected(selected),
+                            )
+                            .clicked()
+                        {
+                            self.emit_value(
+                                &props.common.node_id,
+                                EventKind::Selected,
+                                props.action_id.as_ref(),
+                                Some(EventValue::Number(page as f32)),
+                                None,
+                            );
+                        }
+                    }
+                }
+            }
+            if props.current_page < props.page_count
+                && components
+                    .button(
+                        Button::new("Next")
+                            .variant(ButtonVariant::Ghost)
+                            .trailing_icon("chevron-right"),
+                    )
+                    .clicked()
+            {
+                self.emit_value(
+                    &props.common.node_id,
+                    EventKind::Selected,
+                    props.action_id.as_ref(),
+                    Some(EventValue::Number((props.current_page + 1) as f32)),
+                    None,
+                );
+            }
+        });
     }
 
     fn render_tooltip(&mut self, ui: &mut ComponentUi<'_>, props: &ContractTooltip) {
@@ -1319,35 +1660,23 @@ impl FrameRenderer {
         let mut action_bindings = Vec::new();
         let mut runtime_entries = Vec::new();
         append_runtime_menu_entries(&props.entries, &mut runtime_entries, &mut action_bindings);
-        let mut selected_action = props.selected_item_id.as_deref().and_then(|item_id| {
-            action_bindings
-                .iter()
-                .position(|binding| binding.item_id == item_id)
-        });
-        let previous = selected_action;
-        let mut open_with = OpenWith::new(
-            make_id(&props.common.node_id, "open_with"),
-            runtime_entries.as_slice(),
-        )
-        .width(props.width);
-        if let Some(placeholder) = props.placeholder.as_deref() {
-            open_with = open_with.placeholder(placeholder);
-        }
-        if let Some(size) = props.size {
-            open_with = open_with.size(size);
-        }
+        let trigger_label =
+            find_contract_menu_label(props.entries.as_slice(), props.selected_item_id.as_deref())
+                .or(props.placeholder.as_deref())
+                .unwrap_or("Open With");
+        let mut dropdown = DropdownMenu::new(trigger_label)
+            .entries(runtime_entries.as_slice())
+            .width(props.width);
         if let Some(variant) = props.trigger_variant {
-            open_with = open_with.trigger_variant(variant);
+            dropdown = dropdown.trigger_variant(variant);
         }
-        let _ = ui.open_with(&mut selected_action, open_with);
-        if selected_action != previous {
-            self.emit_menu_action(
-                &props.common.node_id,
-                props.action_id.as_ref(),
-                selected_action,
-                &action_bindings,
-            );
-        }
+        let (_, state) = ui.dropdown_menu(dropdown);
+        self.emit_menu_action(
+            &props.common.node_id,
+            props.action_id.as_ref(),
+            state.action,
+            &action_bindings,
+        );
     }
 
     fn render_collab_cursor(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCollabCursor) {
@@ -1364,49 +1693,42 @@ impl FrameRenderer {
     }
 
     fn render_icon_toolbar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractIconToolbar) {
-        let items = props
-            .items
-            .iter()
-            .map(|item| {
-                let mut runtime_item = IconToolbarItem::new(item.icon.as_str());
-                if let Some(tooltip) = item.tooltip.as_deref() {
-                    runtime_item = runtime_item.tooltip(tooltip);
-                }
-                if let Some(badge_fill) = item.badge_fill.as_ref().and_then(parse_contract_color) {
-                    runtime_item = runtime_item.badge_fill(badge_fill);
-                }
-                runtime_item
+        let _ = compat_card_frame(ui, None, None, None, None, 6, 4, |ui| {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = props.gap;
+                ui.horizontal(|ui| {
+                    let mut components = ui.components();
+                    for item in &props.items {
+                        let selected = props
+                            .selected_item_id
+                            .as_deref()
+                            .is_some_and(|item_id| item_id == item.item_id);
+                        if components
+                            .button(
+                                Button::icon_only(item.icon.as_str())
+                                    .variant(if selected {
+                                        ButtonVariant::Primary
+                                    } else {
+                                        ButtonVariant::Ghost
+                                    })
+                                    .selected(selected),
+                            )
+                            .clicked()
+                        {
+                            self.emit_item(
+                                &props.common.node_id,
+                                EventKind::Selected,
+                                item.action_id.as_ref().or(props.action_id.as_ref()),
+                                item.item_id.as_str(),
+                                item.tooltip.as_deref().unwrap_or(item.icon.as_str()),
+                            );
+                        }
+                    }
+                })
+                .inner
             })
-            .collect::<Vec<_>>();
-        let mut current = props
-            .selected_item_id
-            .as_deref()
-            .and_then(|item_id| props.items.iter().position(|item| item.item_id == item_id))
-            .unwrap_or(0);
-        let previous = current;
-        let mut toolbar = IconToolbar::new(
-            make_id(&props.common.node_id, "icon_toolbar"),
-            items.as_slice(),
-        )
-        .gap(props.gap);
-        if let Some(size) = props.size {
-            toolbar = toolbar.size(size);
-        }
-        if let Some(icon_size) = props.icon_size {
-            toolbar = toolbar.icon_size(icon_size);
-        }
-        let _ = ui.icon_toolbar(&mut current, toolbar);
-        if current != previous {
-            if let Some(item) = props.items.get(current) {
-                self.emit_item(
-                    &props.common.node_id,
-                    EventKind::Selected,
-                    item.action_id.as_ref().or(props.action_id.as_ref()),
-                    item.item_id.as_str(),
-                    item.tooltip.as_deref().unwrap_or(item.icon.as_str()),
-                );
-            }
-        }
+            .inner
+        });
     }
 
     fn render_file_tree(&mut self, ui: &mut ComponentUi<'_>, props: &ContractFileTree) {
@@ -1529,24 +1851,37 @@ impl FrameRenderer {
     }
 
     fn render_image_tile(&mut self, ui: &mut ComponentUi<'_>, props: &ContractImageTile) {
-        let mut tile = ImageTile::new(contract_image(props.source.as_str()))
-            .image_frame(props.image_frame)
-            .selected(props.selected);
-        if let Some(size) = props.size {
-            tile = tile.size(size);
-        }
-        if let (Some(width), Some(height)) = (props.image_width, props.image_height) {
-            tile = tile.image_size(egui::vec2(width, height));
-        }
-        if let Some(playback_state) = props.playback_state {
-            tile = tile.playback_state(playback_state);
-        }
-        let (_, state) = if props.children.is_empty() {
-            ui.image_tile(tile)
-        } else {
-            ui.image_tile_with_body(tile, |ui| self.render_children(ui, &props.children))
-        };
-        if state.play_pause_clicked {
+        let (default_width, default_height) = compat_image_tile_dimensions(props.size);
+        let image_width = props.image_width.unwrap_or(default_width);
+        let image_height = props.image_height.unwrap_or(default_height);
+        let mut play_pause_clicked = false;
+        let card = compat_card_frame(ui, None, None, None, None, 10, 10, |ui| {
+            let mut components = ui.components();
+            let mut image = contract_image(props.source.as_str())
+                .fit_to_exact_size(egui::vec2(image_width, image_height));
+            if props.image_frame {
+                image = image.corner_radius(CornerRadius::same(8));
+            }
+            let _ = components.image(image);
+            if let Some(playback_state) = props.playback_state {
+                components.add_space(6.0);
+                let icon = match playback_state {
+                    ImageTilePlaybackState::Paused => "play",
+                    ImageTilePlaybackState::Playing => "pause",
+                };
+                if components
+                    .button(Button::icon_only(icon).variant(ButtonVariant::Primary))
+                    .clicked()
+                {
+                    play_pause_clicked = true;
+                }
+            }
+            if !props.children.is_empty() {
+                components.add_space(8.0);
+                self.render_children(components.ui_mut(), &props.children);
+            }
+        });
+        if play_pause_clicked {
             self.emit_basic(
                 &props.common.node_id,
                 EventKind::Toggled,
@@ -1555,7 +1890,7 @@ impl FrameRenderer {
                     .as_ref()
                     .or(props.action_id.as_ref()),
             );
-        } else if state.tile_clicked {
+        } else if card.response.clicked() {
             self.emit_basic(
                 &props.common.node_id,
                 EventKind::Clicked,
@@ -1565,28 +1900,32 @@ impl FrameRenderer {
     }
 
     fn render_command(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCommand) {
-        let items = props
-            .items
-            .iter()
-            .map(|item| {
-                let mut command_item = CommandItem::new(item.group.as_str(), item.label.as_str());
-                if let Some(shortcut) = item.shortcut.as_deref() {
-                    command_item = command_item.shortcut(shortcut);
-                }
-                command_item
-            })
-            .collect::<Vec<_>>();
         let mut query = props.query.clone();
         let previous_query = query.clone();
-        let mut command = Command::new(make_id(&props.common.node_id, "command"))
-            .width(props.width)
-            .max_height(props.max_height)
-            .preview(props.preview)
-            .preview_height(props.preview_height);
-        if let Some(placeholder) = props.placeholder.as_deref() {
-            command = command.placeholder(placeholder);
+        let placeholder = props
+            .placeholder
+            .as_deref()
+            .unwrap_or("Execute a command...");
+
+        if props.preview {
+            let runtime = crate::theme::runtime_for_ui(ui.raw());
+            let _ = compat_card_frame(
+                ui,
+                Some(tokens::muted_surface(runtime)),
+                Some(Stroke::new(1.0, tokens::separator(runtime))),
+                None,
+                None,
+                12,
+                12,
+                |ui| {
+                    ui.set_min_height(props.preview_height.max(1.0));
+                    render_contract_command_panel(ui, &mut query, props, placeholder);
+                },
+            );
+        } else {
+            render_contract_command_panel(ui.raw_mut(), &mut query, props, placeholder);
         }
-        let _ = ui.command(&mut query, items.as_slice(), command);
+
         if query != previous_query {
             self.emit_value(
                 &props.common.node_id,
@@ -1751,6 +2090,39 @@ fn effective_layout(
     let mut changed = common.layout.is_some();
 
     if let Some(spec) = class_spec {
+        if layout.display.is_none() {
+            if let Some(display) = class_display(spec) {
+                layout.display = Some(display);
+                changed = true;
+            }
+        }
+        if layout.direction.is_none() {
+            if let Some(direction) = spec.direction.map(class_direction) {
+                layout.direction = Some(direction);
+                changed = true;
+            } else if spec.is_flex {
+                layout.direction = Some(ContractDirection::Row);
+                changed = true;
+            }
+        }
+        if layout.grow.is_none() {
+            if let Some(grow) = spec.flex_grow {
+                layout.grow = Some(grow);
+                changed = true;
+            }
+        }
+        if layout.shrink.is_none() {
+            if let Some(shrink) = spec.flex_shrink {
+                layout.shrink = Some(shrink);
+                changed = true;
+            }
+        }
+        if layout.basis.is_none() {
+            if let Some(basis) = spec.flex_basis.and_then(class_flex_basis) {
+                layout.basis = Some(basis);
+                changed = true;
+            }
+        }
         if layout.width.is_none() {
             if let Some(width) = spec.width.and_then(class_width) {
                 layout.width = Some(width);
@@ -1760,6 +2132,42 @@ fn effective_layout(
         if layout.height.is_none() {
             if let Some(height) = spec.height.and_then(class_height) {
                 layout.height = Some(height);
+                changed = true;
+            }
+        }
+        if layout.min_width.is_none() {
+            if let Some(min_width) = spec.min_width.and_then(class_width) {
+                layout.min_width = Some(min_width);
+                changed = true;
+            }
+        }
+        if layout.min_height.is_none() {
+            if let Some(min_height) = spec.min_height.and_then(class_height) {
+                layout.min_height = Some(min_height);
+                changed = true;
+            }
+        }
+        if layout.max_width.is_none() {
+            if let Some(max_width) = spec.max_width.and_then(class_width) {
+                layout.max_width = Some(max_width);
+                changed = true;
+            }
+        }
+        if layout.max_height.is_none() {
+            if let Some(max_height) = spec.max_height.and_then(class_height) {
+                layout.max_height = Some(max_height);
+                changed = true;
+            }
+        }
+        if layout.gap_x.is_none() {
+            if let Some(gap) = spec.gap_col {
+                layout.gap_x = Some(gap);
+                changed = true;
+            }
+        }
+        if layout.gap_y.is_none() {
+            if let Some(gap) = spec.gap_row {
+                layout.gap_y = Some(gap);
                 changed = true;
             }
         }
@@ -1775,9 +2183,111 @@ fn effective_layout(
                 changed = true;
             }
         }
+        if layout.align.is_none() {
+            if let Some(align) = spec.align_items.map(class_align_items) {
+                layout.align = Some(align);
+                changed = true;
+            } else if spec.is_flex {
+                layout.align = Some(ContractAlign::Stretch);
+                changed = true;
+            }
+        }
+        if layout.justify.is_none() {
+            if let Some(justify) = spec.justify.and_then(class_justify) {
+                layout.justify = Some(justify);
+                changed = true;
+            }
+        }
+        if layout.wrap.is_none() {
+            if let Some(wrap) = spec.flex_wrap.and_then(class_flex_wrap) {
+                layout.wrap = Some(wrap);
+                changed = true;
+            }
+        }
+        if layout.columns.is_empty() {
+            if let Some(columns) = class_grid_tracks(spec.grid_cols) {
+                layout.columns = columns;
+                changed = true;
+            }
+        }
+        if layout.rows.is_empty() {
+            if let Some(rows) = class_grid_tracks(spec.grid_rows) {
+                layout.rows = rows;
+                changed = true;
+            }
+        }
+        if layout.overflow_x.is_none() {
+            if let Some(overflow_x) = class_overflow_x(spec) {
+                layout.overflow_x = Some(overflow_x);
+                changed = true;
+            }
+        }
+        if layout.overflow_y.is_none() {
+            if let Some(overflow_y) = class_overflow_y(spec) {
+                layout.overflow_y = Some(overflow_y);
+                changed = true;
+            }
+        }
     }
 
     changed.then_some(layout)
+}
+
+fn class_display(spec: &tailwind::Spec) -> Option<ContractDisplay> {
+    if spec.is_grid {
+        Some(ContractDisplay::Grid)
+    } else if spec.is_flex {
+        Some(ContractDisplay::Flex)
+    } else {
+        None
+    }
+}
+
+fn class_direction(direction: tailwind::Direction) -> ContractDirection {
+    match direction {
+        tailwind::Direction::Horizontal => ContractDirection::Row,
+        tailwind::Direction::Vertical => ContractDirection::Column,
+    }
+}
+
+fn class_flex_basis(basis: tailwind::FlexBasis) -> Option<ContractLength> {
+    Some(match basis {
+        tailwind::FlexBasis::Auto => ContractLength::Auto,
+        tailwind::FlexBasis::Full => ContractLength::Percent { value: 1.0 },
+        tailwind::FlexBasis::Pixels(value) => ContractLength::Px { value },
+        tailwind::FlexBasis::Percent(value) => ContractLength::Percent { value },
+    })
+}
+
+fn class_grid_tracks(track_count: Option<usize>) -> Option<Vec<ContractTrack>> {
+    let count = track_count?;
+    (count > 0).then(|| vec![ContractTrack::Fr { value: 1.0 }; count])
+}
+
+fn class_align_items(align: tailwind::AlignItems) -> ContractAlign {
+    match align {
+        tailwind::AlignItems::Start => ContractAlign::Start,
+        tailwind::AlignItems::Center => ContractAlign::Center,
+        tailwind::AlignItems::End => ContractAlign::End,
+        tailwind::AlignItems::Stretch => ContractAlign::Stretch,
+    }
+}
+
+fn class_justify(justify: tailwind::JustifyContent) -> Option<ContractJustify> {
+    match justify {
+        tailwind::JustifyContent::Start => Some(ContractJustify::Start),
+        tailwind::JustifyContent::Center => Some(ContractJustify::Center),
+        tailwind::JustifyContent::End => Some(ContractJustify::End),
+        tailwind::JustifyContent::Between | tailwind::JustifyContent::Around => None,
+    }
+}
+
+fn class_flex_wrap(wrap: tailwind::FlexWrap) -> Option<bool> {
+    match wrap {
+        tailwind::FlexWrap::NoWrap => Some(false),
+        tailwind::FlexWrap::Wrap => Some(true),
+        tailwind::FlexWrap::WrapReverse => None,
+    }
 }
 
 fn class_width(width: tailwind::Width) -> Option<ContractLength> {
@@ -1794,6 +2304,24 @@ fn class_height(height: tailwind::Height) -> Option<ContractLength> {
         tailwind::Height::Pixels(value) => ContractLength::Px { value },
         tailwind::Height::Percent(value) => ContractLength::Percent { value },
     })
+}
+
+fn class_overflow_x(spec: &tailwind::Spec) -> Option<ContractOverflow> {
+    if spec.scroll_x {
+        return Some(ContractOverflow::Scroll);
+    }
+    spec.clip_children
+        .filter(|clip_children| *clip_children)
+        .map(|_| ContractOverflow::Hidden)
+}
+
+fn class_overflow_y(spec: &tailwind::Spec) -> Option<ContractOverflow> {
+    if spec.scroll_y {
+        return Some(ContractOverflow::Scroll);
+    }
+    spec.clip_children
+        .filter(|clip_children| *clip_children)
+        .map(|_| ContractOverflow::Hidden)
 }
 
 fn class_padding_edges(
@@ -1836,6 +2364,18 @@ fn class_text_color(
     class_spec
         .and_then(|spec| spec.text)
         .map(|color| tailwind::resolve_color(&runtime, color))
+        .map(|color| apply_class_opacity(color, class_spec))
+}
+
+fn resolved_icon_tint(
+    props: &ContractIcon,
+    class_spec: Option<&tailwind::Spec>,
+    runtime: crate::theme::ThemeRuntime,
+) -> Option<Color32> {
+    match props.tint.as_ref() {
+        Some(tint) => parse_contract_color(tint),
+        None => class_text_color(class_spec, runtime),
+    }
 }
 
 fn class_background_color(
@@ -1843,9 +2383,10 @@ fn class_background_color(
     runtime: crate::theme::ThemeRuntime,
 ) -> Option<Color32> {
     match class_spec.and_then(|spec| spec.background) {
-        Some(tailwind::UiRuntimeBackground::Solid(color)) => {
-            Some(tailwind::resolve_color(&runtime, color))
-        }
+        Some(tailwind::UiRuntimeBackground::Solid(color)) => Some(apply_class_opacity(
+            tailwind::resolve_color(&runtime, color),
+            class_spec,
+        )),
         None => None,
     }
 }
@@ -1860,7 +2401,31 @@ fn class_border_stroke(
         .border_color
         .map(|color| tailwind::resolve_color(&runtime, color))
         .unwrap_or_else(|| tokens::separator(runtime));
-    Some(Stroke::new(width.max(0.0), color))
+    Some(Stroke::new(
+        width.max(0.0),
+        apply_class_opacity(color, class_spec),
+    ))
+}
+
+fn class_shadow(
+    class_spec: Option<&tailwind::Spec>,
+    runtime: crate::theme::ThemeRuntime,
+) -> Option<egui::Shadow> {
+    let mut shadow = match class_spec.and_then(|spec| spec.shadow) {
+        Some(tailwind::SurfaceShadow::Sm) => tokens::tailwind_shadow_sm(runtime),
+        Some(tailwind::SurfaceShadow::Md) => tokens::tailwind_shadow_md(runtime),
+        Some(tailwind::SurfaceShadow::Lg) => tokens::tailwind_shadow_lg(runtime),
+        None => return None,
+    };
+    shadow.color = apply_class_opacity(shadow.color, class_spec);
+    Some(shadow)
+}
+
+fn apply_class_opacity(color: Color32, class_spec: Option<&tailwind::Spec>) -> Color32 {
+    match class_spec.and_then(|spec| spec.opacity) {
+        Some(opacity) => color.gamma_multiply(opacity.clamp(0.0, 1.0)),
+        None => color,
+    }
 }
 
 fn class_border_width(spec: &tailwind::Spec) -> Option<f32> {
@@ -1875,10 +2440,33 @@ fn class_border_width(spec: &tailwind::Spec) -> Option<f32> {
     .reduce(f32::max)
 }
 
-fn class_corner_radius(class_spec: Option<&tailwind::Spec>) -> Option<u8> {
-    class_spec
-        .and_then(|spec| spec.corner_radius)
-        .map(|radius| radius.round().clamp(0.0, 255.0) as u8)
+fn class_corner_radius(
+    class_spec: Option<&tailwind::Spec>,
+    fallback: CornerRadius,
+) -> Option<CornerRadius> {
+    let radii = class_spec?.corner_radii;
+    radii.any().then(|| CornerRadius {
+        nw: radii
+            .nw
+            .unwrap_or(f32::from(fallback.nw))
+            .round()
+            .clamp(0.0, 255.0) as u8,
+        ne: radii
+            .ne
+            .unwrap_or(f32::from(fallback.ne))
+            .round()
+            .clamp(0.0, 255.0) as u8,
+        sw: radii
+            .sw
+            .unwrap_or(f32::from(fallback.sw))
+            .round()
+            .clamp(0.0, 255.0) as u8,
+        se: radii
+            .se
+            .unwrap_or(f32::from(fallback.se))
+            .round()
+            .clamp(0.0, 255.0) as u8,
+    })
 }
 
 fn class_label_weight(class_spec: Option<&tailwind::Spec>) -> Option<LabelWeight> {
@@ -1922,6 +2510,7 @@ fn class_text_size(class_spec: Option<&tailwind::Spec>) -> Option<f32> {
 fn with_layout_scope<R>(
     ui: &mut ComponentUi<'_>,
     layout: Option<&ContractLayout>,
+    mode: LayoutScopeMode,
     add: impl FnOnce(&mut ComponentUi<'_>) -> R,
 ) -> R {
     if layout.is_none() {
@@ -1931,11 +2520,11 @@ fn with_layout_scope<R>(
     ui.ui_mut()
         .scope(|ui| {
             let render = |ui: &mut egui::Ui| {
-                apply_layout_sizing(ui, layout);
+                apply_layout_sizing(ui, layout, mode);
                 let mut components = ui.components();
                 add(&mut components)
             };
-            if let Some(frame) = layout_frame(layout) {
+            if let Some(frame) = layout_frame(layout, mode) {
                 frame.show(ui, render).inner
             } else {
                 render(ui)
@@ -1944,17 +2533,20 @@ fn with_layout_scope<R>(
         .inner
 }
 
-fn layout_frame(layout: Option<&ContractLayout>) -> Option<egui::Frame> {
+fn layout_frame(layout: Option<&ContractLayout>, mode: LayoutScopeMode) -> Option<egui::Frame> {
     let layout = layout?;
-    if layout.padding.is_none() && layout.margin.is_none() {
+    let include_margin = matches!(mode, LayoutScopeMode::Full);
+    if layout.padding.is_none() && (!include_margin || layout.margin.is_none()) {
         return None;
     }
     let mut frame = egui::Frame::new();
     if let Some(padding) = layout.padding {
         frame = frame.inner_margin(edges_to_margin(padding));
     }
-    if let Some(margin) = layout.margin {
-        frame = frame.outer_margin(edges_to_margin(margin));
+    if include_margin {
+        if let Some(margin) = layout.margin {
+            frame = frame.outer_margin(edges_to_margin(margin));
+        }
     }
     Some(frame)
 }
@@ -1972,10 +2564,14 @@ fn edge_to_i8(value: f32) -> i8 {
     value.round().clamp(0.0, i8::MAX as f32) as i8
 }
 
-fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>) {
+fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>, mode: LayoutScopeMode) {
     let Some(layout) = layout else {
         return;
     };
+
+    if matches!(mode, LayoutScopeMode::TaffyItem) {
+        return;
+    }
 
     if let Some(width) = resolve_contract_length(layout.width.as_ref(), ui.available_width()) {
         ui.set_min_width(width);
@@ -2007,39 +2603,28 @@ fn apply_layout_sizing(ui: &mut egui::Ui, layout: Option<&ContractLayout>) {
     }
 }
 
-fn render_container_children(
-    ui: &mut egui::Ui,
-    common: &ContractCommon,
-    default_direction: ContractDirection,
-    default_gap: f32,
-    default_justify: ContractJustify,
-    default_align: ContractAlign,
-    add: impl FnOnce(&mut egui::Ui),
-) {
-    let plan = container_layout_plan(
-        common,
-        default_direction,
-        default_gap,
-        default_justify,
-        default_align,
-    );
-
-    match plan.direction {
-        ContractDirection::Row => {
-            let _ = layout_row()
-                .gap(plan.gap)
-                .justify(map_flow_justify(plan.justify))
-                .align(map_flow_align(plan.align))
-                .show(ui, add);
-        }
-        ContractDirection::Column => {
-            let _ = layout_column()
-                .gap(plan.gap)
-                .justify(map_flow_justify(plan.justify))
-                .align(map_flow_align(plan.align))
-                .show(ui, add);
-        }
-    }
+fn compat_card_frame<R>(
+    ui: &mut ComponentUi<'_>,
+    fill: Option<Color32>,
+    stroke: Option<Stroke>,
+    corner_radius: Option<CornerRadius>,
+    shadow: Option<egui::Shadow>,
+    padding_x: i8,
+    padding_y: i8,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let runtime = crate::theme::runtime_for_ui(ui.raw());
+    surface_frame(
+        ui.raw_mut(),
+        SurfaceFrame::new(
+            fill.unwrap_or(tokens::muted_surface(runtime)),
+            stroke.unwrap_or(Stroke::new(1.0, tokens::separator(runtime))),
+        )
+        .corner_radius(corner_radius.unwrap_or(CornerRadius::same(tokens::radius_lg(runtime))))
+        .shadow(shadow.unwrap_or(egui::Shadow::NONE))
+        .padding(padding_x, padding_y),
+        add,
+    )
 }
 
 fn ignore_metadata_only_common_fields(common: &ContractCommon) {
@@ -2047,13 +2632,16 @@ fn ignore_metadata_only_common_fields(common: &ContractCommon) {
 }
 
 fn container_layout_plan(
-    common: &ContractCommon,
+    layout: Option<&ContractLayout>,
     default_direction: ContractDirection,
     default_gap: f32,
     default_justify: ContractJustify,
     default_align: ContractAlign,
 ) -> ContainerLayoutPlan {
-    let layout = common.layout.as_ref();
+    let display = match layout.and_then(|layout| layout.display) {
+        Some(ContractDisplay::Grid) => TaffyDisplay::Grid,
+        _ => TaffyDisplay::Flex,
+    };
     let direction = layout
         .and_then(|layout| layout.direction)
         .unwrap_or(default_direction);
@@ -2063,21 +2651,174 @@ fn container_layout_plan(
     let align = layout
         .and_then(|layout| layout.align)
         .unwrap_or(default_align);
-    let gap = match direction {
-        ContractDirection::Row => layout
-            .and_then(|layout| layout.gap_x.or(layout.gap_y))
-            .unwrap_or(default_gap),
-        ContractDirection::Column => layout
-            .and_then(|layout| layout.gap_y.or(layout.gap_x))
-            .unwrap_or(default_gap),
-    };
+    let gap_x = layout
+        .and_then(|layout| layout.gap_x.or(layout.gap_y))
+        .unwrap_or(default_gap);
+    let gap_y = layout
+        .and_then(|layout| layout.gap_y.or(layout.gap_x))
+        .unwrap_or(default_gap);
+    let wrap = layout.and_then(|layout| layout.wrap).unwrap_or(false);
+    let overflow_x = layout
+        .and_then(|layout| layout.overflow_x)
+        .unwrap_or(ContractOverflow::Visible);
+    let overflow_y = layout
+        .and_then(|layout| layout.overflow_y)
+        .unwrap_or(ContractOverflow::Visible);
 
     ContainerLayoutPlan {
+        display,
         direction,
         justify,
         align,
-        gap,
+        gap_x,
+        gap_y,
+        wrap,
+        overflow_x,
+        overflow_y,
     }
+}
+
+fn container_taffy_style(
+    layout: Option<&ContractLayout>,
+    plan: ContainerLayoutPlan,
+) -> taffy::Style {
+    let mut style = taffy::Style {
+        display: match plan.display {
+            TaffyDisplay::Flex => taffy::Display::Flex,
+            TaffyDisplay::Grid => taffy::Display::Grid,
+        },
+        overflow: taffy::Point {
+            x: map_taffy_overflow(plan.overflow_x),
+            y: map_taffy_overflow(plan.overflow_y),
+        },
+        gap: taffy::Size {
+            width: taffy::style_helpers::length(plan.gap_x.max(0.0)),
+            height: taffy::style_helpers::length(plan.gap_y.max(0.0)),
+        },
+        size: taffy::Size {
+            width: contract_length_to_dimension(layout.and_then(|layout| layout.width.as_ref())),
+            height: contract_length_to_dimension(layout.and_then(|layout| layout.height.as_ref())),
+        },
+        min_size: taffy::Size {
+            width: contract_length_to_dimension(
+                layout.and_then(|layout| layout.min_width.as_ref()),
+            ),
+            height: contract_length_to_dimension(
+                layout.and_then(|layout| layout.min_height.as_ref()),
+            ),
+        },
+        max_size: taffy::Size {
+            width: contract_length_to_dimension(
+                layout.and_then(|layout| layout.max_width.as_ref()),
+            ),
+            height: contract_length_to_dimension(
+                layout.and_then(|layout| layout.max_height.as_ref()),
+            ),
+        },
+        ..Default::default()
+    };
+
+    if matches!(plan.display, TaffyDisplay::Flex) {
+        style.flex_direction = match plan.direction {
+            ContractDirection::Row => taffy::FlexDirection::Row,
+            ContractDirection::Column => taffy::FlexDirection::Column,
+        };
+        style.align_items = Some(map_taffy_align_items(plan.align));
+        style.justify_content = Some(map_taffy_justify_content(plan.justify));
+        style.flex_wrap = if plan.wrap {
+            taffy::FlexWrap::Wrap
+        } else {
+            taffy::FlexWrap::NoWrap
+        };
+    } else {
+        style.align_items = Some(map_taffy_align_items(plan.align));
+        style.justify_content = Some(map_taffy_justify_content(plan.justify));
+        if let Some(layout) = layout {
+            style.grid_template_columns =
+                layout.columns.iter().map(contract_track_to_taffy).collect();
+            style.grid_template_rows = layout.rows.iter().map(contract_track_to_taffy).collect();
+        }
+    }
+
+    style
+}
+
+fn taffy_item_style(child: &ContractNode, layout: Option<&ContractLayout>) -> taffy::Style {
+    let mut style = taffy::Style {
+        size: taffy::Size {
+            width: contract_length_to_dimension(layout.and_then(|layout| layout.width.as_ref())),
+            height: contract_length_to_dimension(layout.and_then(|layout| layout.height.as_ref())),
+        },
+        min_size: taffy::Size {
+            width: contract_length_to_dimension(
+                layout.and_then(|layout| layout.min_width.as_ref()),
+            ),
+            height: contract_length_to_dimension(
+                layout.and_then(|layout| layout.min_height.as_ref()),
+            ),
+        },
+        max_size: taffy::Size {
+            width: contract_length_to_dimension(
+                layout.and_then(|layout| layout.max_width.as_ref()),
+            ),
+            height: contract_length_to_dimension(
+                layout.and_then(|layout| layout.max_height.as_ref()),
+            ),
+        },
+        margin: contract_margin_to_taffy(layout.and_then(|layout| layout.margin)),
+        ..Default::default()
+    };
+
+    if let Some(layout) = layout {
+        if let Some(grow) = layout.grow {
+            style.flex_grow = grow.max(0.0);
+        }
+        if let Some(shrink) = layout.shrink {
+            style.flex_shrink = shrink.max(0.0);
+        }
+        if let Some(basis) = layout.basis.as_ref() {
+            style.flex_basis = contract_length_to_dimension(Some(basis));
+        }
+        if let Some(col_span) = layout.col_span.filter(|span| *span > 1) {
+            style.grid_column = taffy::style_helpers::span(col_span);
+        }
+        if let Some(row_span) = layout.row_span.filter(|span| *span > 1) {
+            style.grid_row = taffy::style_helpers::span(row_span);
+        }
+    }
+
+    if let ContractNode::Spacer(props) = child {
+        if props.flex {
+            style.flex_grow = layout
+                .and_then(|layout| layout.grow)
+                .unwrap_or(1.0)
+                .max(0.0);
+            style.flex_basis = taffy::style_helpers::length(0.0);
+            if props.width.is_none() {
+                style.min_size.width = taffy::style_helpers::length(0.0);
+            }
+            if props.height.is_none() {
+                style.min_size.height = taffy::style_helpers::length(0.0);
+            }
+        }
+        if let Some(width) = props.width {
+            style.size.width = taffy::style_helpers::length(width.max(0.0));
+        }
+        if let Some(height) = props.height {
+            style.size.height = taffy::style_helpers::length(height.max(0.0));
+        }
+    }
+
+    if let ContractNode::SizedBox(props) = child {
+        if let Some(width) = props.width {
+            style.size.width = taffy::style_helpers::length(width.max(0.0));
+        }
+        if let Some(height) = props.height {
+            style.size.height = taffy::style_helpers::length(height.max(0.0));
+        }
+    }
+
+    style
 }
 
 fn resolve_contract_length(length: Option<&ContractLength>, available: f32) -> Option<f32> {
@@ -2085,25 +2826,74 @@ fn resolve_contract_length(length: Option<&ContractLength>, available: f32) -> O
         ContractLength::Auto => None,
         ContractLength::Px { value } => Some(value.max(0.0)),
         ContractLength::Percent { value } => {
-            let ratio = if *value > 1.0 { *value / 100.0 } else { *value };
-            Some((available.max(0.0) * ratio.max(0.0)).max(0.0))
+            let ratio = normalized_percent(*value);
+            Some((available.max(0.0) * ratio).max(0.0))
         }
     }
 }
 
-fn map_flow_justify(value: ContractJustify) -> FlowJustify {
-    match value {
-        ContractJustify::Start => FlowJustify::Start,
-        ContractJustify::Center => FlowJustify::Center,
-        ContractJustify::End => FlowJustify::End,
+fn contract_length_to_dimension(length: Option<&ContractLength>) -> taffy::Dimension {
+    match length {
+        Some(ContractLength::Auto) | None => taffy::Dimension::Auto,
+        Some(ContractLength::Px { value }) => taffy::Dimension::Length(value.max(0.0)),
+        Some(ContractLength::Percent { value }) => {
+            taffy::Dimension::Percent(normalized_percent(*value))
+        }
     }
 }
 
-fn map_flow_align(value: ContractAlign) -> FlowAlign {
+fn normalized_percent(value: f32) -> f32 {
+    let ratio = if value > 1.0 { value / 100.0 } else { value };
+    ratio.max(0.0)
+}
+
+fn contract_margin_to_taffy(
+    edges: Option<ContractEdges>,
+) -> taffy::Rect<taffy::LengthPercentageAuto> {
+    let Some(edges) = edges else {
+        return taffy::Rect::zero();
+    };
+    taffy::Rect {
+        left: taffy::LengthPercentageAuto::Length(edges.left.max(0.0)),
+        right: taffy::LengthPercentageAuto::Length(edges.right.max(0.0)),
+        top: taffy::LengthPercentageAuto::Length(edges.top.max(0.0)),
+        bottom: taffy::LengthPercentageAuto::Length(edges.bottom.max(0.0)),
+    }
+}
+
+fn contract_track_to_taffy(track: &ContractTrack) -> taffy::TrackSizingFunction {
+    match track {
+        ContractTrack::Auto => taffy::style_helpers::auto(),
+        ContractTrack::Fr { value } => taffy::style_helpers::fr(value.max(0.0)),
+        ContractTrack::Px { value } => taffy::style_helpers::length(value.max(0.0)),
+        ContractTrack::Percent { value } => {
+            taffy::style_helpers::percent(normalized_percent(*value))
+        }
+    }
+}
+
+fn map_taffy_overflow(value: ContractOverflow) -> taffy::Overflow {
     match value {
-        ContractAlign::Start => FlowAlign::Start,
-        ContractAlign::Center => FlowAlign::Center,
-        ContractAlign::End => FlowAlign::End,
+        ContractOverflow::Visible => taffy::Overflow::Visible,
+        ContractOverflow::Hidden => taffy::Overflow::Hidden,
+        ContractOverflow::Scroll => taffy::Overflow::Scroll,
+    }
+}
+
+fn map_taffy_justify_content(value: ContractJustify) -> taffy::JustifyContent {
+    match value {
+        ContractJustify::Start => taffy::JustifyContent::Start,
+        ContractJustify::Center => taffy::JustifyContent::Center,
+        ContractJustify::End => taffy::JustifyContent::End,
+    }
+}
+
+fn map_taffy_align_items(value: ContractAlign) -> taffy::AlignItems {
+    match value {
+        ContractAlign::Start => taffy::AlignItems::Start,
+        ContractAlign::Center => taffy::AlignItems::Center,
+        ContractAlign::End => taffy::AlignItems::End,
+        ContractAlign::Stretch => taffy::AlignItems::Stretch,
     }
 }
 
@@ -2172,6 +2962,132 @@ fn build_runtime_file_tree<'a>(
                 .children(build_runtime_file_tree(item.children.as_slice(), bindings))
         })
         .collect()
+}
+
+fn render_contract_menu_entries<'a>(
+    ui: &mut egui::Ui,
+    entries: &'a [ContractMenuEntry],
+    selected: &mut Option<MenuActionBinding<'a>>,
+) {
+    for entry in entries {
+        match entry {
+            ContractMenuEntry::Action(action) => {
+                let mut label = action.label.clone();
+                if let Some(shortcut) = action.shortcut.as_deref() {
+                    label.push_str("    ");
+                    label.push_str(shortcut);
+                }
+                if ui.button(label).clicked() {
+                    *selected = Some(MenuActionBinding {
+                        item_id: action.item_id.as_str(),
+                        label: action.label.as_str(),
+                        action_id: action.action_id.as_ref(),
+                    });
+                    ui.close();
+                }
+            }
+            ContractMenuEntry::Separator => {
+                ui.separator();
+            }
+            ContractMenuEntry::Submenu(submenu) => {
+                ui.menu_button(submenu.label.as_str(), |ui| {
+                    render_contract_menu_entries(ui, submenu.entries.as_slice(), selected);
+                });
+            }
+        }
+    }
+}
+
+fn compat_combobox_summary(selected_item_ids: &[String], props: &ContractCombobox) -> String {
+    let labels = selected_item_ids
+        .iter()
+        .filter_map(|item_id| props.items.iter().find(|item| &item.item_id == item_id))
+        .map(|item| item.label.as_str())
+        .collect::<Vec<_>>();
+    if labels.is_empty() {
+        props
+            .placeholder
+            .clone()
+            .unwrap_or_else(|| "Select options".to_owned())
+    } else {
+        labels.join(", ")
+    }
+}
+
+fn render_contract_command_panel(
+    ui: &mut egui::Ui,
+    query: &mut String,
+    props: &ContractCommand,
+    placeholder: &str,
+) {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let _ = surface_frame(
+        ui,
+        SurfaceFrame::new(
+            tokens::card_background(runtime),
+            Stroke::new(1.0, tokens::separator(runtime)),
+        )
+        .corner_radius(tokens::radius_lg(runtime))
+        .padding(10, 8)
+        .shadow(tokens::tailwind_shadow_lg(runtime)),
+        |ui| {
+            ui.set_min_width(props.width);
+            ui.set_max_width(props.width);
+            let mut components = ui.components();
+            let _ = components.text_input(
+                query,
+                TextInput::new().width(props.width).placeholder(placeholder),
+            );
+            components.add_space(6.0);
+            let _ = components.separator();
+            components.add_space(4.0);
+
+            let query_lower = query.trim().to_ascii_lowercase();
+            let visible_items = props
+                .items
+                .iter()
+                .filter(|item| {
+                    query_lower.is_empty()
+                        || item
+                            .label
+                            .to_ascii_lowercase()
+                            .contains(query_lower.as_str())
+                        || item
+                            .group
+                            .to_ascii_lowercase()
+                            .contains(query_lower.as_str())
+                })
+                .collect::<Vec<_>>();
+
+            let _ = egui::ScrollArea::vertical()
+                .no_drag_to_scroll()
+                .max_height(props.max_height)
+                .auto_shrink([false, false])
+                .show(components.ui_mut(), |ui: &mut egui::Ui| {
+                    ui.spacing_mut().item_spacing.y = 4.0;
+                    if visible_items.is_empty() {
+                        let mut components = ui.components();
+                        let _ = components
+                            .label(Label::new("No matches").tone(LabelTone::Muted).size(12.0));
+                    } else {
+                        let mut components = ui.components();
+                        for item in visible_items {
+                            let display = if item.group.is_empty() {
+                                item.label.clone()
+                            } else {
+                                format!("{} - {}", item.group, item.label)
+                            };
+                            let mut button =
+                                Button::new(display.as_str()).variant(ButtonVariant::Ghost);
+                            if let Some(shortcut) = item.shortcut.as_deref() {
+                                button = button.trailing_text(shortcut);
+                            }
+                            let _ = components.button(button);
+                        }
+                    }
+                });
+        },
+    );
 }
 
 fn append_runtime_menu_entries<'a>(
@@ -2285,8 +3201,200 @@ fn contract_image(source: &str) -> Image<'static> {
         "showcase" | "showcase-image" | "builtin:showcase-image" => {
             Image::from_bytes("bytes://contract/showcase-image.png", SHOWCASE_IMAGE_BYTES)
         }
+        source if source.starts_with("builtin:twemoji:") => {
+            let emoji = source.trim_start_matches("builtin:twemoji:");
+            twemoji::image_source(emoji)
+                .map(Image::new)
+                .unwrap_or_else(|| Image::from_uri(source.to_owned()))
+        }
         source => Image::from_uri(source.to_owned()),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompatPaginationItem {
+    Page(usize),
+    Ellipsis,
+}
+
+fn compat_pagination_items(
+    current_page: usize,
+    page_count: usize,
+    sibling_count: usize,
+) -> Vec<CompatPaginationItem> {
+    if page_count == 0 {
+        return Vec::new();
+    }
+
+    let current = current_page.clamp(1, page_count);
+    let visible_page_slots = sibling_count.saturating_mul(2) + 5;
+    if page_count <= visible_page_slots {
+        return (1..=page_count).map(CompatPaginationItem::Page).collect();
+    }
+
+    let left_sibling = current.saturating_sub(sibling_count).max(1);
+    let right_sibling = (current + sibling_count).min(page_count);
+    let show_left_ellipsis = left_sibling > 2;
+    let show_right_ellipsis = right_sibling < page_count.saturating_sub(1);
+
+    if !show_left_ellipsis && show_right_ellipsis {
+        let last_left_page = (sibling_count * 2 + 2).min(page_count.saturating_sub(1));
+        let mut items = (1..=last_left_page)
+            .map(CompatPaginationItem::Page)
+            .collect::<Vec<_>>();
+        items.push(CompatPaginationItem::Ellipsis);
+        items.push(CompatPaginationItem::Page(page_count));
+        return items;
+    }
+
+    if show_left_ellipsis && !show_right_ellipsis {
+        let start_page = page_count.saturating_sub(sibling_count * 2 + 1).max(2);
+        let mut items = vec![
+            CompatPaginationItem::Page(1),
+            CompatPaginationItem::Ellipsis,
+        ];
+        items.extend((start_page..=page_count).map(CompatPaginationItem::Page));
+        return items;
+    }
+
+    if show_left_ellipsis && show_right_ellipsis {
+        let mut items = vec![
+            CompatPaginationItem::Page(1),
+            CompatPaginationItem::Ellipsis,
+        ];
+        items.extend((left_sibling..=right_sibling).map(CompatPaginationItem::Page));
+        items.push(CompatPaginationItem::Ellipsis);
+        items.push(CompatPaginationItem::Page(page_count));
+        return items;
+    }
+
+    (1..=page_count).map(CompatPaginationItem::Page).collect()
+}
+
+fn compat_anchored_pos(rect: egui::Rect, anchor: Align2) -> egui::Pos2 {
+    egui::pos2(
+        rect.left() + rect.width() * anchor.x().to_factor(),
+        rect.top() + rect.height() * anchor.y().to_factor(),
+    )
+}
+
+fn compat_image_tile_dimensions(size: Option<ImageTileSize>) -> (f32, f32) {
+    match size.unwrap_or(ImageTileSize::Md) {
+        ImageTileSize::Sm => (144.0, 96.0),
+        ImageTileSize::Md => (216.0, 144.0),
+        ImageTileSize::Lg => (288.0, 192.0),
+    }
+}
+
+fn find_contract_menu_label<'a>(
+    entries: &'a [ContractMenuEntry],
+    item_id: Option<&str>,
+) -> Option<&'a str> {
+    let item_id = item_id?;
+    for entry in entries {
+        match entry {
+            ContractMenuEntry::Action(action) if action.item_id == item_id => {
+                return Some(action.label.as_str())
+            }
+            ContractMenuEntry::Submenu(submenu) => {
+                if let Some(label) =
+                    find_contract_menu_label(submenu.entries.as_slice(), Some(item_id))
+                {
+                    return Some(label);
+                }
+            }
+            ContractMenuEntry::Action(_) | ContractMenuEntry::Separator => {}
+        }
+    }
+    None
+}
+
+fn draw_compat_keycap(
+    ui: &mut egui::Ui,
+    text: &str,
+    min_width: f32,
+    height: f32,
+    fill: Option<Color32>,
+    stroke: Option<Stroke>,
+    text_color: Option<Color32>,
+    text_size: f32,
+    padding_x: f32,
+) -> egui::Response {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let resolved_text_color = text_color.unwrap_or(tokens::text_muted(runtime));
+    let font_id = egui::FontId::new(text_size.max(1.0), egui::FontFamily::Monospace);
+    let text_width = ui.fonts_mut(|fonts| {
+        fonts
+            .layout_no_wrap(text.to_owned(), font_id.clone(), resolved_text_color)
+            .size()
+            .x
+    });
+    let width = (text_width + (padding_x.max(0.0) * 2.0)).max(min_width.max(1.0));
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, height.max(1.0)), Sense::hover());
+
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(tokens::radius_sm(runtime)),
+        fill.unwrap_or(tokens::input_background(runtime)),
+        stroke.unwrap_or(Stroke::new(1.0, tokens::input_border(runtime))),
+        StrokeKind::Outside,
+    );
+    ui.painter().text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        text,
+        font_id,
+        resolved_text_color,
+    );
+
+    response
+}
+
+fn draw_compat_skeleton(
+    ui: &mut egui::Ui,
+    width: f32,
+    height: f32,
+    corner_radius: Option<u8>,
+    circle: bool,
+    animated: bool,
+) -> egui::Response {
+    let runtime = crate::theme::runtime_for_ui(ui);
+    let size = if circle {
+        let diameter = width.min(height).max(1.0);
+        egui::vec2(diameter, diameter)
+    } else {
+        egui::vec2(width.max(1.0), height.max(1.0))
+    };
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let base = tokens::muted_surface(runtime);
+    let fill = if animated {
+        let phase = (ui.input(|input| input.time) as f32 / 2.0).fract();
+        let opacity = if phase < 0.5 {
+            1.0 - (0.5 * (phase * 2.0))
+        } else {
+            0.5 + (0.5 * ((phase - 0.5) * 2.0))
+        };
+        ui.ctx().request_repaint_after_secs(1.0 / 30.0);
+        base.gamma_multiply(opacity)
+    } else {
+        base
+    };
+    let radius = if circle {
+        ((size.x.min(size.y) * 0.5).round()).clamp(0.0, 255.0) as u8
+    } else {
+        corner_radius.unwrap_or(tokens::radius_md(runtime))
+    };
+
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(radius),
+        fill,
+        Stroke::NONE,
+        StrokeKind::Outside,
+    );
+
+    response
 }
 
 fn drag_region_id(region: DragBoardRegion) -> &'static str {
@@ -2509,20 +3617,25 @@ fn contract_toast_shadow(runtime: crate::theme::ThemeRuntime, depth: usize) -> e
 #[cfg(test)]
 mod tests {
     use super::{
-        class_background_color, class_label_weight, class_spec, class_text_color, class_text_size,
-        container_layout_plan, contract_toast_shadow, effective_layout, render_tree,
-        should_emit_dialogue_closed,
+        class_background_color, class_corner_radius, class_label_weight, class_shadow, class_spec,
+        class_text_color, class_text_size, container_layout_plan, contract_toast_shadow,
+        effective_layout, render_tree, resolved_icon_tint, should_emit_dialogue_closed,
+        taffy_item_style, TaffyDisplay,
     };
-    use crate::components::{LabelWeight, ToastIntent};
     use crate::contract::{
-        ContractActions, ContractAlign, ContractButton, ContractCommon, ContractDirection,
-        ContractDisplay, ContractEdges, ContractJustify, ContractLabel, ContractLayout,
-        ContractLength, ContractNode, ContractToastItem, ContractToastViewport, ContractTrack,
-        ContractTree, EventKind,
+        ContractActions, ContractAlign, ContractButton, ContractColumn, ContractCommon,
+        ContractDirection, ContractDisplay, ContractEdges, ContractIcon, ContractJustify,
+        ContractLabel, ContractLayout, ContractLength, ContractNode, ContractOverflow,
+        ContractSizedBox, ContractToastItem, ContractToastViewport, ContractTrack, ContractTree,
+        EventKind,
     };
+    use crate::layout::taffy;
+    use crate::runtime_components::{LabelWeight, ToastIntent};
     use crate::theme::{self, ColorRole, ThemeMode, ThemeSpec};
     use crate::ui::tokens;
-    use egui::{pos2, CentralPanel, Context, Event, Modifiers, PointerButton, RawInput, Shape};
+    use egui::{
+        pos2, CentralPanel, Context, CornerRadius, Event, Modifiers, PointerButton, RawInput, Shape,
+    };
     use std::collections::BTreeMap;
 
     fn run_frame(
@@ -2624,7 +3737,7 @@ mod tests {
 
         let toast_tree = ContractTree::new(ContractNode::ToastViewport(ContractToastViewport {
             common: ContractCommon::new("toast.viewport"),
-            placement: crate::components::ToastPlacement::BottomRight,
+            placement: crate::runtime_components::ToastPlacement::BottomRight,
             width: 320.0,
             margin_x: 16.0,
             margin_y: 16.0,
@@ -2675,7 +3788,7 @@ mod tests {
 
         let cleared_tree = ContractTree::new(ContractNode::ToastViewport(ContractToastViewport {
             common: ContractCommon::new("toast.viewport"),
-            placement: crate::components::ToastPlacement::BottomRight,
+            placement: crate::runtime_components::ToastPlacement::BottomRight,
             width: 320.0,
             margin_x: 16.0,
             margin_y: 16.0,
@@ -2849,7 +3962,7 @@ mod tests {
         let tree = ContractTree::new(ContractNode::Label(ContractLabel {
             common,
             text: "Explicit label".to_owned(),
-            tone: Some(crate::components::LabelTone::Muted),
+            tone: Some(crate::runtime_components::LabelTone::Muted),
             weight: Some(LabelWeight::Regular),
             size: Some(11.0),
             truncate: false,
@@ -2929,6 +4042,194 @@ mod tests {
     }
 
     #[test]
+    fn class_name_grid_overflow_and_min_max_materialize_into_layout() {
+        let mut common = ContractCommon::new("layout.node");
+        common.class = Some(String::from(
+            "grid grid-cols-3 grid-rows-2 min-w-44 max-h-[25%] overflow-hidden",
+        ));
+
+        let spec = class_spec(&common).expect("class spec should parse");
+        let layout = effective_layout(&common, Some(&spec)).expect("class layout");
+
+        assert_eq!(layout.display, Some(ContractDisplay::Grid));
+        assert_eq!(
+            layout.columns,
+            vec![
+                ContractTrack::Fr { value: 1.0 },
+                ContractTrack::Fr { value: 1.0 },
+                ContractTrack::Fr { value: 1.0 }
+            ]
+        );
+        assert_eq!(
+            layout.rows,
+            vec![
+                ContractTrack::Fr { value: 1.0 },
+                ContractTrack::Fr { value: 1.0 }
+            ]
+        );
+        assert_eq!(layout.min_width, Some(ContractLength::Px { value: 176.0 }));
+        assert_eq!(
+            layout.max_height,
+            Some(ContractLength::Percent { value: 0.25 })
+        );
+        assert_eq!(layout.overflow_x, Some(ContractOverflow::Hidden));
+        assert_eq!(layout.overflow_y, Some(ContractOverflow::Hidden));
+    }
+
+    #[test]
+    fn class_name_flex_layout_merges_into_container_plan() {
+        let mut common = ContractCommon::new("layout.node");
+        common.class = Some(String::from(
+            "flex flex-col gap-x-2 gap-y-3 items-stretch justify-center flex-wrap grow basis-[50%]",
+        ));
+
+        let spec = class_spec(&common).expect("class spec should parse");
+        let layout = effective_layout(&common, Some(&spec)).expect("class layout");
+
+        assert_eq!(layout.display, Some(ContractDisplay::Flex));
+        assert_eq!(layout.direction, Some(ContractDirection::Column));
+        assert_eq!(layout.gap_x, Some(8.0));
+        assert_eq!(layout.gap_y, Some(12.0));
+        assert_eq!(layout.align, Some(ContractAlign::Stretch));
+        assert_eq!(layout.justify, Some(ContractJustify::Center));
+        assert_eq!(layout.wrap, Some(true));
+        assert_eq!(layout.grow, Some(1.0));
+        assert_eq!(layout.basis, Some(ContractLength::Percent { value: 0.5 }));
+
+        let plan = container_layout_plan(
+            Some(&layout),
+            ContractDirection::Row,
+            4.0,
+            ContractJustify::Start,
+            ContractAlign::Start,
+        );
+
+        assert_eq!(plan.display, TaffyDisplay::Flex);
+        assert_eq!(plan.direction, ContractDirection::Column);
+        assert_eq!(plan.gap_x, 8.0);
+        assert_eq!(plan.gap_y, 12.0);
+        assert_eq!(plan.align, ContractAlign::Stretch);
+        assert_eq!(plan.justify, ContractJustify::Center);
+        assert!(plan.wrap);
+    }
+
+    #[test]
+    fn class_name_flex_layout_defaults_cross_axis_alignment_to_stretch() {
+        let mut common = ContractCommon::new("layout.node");
+        common.class = Some(String::from("flex flex-col gap-3"));
+
+        let spec = class_spec(&common).expect("class spec should parse");
+        let layout = effective_layout(&common, Some(&spec)).expect("class layout");
+
+        assert_eq!(layout.display, Some(ContractDisplay::Flex));
+        assert_eq!(layout.direction, Some(ContractDirection::Column));
+        assert_eq!(layout.align, Some(ContractAlign::Stretch));
+    }
+
+    #[test]
+    fn taffy_item_style_maps_flex_and_grid_item_fields() {
+        let button = ContractNode::Button(ContractButton {
+            common: ContractCommon::new("button"),
+            label: "Save".into(),
+            action_id: None,
+            variant: None,
+            size: None,
+            leading_icon: None,
+            trailing_text: None,
+            trailing_icon: None,
+            selected: false,
+            icon_only: false,
+        });
+        let layout = ContractLayout {
+            width: Some(ContractLength::Percent { value: 0.5 }),
+            min_height: Some(ContractLength::Px { value: 24.0 }),
+            margin: Some(ContractEdges {
+                top: 1.0,
+                right: 2.0,
+                bottom: 3.0,
+                left: 4.0,
+            }),
+            grow: Some(2.0),
+            shrink: Some(0.0),
+            basis: Some(ContractLength::Px { value: 120.0 }),
+            col_span: Some(2),
+            row_span: Some(3),
+            ..ContractLayout::default()
+        };
+
+        let style = taffy_item_style(&button, Some(&layout));
+        assert_eq!(style.size.width, taffy::Dimension::Percent(0.5));
+        assert_eq!(style.min_size.height, taffy::Dimension::Length(24.0));
+        assert_eq!(style.margin.left, taffy::LengthPercentageAuto::Length(4.0));
+        assert_eq!(style.flex_grow, 2.0);
+        assert_eq!(style.flex_shrink, 0.0);
+        assert_eq!(style.flex_basis, taffy::Dimension::Length(120.0));
+        assert_eq!(
+            style.grid_column,
+            taffy::style_helpers::span::<taffy::Line<taffy::GridPlacement>>(2)
+        );
+        assert_eq!(
+            style.grid_row,
+            taffy::style_helpers::span::<taffy::Line<taffy::GridPlacement>>(3)
+        );
+    }
+
+    #[test]
+    fn taffy_item_style_honors_sized_box_explicit_dimensions() {
+        let sized_box = ContractNode::SizedBox(ContractSizedBox {
+            common: ContractCommon::new("catalog.sidepanel"),
+            width: Some(232.0),
+            height: Some(480.0),
+            children: Vec::new(),
+        });
+
+        let style = taffy_item_style(&sized_box, None);
+
+        assert_eq!(style.size.width, taffy::Dimension::Length(232.0));
+        assert_eq!(style.size.height, taffy::Dimension::Length(480.0));
+    }
+
+    #[test]
+    fn taffy_column_labels_keep_intrinsic_text_width_instead_of_collapsing_per_character() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+
+        let tree = ContractTree::new(ContractNode::SizedBox(ContractSizedBox {
+            common: ContractCommon::new("catalog.sidepanel"),
+            width: Some(232.0),
+            height: None,
+            children: vec![ContractNode::Column(ContractColumn {
+                common: ContractCommon::new("catalog.nav"),
+                gap: 8.0,
+                justify: ContractJustify::Start,
+                align: ContractAlign::Start,
+                children: vec![ContractNode::Label(ContractLabel {
+                    common: ContractCommon::new("catalog.nav.label"),
+                    text: "Component authoring".to_owned(),
+                    tone: None,
+                    weight: None,
+                    size: None,
+                    truncate: false,
+                })],
+            })],
+        }));
+
+        let frame_output = context.run(RawInput::default(), |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = render_tree(ui, &tree);
+            });
+        });
+
+        let text_shape = find_text_shape(&frame_output.shapes, "Component authoring")
+            .expect("catalog nav text should render");
+        assert!(
+            text_shape.galley.rows.len() <= 2,
+            "expected catalog nav label to render in at most two rows, got {} rows",
+            text_shape.galley.rows.len()
+        );
+    }
+
+    #[test]
     fn card_class_background_resolves_theme_roles() {
         let context = Context::default();
         theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
@@ -2944,6 +4245,108 @@ mod tests {
     }
 
     #[test]
+    fn class_opacity_modulates_supported_tailwind_colors() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+        let mut common = ContractCommon::new("styled-card");
+        common.class = Some(String::from("bg-card text-destructive opacity-80"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_background_color(Some(&spec), runtime),
+            Some(theme::resolved_color(runtime, ColorRole::Card).gamma_multiply(0.8))
+        );
+        assert_eq!(
+            class_text_color(Some(&spec), runtime),
+            Some(theme::resolved_color(runtime, ColorRole::Destructive).gamma_multiply(0.8))
+        );
+    }
+
+    #[test]
+    fn card_class_shadow_maps_tailwind_shadow_tokens() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+        let mut common = ContractCommon::new("styled-card");
+        common.class = Some(String::from("shadow-md"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_shadow(Some(&spec), runtime),
+            Some(tokens::tailwind_shadow_md(runtime))
+        );
+    }
+
+    #[test]
+    fn card_class_radius_merges_segmented_tokens() {
+        let mut common = ContractCommon::new("styled-card");
+        common.class = Some(String::from("rounded-lg rounded-l-none rounded-tr-xl"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_corner_radius(Some(&spec), CornerRadius::same(8)),
+            Some(CornerRadius {
+                nw: 0,
+                ne: 12,
+                sw: 0,
+                se: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn card_class_radius_preserves_default_corners_for_partial_segmented_tokens() {
+        let mut common = ContractCommon::new("styled-card");
+        common.class = Some(String::from("rounded-l-none"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_corner_radius(Some(&spec), CornerRadius::same(8)),
+            Some(CornerRadius {
+                nw: 0,
+                ne: 8,
+                sw: 0,
+                se: 8,
+            })
+        );
+
+        common.class = Some(String::from("rounded-tr-xl"));
+        let spec = class_spec(&common).expect("class spec should parse");
+
+        assert_eq!(
+            class_corner_radius(Some(&spec), CornerRadius::same(8)),
+            Some(CornerRadius {
+                nw: 8,
+                ne: 12,
+                sw: 8,
+                se: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn icon_class_text_color_resolves_when_explicit_tint_is_absent() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let runtime = theme::runtime_for_context(&context);
+        let mut common = ContractCommon::new("styled-icon");
+        common.class = Some(String::from("text-destructive"));
+        let icon = ContractIcon {
+            common,
+            name: "bot".to_owned(),
+            size: 18.0,
+            tint: None,
+        };
+        let spec = class_spec(&icon.common).expect("class spec should parse");
+
+        assert_eq!(
+            resolved_icon_tint(&icon, Some(&spec), runtime),
+            Some(theme::resolved_color(runtime, ColorRole::Destructive))
+        );
+    }
+
+    #[test]
     fn partial_layout_plan_applies_flow_container_overrides() {
         let mut common = ContractCommon::new("layout.node");
         common.layout = Some(ContractLayout {
@@ -2955,17 +4358,20 @@ mod tests {
         });
 
         let plan = container_layout_plan(
-            &common,
+            common.layout.as_ref(),
             ContractDirection::Row,
             8.0,
             ContractJustify::Start,
             ContractAlign::Start,
         );
 
+        assert_eq!(plan.display, TaffyDisplay::Flex);
         assert_eq!(plan.direction, ContractDirection::Column);
-        assert_eq!(plan.gap, 14.0);
+        assert_eq!(plan.gap_x, 14.0);
+        assert_eq!(plan.gap_y, 14.0);
         assert_eq!(plan.align, ContractAlign::End);
         assert_eq!(plan.justify, ContractJustify::Center);
+        assert!(!plan.wrap);
     }
 
     #[test]

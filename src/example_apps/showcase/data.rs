@@ -3,20 +3,6 @@ pub const WINDOW_INNER_SIZE: [f32; 2] = [1280.0, 900.0];
 
 const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../../assets/images/showcase-image.png");
 
-const BUTTON_GROUP_OPTIONS: [&str; 3] = ["Move", "Rotate", "Scale"];
-const TOOLBAR_ACTION_OPTIONS: [&str; 3] = ["Edit", "BG Remover", "Eraser"];
-const ICON_TOOLBAR_ITEMS: [IconToolbarItem<'static>; 8] = [
-    IconToolbarItem::new("mouse-pointer-2").tooltip("Select"),
-    IconToolbarItem::new("move").tooltip("Move"),
-    IconToolbarItem::new("rotate-ccw").tooltip("Rotate"),
-    IconToolbarItem::new("arrow-up-right").tooltip("Expand"),
-    IconToolbarItem::new("crosshair").tooltip("Center"),
-    IconToolbarItem::new("package-2")
-        .tooltip("Group")
-        .badge_fill(Color32::from_rgb(40, 150, 255)),
-    IconToolbarItem::new("copy").tooltip("Duplicate"),
-    IconToolbarItem::new("trash").tooltip("Delete"),
-];
 const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(35, 45, 75),
     Color32::from_rgb(103, 132, 162),
@@ -24,16 +10,7 @@ const TOOLBAR_SWATCHES: [Color32; 4] = [
     Color32::from_rgb(206, 164, 84),
 ];
 const TOOLTIP_PLACEMENT_OPTIONS: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
-const TWEMOJI_SEQUENCE_SAMPLES: [(&str, &str); 5] = [
-    ("🙂", "Simple"),
-    ("👩‍💻", "ZWJ"),
-    ("🧑🏽‍🚀", "Skin tone"),
-    ("❤️", "Variant"),
-    ("🇺🇸", "Flag"),
-];
 const SELECT_OPTIONS: [&str; 4] = ["Draft", "Review", "Approved", "Archived"];
-const OPEN_WITH_ENTRIES: [DropdownMenuEntry<'static>; 1] =
-    [DropdownMenuEntry::action_with_icon(0, "Codex", "codex")];
 const COMBOBOX_OPTIONS: [&str; 6] = [
     "Material 1",
     "Material Glass",
@@ -42,21 +19,21 @@ const COMBOBOX_OPTIONS: [&str; 6] = [
     "Sprite Mask",
     "UI Text Style",
 ];
-const TAB_OPTIONS: [TabOption<'static>; 3] = [
-    TabOption::new(0, "Design"),
-    TabOption::new(1, "Code"),
-    TabOption::new(2, "History"),
+const TAB_OPTIONS: [ShowcaseTabOption<'static>; 3] = [
+    ShowcaseTabOption::new(0, "Design"),
+    ShowcaseTabOption::new(1, "Code"),
+    ShowcaseTabOption::new(2, "History"),
 ];
-const BLENDER_TAB_OPTIONS: [TabOption<'static>; 5] = [
-    TabOption::new(0, "Layout"),
-    TabOption::new(1, "Modeling"),
-    TabOption::new(2, "Sculpting"),
-    TabOption::new(3, "UV Editing"),
-    TabOption::new(4, "Texture Paint"),
+const BLENDER_TAB_OPTIONS: [ShowcaseTabOption<'static>; 5] = [
+    ShowcaseTabOption::new(0, "Layout"),
+    ShowcaseTabOption::new(1, "Modeling"),
+    ShowcaseTabOption::new(2, "Sculpting"),
+    ShowcaseTabOption::new(3, "UV Editing"),
+    ShowcaseTabOption::new(4, "Texture Paint"),
 ];
-const STACKED_TAB_OPTIONS: [TabOption<'static>; 2] = [
-    TabOption::with_icon(0, "Templates", "layout-template"),
-    TabOption::with_icon(1, "Layouts", "layout-grid"),
+const STACKED_TAB_OPTIONS: [ShowcaseTabOption<'static>; 2] = [
+    ShowcaseTabOption::with_icon(0, "Templates", "layout-template"),
+    ShowcaseTabOption::with_icon(1, "Layouts", "layout-grid"),
 ];
 const CANVA_BACKGROUND_SWATCHES: [Color32; 5] = [
     Color32::from_rgb(154, 181, 208),
@@ -168,20 +145,20 @@ const CANVA_EFFECT_ITEMS: [CanvaEditRailItem<'static>; 5] = [
         Color32::from_rgb(213, 236, 250),
     ),
 ];
-const CANVA_POSITION_TAB_OPTIONS: [TabOption<'static>; 2] =
-    [TabOption::new(0, "Arrange"), TabOption::new(1, "Layers")];
-const CANVA_LAYER_FILTER_OPTIONS: [TabOption<'static>; 2] =
-    [TabOption::new(0, "All"), TabOption::new(1, "Overlapping")];
-const HIERARCHY_STYLE_OPTIONS: [TabOption<'static>; 2] =
-    [TabOption::new(0, "Normal"), TabOption::new(1, "Component")];
-const HIERARCHY_ICON_STYLE_OPTIONS: [TabOption<'static>; 2] =
-    [TabOption::new(0, "Emoji"), TabOption::new(1, "Icons")];
+const CANVA_POSITION_TAB_OPTIONS: [ShowcaseTabOption<'static>; 2] =
+    [ShowcaseTabOption::new(0, "Arrange"), ShowcaseTabOption::new(1, "Layers")];
+const CANVA_LAYER_FILTER_OPTIONS: [ShowcaseTabOption<'static>; 2] =
+    [ShowcaseTabOption::new(0, "All"), ShowcaseTabOption::new(1, "Overlapping")];
+const HIERARCHY_STYLE_OPTIONS: [ShowcaseTabOption<'static>; 2] =
+    [ShowcaseTabOption::new(0, "Normal"), ShowcaseTabOption::new(1, "Component")];
+const HIERARCHY_ICON_STYLE_OPTIONS: [ShowcaseTabOption<'static>; 2] =
+    [ShowcaseTabOption::new(0, "Emoji"), ShowcaseTabOption::new(1, "Icons")];
 pub(crate) const SHOWCASE_BASE_COLOR: BaseColor = BaseColor::Slate;
 const SIDEBAR_SIDE_OPTIONS: [&str; 2] = ["Left", "Right"];
-const RAIL_TAB_OPTIONS: [TabOption<'static>; 3] = [
-    TabOption::with_icon(0, "Home", "house"),
-    TabOption::with_icon(1, "Assets", "image"),
-    TabOption::with_icon(2, "Export", "rocket"),
+const RAIL_TAB_OPTIONS: [ShowcaseTabOption<'static>; 3] = [
+    ShowcaseTabOption::with_icon(0, "Home", "house"),
+    ShowcaseTabOption::with_icon(1, "Assets", "image"),
+    ShowcaseTabOption::with_icon(2, "Export", "rocket"),
 ];
 const TOAST_PLACEMENT_OPTIONS: [&str; 9] = [
     "Top Left",
@@ -213,18 +190,18 @@ const RADIO_GROUP_OPTIONS: [RadioOption<'static>; 3] = [
     RadioOption::new(2, "Enterprise")
         .description("Extended theming, audit trails, and environment presets."),
 ];
-const COMMAND_ITEMS: [CommandItem<'static>; 11] = [
-    CommandItem::new("", "scene: open scene search").shortcut("Ctrl+P"),
-    CommandItem::new("", "scene: save active scene").shortcut("Ctrl+S"),
-    CommandItem::new("", "gameobject: create empty").shortcut("Ctrl+Shift+N"),
-    CommandItem::new("", "gameobject: add camera"),
-    CommandItem::new("", "assets: reimport selected").shortcut("Ctrl+R"),
-    CommandItem::new("", "view: toggle gizmos"),
-    CommandItem::new("", "view: focus selection").shortcut("F"),
-    CommandItem::new("", "window: animation"),
-    CommandItem::new("", "window: inspector").shortcut("Ctrl+I"),
-    CommandItem::new("", "tools: bake lighting"),
-    CommandItem::new("", "tools: build nav mesh").shortcut("Ctrl+B"),
+const COMMAND_ITEMS: [(&str, &str, Option<&str>); 11] = [
+    ("", "scene: open scene search", Some("Ctrl+P")),
+    ("", "scene: save active scene", Some("Ctrl+S")),
+    ("", "gameobject: create empty", Some("Ctrl+Shift+N")),
+    ("", "gameobject: add camera", None),
+    ("", "assets: reimport selected", Some("Ctrl+R")),
+    ("", "view: toggle gizmos", None),
+    ("", "view: focus selection", Some("F")),
+    ("", "window: animation", None),
+    ("", "window: inspector", Some("Ctrl+I")),
+    ("", "tools: bake lighting", None),
+    ("", "tools: build nav mesh", Some("Ctrl+B")),
 ];
 const DROPDOWN_INVITE_ENTRIES: [DropdownMenuEntry<'static>; 4] = [
     DropdownMenuEntry::action(4, "Email"),
@@ -346,15 +323,12 @@ const MENU_BAR_ACTION_LABELS: [&str; 19] = [
     "Ungroup",
     "Bring to Front",
 ];
-const PAGINATION_PAGE_COUNT: usize = 12;
 pub(crate) const SMALL_TEXT: f32 = 12.0;
 pub(crate) const SIDEBAR_WIDTH: f32 = 238.0;
-const TOOLBAR_PREVIEW_WIDTH: f32 = 820.0;
 const MENU_BAR_PREVIEW_WIDTH: f32 = 420.0;
 const TOOLBAR_CANVAS_LIGHT_FILL: Color32 = Color32::from_rgb(228, 228, 231);
 const COLLAB_CURSOR_DEFAULT_COLOR: Color32 = Color32::from_rgb(255, 122, 36);
 const COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION: egui::Vec2 = egui::vec2(0.5, 0.5);
-const IMAGE_TILE_META_ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
 const NUMBER_INPUT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
 const NUMBER_INPUT_RED: Color32 = Color32::from_rgb(239, 68, 68);
 
@@ -520,15 +494,12 @@ pub struct ShowcaseApp {
     hierarchy_icon_style_index: usize,
     input_value: String,
     search_input_value: String,
-    field_value: String,
-    emoji_selector_value: String,
     checkbox_value: bool,
     collab_cursor_name: String,
     collab_cursor_color: Color32,
     collab_cursor_preview_position: egui::Vec2,
     switch_value: bool,
     small_switch_value: bool,
-    icon_toolbar_selected_index: usize,
     toolbar_color_index: usize,
     canva_position_tab_index: usize,
     canva_layer_filter_index: usize,
@@ -544,11 +515,9 @@ pub struct ShowcaseApp {
     canva_x_value: f32,
     canva_y_value: f32,
     canva_rotate_value: f32,
-    progress_value: f32,
     radio_value: bool,
     radio_group_value: Option<usize>,
     select_index: Option<usize>,
-    skeleton_loading: bool,
     sidebar_preview_open: bool,
     sidebar_side_index: usize,
     tab_index: usize,
@@ -557,10 +526,7 @@ pub struct ShowcaseApp {
     stacked_tab_index: usize,
     rail_tab_index: usize,
     audio_playback_state: AudioPlaybackState,
-    pagination_page: usize,
-    collapsible_open: bool,
     dropdown_action: Option<usize>,
-    open_with_action: Option<usize>,
     context_menu_action: Option<usize>,
     combobox_query: String,
     combobox_indices: Vec<usize>,
@@ -572,10 +538,6 @@ pub struct ShowcaseApp {
     toast_placement_index: Option<usize>,
     menu_bar_action: Option<usize>,
     tooltip_placement: TooltipPlacement,
-    image_tile_selected: bool,
-    image_tile_playback_state: ImageTilePlaybackState,
-    image_tile_last_action: String,
-    spinner_demo_until: Option<f64>,
 }
 
 impl Default for ShowcaseApp {
@@ -599,15 +561,12 @@ impl Default for ShowcaseApp {
             hierarchy_icon_style_index: 0,
             input_value: "Player_Robot".to_owned(),
             search_input_value: "Robot".to_owned(),
-            field_value: "M_Robot_Body".to_owned(),
-            emoji_selector_value: "🙂".to_owned(),
             checkbox_value: true,
             collab_cursor_name: "Lisa Chen".to_owned(),
             collab_cursor_color: COLLAB_CURSOR_DEFAULT_COLOR,
             collab_cursor_preview_position: COLLAB_CURSOR_DEFAULT_PREVIEW_POSITION,
             switch_value: true,
             small_switch_value: false,
-            icon_toolbar_selected_index: 0,
             toolbar_color_index: 0,
             canva_position_tab_index: 0,
             canva_layer_filter_index: 0,
@@ -623,11 +582,9 @@ impl Default for ShowcaseApp {
             canva_x_value: 87.0,
             canva_y_value: 87.0,
             canva_rotate_value: 0.0,
-            progress_value: 0.0,
             radio_value: true,
             radio_group_value: Some(1),
             select_index: Some(1),
-            skeleton_loading: true,
             sidebar_preview_open: false,
             sidebar_side_index: 0,
             tab_index: 0,
@@ -636,10 +593,7 @@ impl Default for ShowcaseApp {
             stacked_tab_index: 0,
             rail_tab_index: 0,
             audio_playback_state: AudioPlaybackState::Paused,
-            pagination_page: 2,
-            collapsible_open: true,
             dropdown_action: None,
-            open_with_action: Some(0),
             context_menu_action: None,
             combobox_query: "mat".to_owned(),
             combobox_indices: vec![0, 2],
@@ -651,10 +605,6 @@ impl Default for ShowcaseApp {
             toast_placement_index: Some(8),
             menu_bar_action: None,
             tooltip_placement: TooltipPlacement::Top,
-            image_tile_selected: false,
-            image_tile_playback_state: ImageTilePlaybackState::Paused,
-            image_tile_last_action: "No image tile actions yet".to_owned(),
-            spinner_demo_until: None,
         }
     }
 }

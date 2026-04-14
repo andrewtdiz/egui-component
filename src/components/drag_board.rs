@@ -322,7 +322,7 @@ mod tests {
     use super::{
         DragBoard, DragBoardItem, DragBoardPayload, DragBoardRegion, DRAG_BOARD_REGION_GAP,
     };
-    use crate::components::ComponentUiExt;
+    use crate::runtime_components::ComponentUiExt;
     use crate::theme::{self, ThemeMode};
     use egui::{pos2, vec2, CentralPanel, Context, Event, Id, Modifiers, PointerButton, RawInput};
 

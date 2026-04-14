@@ -29,20 +29,11 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::ContextMenu => {
             app.context_menu_action = None;
         }
-        ComponentKind::EmojiSelector => {
-            app.emoji_selector_value = "🍕".to_owned();
-        }
-        ComponentKind::IconToolbar => {
-            app.icon_toolbar_selected_index = 0;
-        }
         ComponentKind::Dialogue => {
             app.dialogue_open = true;
         }
         ComponentKind::DragBoard => {
             app.drag_board_regions = DRAG_BOARD_DEFAULT_REGIONS;
-        }
-        ComponentKind::OpenWith => {
-            app.open_with_action = Some(0);
         }
         ComponentKind::FileTree => {
             app.file_tree_nodes = default_file_tree_nodes();
@@ -57,9 +48,6 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         ComponentKind::Popover => {
             app.popover_open = true;
         }
-        ComponentKind::Progress => {
-            app.progress_value = 0.68;
-        }
         ComponentKind::CanvaPosition => {
             app.canva_position_tab_index = 1;
             app.canva_layer_filter_index = 0;
@@ -68,9 +56,6 @@ pub fn configure_snapshot(app: &mut ShowcaseApp, component: ComponentKind, theme
         }
         ComponentKind::Sidebar => {
             app.sidebar_preview_open = true;
-        }
-        ComponentKind::Spinner => {
-            app.spinner_demo_until = Some(f64::MAX);
         }
         ComponentKind::Toast => {
             app.toast_stack.clear();
@@ -130,10 +115,10 @@ impl ShowcaseApp {
         });
 
         ui.add_space(8.0);
-        let _ = ui.components().separator();
+        let _ = ui.separator();
         ui.add_space(8.0);
 
-        ScrollArea::vertical()
+        ScrollArea::vertical().no_drag_to_scroll()
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for section in [
@@ -166,11 +151,11 @@ impl ShowcaseApp {
         let _ = show_inset(ui, 16, 10, |ui| {
             show_showcase_topbar_row(ui, "egui-component Showcase", &mut self.theme_mode);
         });
-        let _ = ui.components().separator();
+        let _ = ui.separator();
     }
 
     fn render_center(&mut self, ui: &mut Ui) {
-        ScrollArea::vertical()
+        ScrollArea::vertical().no_drag_to_scroll()
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let _ = ui.with_layout(Layout::top_down(egui::Align::Center), |ui| {
@@ -183,7 +168,7 @@ impl ShowcaseApp {
         let definition = catalog_component_definition(self.selected_component);
         let width = preview_surface_width(self.selected_component, ui.available_width());
 
-        let _ = ui.components().card(Card::new().padding(14, 14), |ui| {
+        let _ = showcase_card(ui, None, None, None, 14, 14, |ui| {
             ui.set_width(width);
 
             let mut components = ui.components();
@@ -198,7 +183,7 @@ impl ShowcaseApp {
                     .size(SMALL_TEXT),
             );
             ui.add_space(8.0);
-            let _ = ui.components().separator();
+            let _ = ui.separator();
             ui.add_space(10.0);
 
             self.render_selected_preview(ui);
@@ -211,14 +196,8 @@ impl ShowcaseApp {
             ComponentKind::Color => self.render_color_preview(ui),
             ComponentKind::Image => self.render_image_preview(ui),
             ComponentKind::Icon => self.render_icon_preview(ui),
-            ComponentKind::IconToolbar => self.render_icon_toolbar_preview(ui),
-            ComponentKind::Twemoji => self.render_twemoji_preview(ui),
-            ComponentKind::EmojiSelector => self.render_emoji_selector_preview(ui),
-            ComponentKind::Kbd => self.render_kbd_preview(ui),
             ComponentKind::Input => self.render_input_preview(ui),
-            ComponentKind::Field => self.render_field_preview(ui),
             ComponentKind::Button => self.render_button_preview(ui),
-            ComponentKind::ButtonGroup => self.render_button_group_preview(ui),
             ComponentKind::CanvaBackgrounds => self.render_canva_backgrounds_preview(ui),
             ComponentKind::CanvaBrandKit => self.render_canva_brand_kit_preview(ui),
             ComponentKind::CanvaEditImage => self.render_canva_edit_image_preview(ui),
@@ -230,16 +209,12 @@ impl ShowcaseApp {
             ComponentKind::NumberInput => self.render_number_input_preview(ui),
             ComponentKind::Select => self.render_select_preview(ui),
             ComponentKind::Tabs => self.render_tabs_preview(ui),
-            ComponentKind::Separator => self.render_separator_preview(ui),
             ComponentKind::Card => self.render_card_preview(ui),
-            ComponentKind::Progress => self.render_progress_preview(ui),
             ComponentKind::Radio => self.render_radio_preview(ui),
             ComponentKind::RadioGroup => self.render_radio_group_preview(ui),
             ComponentKind::Popover => self.render_popover_preview(ui),
             ComponentKind::Tooltip => self.render_tooltip_preview(ui),
             ComponentKind::DropdownMenu => self.render_dropdown_menu_preview(ui),
-            ComponentKind::OpenWith => self.render_open_with_preview(ui),
-            ComponentKind::Collapsible => self.render_collapsible_preview(ui),
             ComponentKind::AudioPlayback => self.render_audio_playback_preview(ui),
             ComponentKind::Combobox => self.render_combobox_preview(ui),
             ComponentKind::ContextMenu => self.render_context_menu_preview(ui),
@@ -248,14 +223,9 @@ impl ShowcaseApp {
             ComponentKind::DragBoard => self.render_drag_board_preview(ui),
             ComponentKind::FileTree => self.render_file_tree_preview(ui),
             ComponentKind::Hierarchy => self.render_hierarchy_preview(ui),
-            ComponentKind::ImageTile => self.render_image_tile_preview(ui),
             ComponentKind::MenuBar => self.render_menu_bar_preview(ui),
             ComponentKind::Sidebar => self.render_sidebar_preview(ui),
-            ComponentKind::Skeleton => self.render_skeleton_preview(ui),
-            ComponentKind::Spinner => self.render_spinner_preview(ui),
             ComponentKind::Toast => self.render_toast_preview(ui),
-            ComponentKind::Toolbar => self.render_toolbar_preview(ui),
-            ComponentKind::Pagination => self.render_pagination_preview(ui),
         }
     }
 }
@@ -300,19 +270,21 @@ pub(crate) fn show_showcase_topbar_row(ui: &mut Ui, title: &str, theme_mode: &mu
 
 fn show_showcase_theme_mode_selector(ui: &mut Ui, theme_mode: &mut ThemeMode) {
     let options = [
-        TabOption::icon_only(0, "Light", "sun-medium"),
-        TabOption::icon_only(1, "Dark", "moon-star"),
-        TabOption::icon_only(2, "System", "monitor"),
+        ShowcaseTabOption::icon_only(0, "Light", "sun-medium"),
+        ShowcaseTabOption::icon_only(1, "Dark", "moon-star"),
+        ShowcaseTabOption::icon_only(2, "System", "monitor"),
     ];
     let mut selected_mode = match *theme_mode {
         ThemeMode::Light => 0,
         ThemeMode::Dark => 1,
         ThemeMode::System => 2,
     };
-    ui.components().segmented_tabs(
+    showcase_tabs_variant(
+        ui,
         Id::new("component_showcase_theme_mode"),
         &mut selected_mode,
         &options,
+        ShowcaseTabsStyle::Segmented,
     );
     *theme_mode = match selected_mode {
         0 => ThemeMode::Light,

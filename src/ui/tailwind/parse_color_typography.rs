@@ -4,39 +4,43 @@ use crate::ui::tailwind::types::{
     ColorAsk, FontFamily, FontWeight, Spec, TextShadow, TextUnit, UiRuntimeBackground,
 };
 
-pub fn handle_background(spec: &mut Spec, suffix: &str) {
+pub fn handle_background(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(color_value) = lookup_color_token(ColorAsk::Fill, suffix) {
         spec.background = Some(UiRuntimeBackground::Solid(color_value));
+        return true;
     }
+    false
 }
 
-pub fn handle_text(spec: &mut Spec, suffix: &str) {
+pub fn handle_text(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(rest) = suffix.strip_prefix("shadow") {
-        handle_text_shadow(spec, rest);
-        return;
+        return handle_text_shadow(spec, rest);
     }
     if let Some(rest) = suffix.strip_prefix("outline-") {
         if rest.is_empty() {
-            return;
+            return false;
         }
         if let Some(value) = parse_outline_thickness(rest) {
             spec.text_outline_thickness = Some(value);
-            return;
+            return true;
         }
         if let Some(color_value) = lookup_color_token(ColorAsk::Text, rest) {
             spec.text_outline_color = Some(color_value);
+            return true;
         }
-        return;
+        return false;
     }
     if let Some(color_value) = lookup_color_token(ColorAsk::Text, suffix) {
         spec.text = Some(color_value);
+        return true;
     }
+    false
 }
 
-fn handle_text_shadow(spec: &mut Spec, rest: &str) {
+fn handle_text_shadow(spec: &mut Spec, rest: &str) -> bool {
     let shadow = spec.text_shadow.get_or_insert_with(TextShadow::default);
     let Some(rest) = rest.strip_prefix('-') else {
-        return;
+        return false;
     };
     if let Some(value) = rest
         .strip_prefix("x-")
@@ -44,7 +48,7 @@ fn handle_text_shadow(spec: &mut Spec, rest: &str) {
         .filter(|value| value.is_finite())
     {
         shadow.x = value;
-        return;
+        return true;
     }
     if let Some(value) = rest
         .strip_prefix("y-")
@@ -52,7 +56,7 @@ fn handle_text_shadow(spec: &mut Spec, rest: &str) {
         .filter(|value| value.is_finite())
     {
         shadow.y = value;
-        return;
+        return true;
     }
     if let Some(value) = rest
         .strip_prefix("opacity-")
@@ -60,11 +64,13 @@ fn handle_text_shadow(spec: &mut Spec, rest: &str) {
         .filter(|value| value.is_finite())
     {
         shadow.opacity = value;
-        return;
+        return true;
     }
     if let Some(color) = lookup_color_token(ColorAsk::Text, rest) {
         shadow.color = color;
+        return true;
     }
+    false
 }
 
 pub fn handle_typography(spec: &mut Spec, token: &str) -> bool {
@@ -177,29 +183,34 @@ pub fn handle_opacity(spec: &mut Spec, token: &str) -> bool {
     true
 }
 
-pub fn handle_hover_background(spec: &mut Spec, suffix: &str) {
+pub fn handle_hover_background(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(color_value) = lookup_color_token(ColorAsk::FillHover, suffix) {
         spec.hover_background = Some(UiRuntimeBackground::Solid(color_value));
+        return true;
     }
+    false
 }
 
-pub fn handle_hover_text(spec: &mut Spec, suffix: &str) {
+pub fn handle_hover_text(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(rest) = suffix.strip_prefix("outline-") {
         if rest.is_empty() {
-            return;
+            return false;
         }
         if let Some(value) = parse_outline_thickness(rest) {
             spec.hover_text_outline_thickness = Some(value);
-            return;
+            return true;
         }
         if let Some(color_value) = lookup_color_token(ColorAsk::TextHover, rest) {
             spec.hover_text_outline_color = Some(color_value);
+            return true;
         }
-        return;
+        return false;
     }
     if let Some(color_value) = lookup_color_token(ColorAsk::TextHover, suffix) {
         spec.hover_text = Some(color_value);
+        return true;
     }
+    false
 }
 
 pub fn handle_hover_opacity(spec: &mut Spec, token: &str) -> bool {
@@ -219,29 +230,34 @@ pub fn handle_hover_opacity(spec: &mut Spec, token: &str) -> bool {
     true
 }
 
-pub fn handle_group_hover_background(spec: &mut Spec, suffix: &str) {
+pub fn handle_group_hover_background(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(color_value) = lookup_color_token(ColorAsk::FillHover, suffix) {
         spec.group_hover_background = Some(UiRuntimeBackground::Solid(color_value));
+        return true;
     }
+    false
 }
 
-pub fn handle_group_hover_text(spec: &mut Spec, suffix: &str) {
+pub fn handle_group_hover_text(spec: &mut Spec, suffix: &str) -> bool {
     if let Some(rest) = suffix.strip_prefix("outline-") {
         if rest.is_empty() {
-            return;
+            return false;
         }
         if let Some(value) = parse_outline_thickness(rest) {
             spec.group_hover_text_outline_thickness = Some(value);
-            return;
+            return true;
         }
         if let Some(color_value) = lookup_color_token(ColorAsk::TextHover, rest) {
             spec.group_hover_text_outline_color = Some(color_value);
+            return true;
         }
-        return;
+        return false;
     }
     if let Some(color_value) = lookup_color_token(ColorAsk::TextHover, suffix) {
         spec.group_hover_text = Some(color_value);
+        return true;
     }
+    false
 }
 
 pub fn handle_group_hover_opacity(spec: &mut Spec, token: &str) -> bool {

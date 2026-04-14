@@ -1,78 +1,3 @@
-
-fn draw_toolbar_contents(ui: &mut Ui, toolbar_color_index: &mut usize) {
-    let selected_stroke = Stroke::new(1.0, theme::color(ui, ColorRole::Foreground));
-
-    let _ = show_row(ui, 6.0, |ui| {
-        for (index, label) in TOOLBAR_ACTION_OPTIONS.iter().copied().enumerate() {
-            let _ = ui
-                .components()
-                .button(Button::new(label).variant(ButtonVariant::Ghost));
-            if index == 1 {
-                let _ = ui.components().button(
-                    Button::icon_only("crown")
-                        .variant(ButtonVariant::Ghost)
-                        .icon_size(13.0)
-                        .icon_tint(Color32::from_rgb(216, 168, 83)),
-                );
-            }
-        }
-
-        draw_toolbar_divider(ui);
-
-        for (index, fill) in TOOLBAR_SWATCHES.iter().copied().enumerate() {
-            let stroke = if *toolbar_color_index == index {
-                selected_stroke
-            } else {
-                Stroke::NONE
-            };
-            if ui
-                .components()
-                .button(Button::color_only(
-                    Color::new(fill).size(16.0).stroke(stroke),
-                ))
-                .clicked()
-            {
-                *toolbar_color_index = index;
-            }
-        }
-
-        draw_toolbar_divider(ui);
-        let _ = ui
-            .components()
-            .button(Button::icon_only("square-menu").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::icon_only("rotate-ccw").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::icon_only("crop").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::new("Flip").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::icon_only("grid-3x3").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::new("Animate").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::new("Position").variant(ButtonVariant::Ghost));
-        let _ = ui
-            .components()
-            .button(Button::icon_only("paint-roller").variant(ButtonVariant::Ghost));
-    });
-}
-
-fn draw_toolbar_divider(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(vec2(1.0, 16.0), Sense::hover());
-    ui.painter().vline(
-        rect.center().x,
-        rect.y_range(),
-        Stroke::new(1.0, theme::color(ui, ColorRole::Border)),
-    );
-}
-
 fn draw_canva_brand_nav_item(
     ui: &mut Ui,
     label: &str,
@@ -274,9 +199,7 @@ fn render_canva_brand_guidelines(ui: &mut Ui) {
 
 fn draw_canva_brand_info_card(ui: &mut Ui, title: &str, body: &str) {
     let fill = theme::color(ui, ColorRole::Card);
-    let _ = ui
-        .components()
-        .card(Card::new().padding(12, 12).fill(fill), |ui| {
+    let _ = showcase_card(ui, Some(fill), None, None, 12, 12, |ui| {
             let _ = ui.components().label(
                 Label::new(title)
                     .tone(LabelTone::Primary)
@@ -314,9 +237,7 @@ fn render_canva_brand_color_swatches(ui: &mut Ui) {
         ("Ink", "#111827", Color32::from_rgb(17, 24, 39)),
     ] {
         let _ = show_row(ui, 10.0, |ui| {
-            let _ = ui
-                .components()
-                .color(Color::new(fill).size(28.0).stroke(border));
+            let _ = showcase_swatch(ui, Swatch::new(fill).size(28.0).stroke(border));
             let _ = show_column(ui, 2.0, |ui| {
                 let _ = ui.components().label(
                     Label::new(name)
@@ -528,7 +449,7 @@ fn paint_canva_brand_asset_tile(ui: &Ui, rect: egui::Rect, kind: &str, index: us
 }
 
 fn draw_canva_edit_tool_row(ui: &mut Ui, selected_index: &mut usize) {
-    ScrollArea::horizontal()
+    ScrollArea::horizontal().no_drag_to_scroll()
         .id_salt("component_showcase_canva_edit_tool_row")
         .auto_shrink([false, true])
         .show(ui, |ui| {
@@ -614,7 +535,7 @@ fn draw_canva_edit_rail(
     mut selected_index: Option<&mut usize>,
     text_below: bool,
 ) {
-    ScrollArea::horizontal()
+    ScrollArea::horizontal().no_drag_to_scroll()
         .id_salt(id)
         .auto_shrink([false, true])
         .show(ui, |ui| {
@@ -1389,11 +1310,3 @@ fn draw_canva_ratio_field(ui: &mut Ui, width: f32, locked: &mut bool) {
     });
 }
 
-fn draw_image_tile_metadata_row(ui: &mut Ui, text: &str) {
-    let _ = show_row(ui, 6.0, |ui| {
-        let mut components = ui.components();
-        let _ = components.icon(Icon::new("globe").size(12.0).tint(IMAGE_TILE_META_ACCENT));
-        let _ = components.label(Label::new("•").tone(LabelTone::Muted));
-        let _ = components.label(Label::new(text).tone(LabelTone::Muted).size(SMALL_TEXT));
-    });
-}
