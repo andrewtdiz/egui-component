@@ -9,7 +9,7 @@ export function DragBoardRoot({ children, className, ...props }: NodeProps & Rec
 }
 
 export function DragBoardCard({ title, description, empty = false, className, children, ...props }: NodeProps & { title?: string; description?: string; empty?: boolean } & Record<string, unknown>) {
-  return <Card {...props} className={cn(empty ? "bg-card border-border rounded-md" : cn(styles.surfaceMuted, "rounded-lg"), className)} paddingX={12} paddingY={12}><div className="flex flex-col gap-2">{title != null && <Label text={title} className="font-semibold" />}{description != null && <LabelMuted text={description} />}{children}</div></Card>;
+  return <Card {...props} className={cn(empty ? "bg-card border-border rounded-md" : cn(styles.surfaceMuted, "rounded-lg"), className)} paddingX={12} paddingY={12}><div className="flex flex-col items-stretch gap-2">{title != null && <Label text={title} className="font-semibold" />}{description != null && <LabelMuted text={description} />}{children}</div></Card>;
 }
 
 function moveEvent(event: unknown, item: Item, from: string, to: string, index: number, id: string) {
@@ -34,7 +34,7 @@ export function DragBoardColumn({ title, region, items, onChange }: { title: str
           const description = item.description == null ? undefined : String(item.description);
           return (
             <Card key={id} className="bg-card border-border rounded-md" paddingX={12} paddingY={12} onClick={(event) => onChange?.(moveEvent(event, item, normalizedRegion, nextRegion, index, id), { item_id: id, from: normalizedRegion, to: nextRegion })}>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col items-stretch gap-1">
                 <Label text={String(item.title ?? itemLabel(item, String(index)))} className="font-semibold" />
                 {description != null && <LabelMuted text={description} />}
                 <Button size="sm" variant="ghost" onClick={(event) => onChange?.(moveEvent(event, item, normalizedRegion, nextRegion, index, id), { item_id: id, from: normalizedRegion, to: nextRegion })}>{nextRegion === "left" ? "Move left" : "Move right"}</Button>

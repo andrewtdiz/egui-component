@@ -23,7 +23,7 @@ export function PaletteColorInput({ value = "#2896ff", palette = defaultPalette,
 }
 
 export function PaletteColorInputRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
-  return <Card {...props} className={cn("bg-muted border-border rounded-md", className)} paddingX={props.paddingX ?? 10} paddingY={props.paddingY ?? 10}><div className="flex flex-col gap-2">{children}</div></Card>;
+  return <Card {...props} className={cn("bg-muted border-border rounded-md", className)} paddingX={props.paddingX ?? 10} paddingY={props.paddingY ?? 10}><div className="flex flex-col items-stretch gap-2">{children}</div></Card>;
 }
 
 export function PaletteColorInputHeader({ text = "Palette color", className, ...props }: NodeProps & { text?: string } & Record<string, unknown>) {
@@ -49,5 +49,5 @@ export function PaletteColorInputCustomLabel({ text = "Custom", className, ...pr
 }
 
 export function PaletteColorInputCustom({ value = "#2896ff", label = "Custom", onChange, className, ...props }: NodeProps & { value?: string; label?: string; onChange?: Handler } & Record<string, unknown>) {
-  return <div {...nodeProps(props, cn("flex flex-col gap-1", className))}><PaletteColorInputCustomLabel text={label} /><ColorInput id={scopedId(props, "palette-color", "input")} value={value} onChange={onChange} /></div>;
+  return <div {...nodeProps(props, cn("flex flex-col items-stretch gap-1", className))}><PaletteColorInputCustomLabel text={label} /><ColorInput id={scopedId(props, "palette-color", "input")} value={value} onChange={onChange} /></div>;
 }

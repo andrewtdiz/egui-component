@@ -96,7 +96,7 @@ export const componentPreviews: ComponentPreview[] = [
   preview("image-tile", "Image Tile", "media", () => frame("image-tile", <ImageTile id="jsx-image-tile" size="sm" selected playbackState="paused"><Label text="Preview tile" /><LabelMuted text="Playback paused" /></ImageTile>)),
   preview("input", "Input", "controls", InputPreviewDemo),
   preview("kbd", "Kbd", "primitives", () => frame("kbd", <div className="flex flex-row items-center gap-2"><Kbd id="jsx-kbd-command" text="Ctrl" /><Kbd id="jsx-kbd-key" text="K" /></div>)),
-  preview("label", "Label", "primitives", () => frame("label", <div className="flex flex-col gap-1"><Label id="jsx-label" text="Foreground label" className="text-lg font-semibold" /><LabelMuted id="jsx-muted-label" text="Muted label" /></div>)),
+  preview("label", "Label", "primitives", () => frame("label", <div className="flex flex-col items-stretch gap-1"><Label id="jsx-label" text="Foreground label" className="text-lg font-semibold" /><LabelMuted id="jsx-muted-label" text="Muted label" /></div>)),
   preview("menu-bar", "Menu Bar", "menus", () => frame("menu-bar", <MenuBar id="jsx-menu-bar" menus={[{ menuId: "file", label: "File", width: 220, entries: menuEntries }]} />)),
   preview("open-with", "Open With", "menus", OpenWithPreviewDemo),
   preview("pagination", "Pagination", "controls", PaginationPreviewDemo),
@@ -106,7 +106,7 @@ export const componentPreviews: ComponentPreview[] = [
   preview("progress", "Progress", "feedback", () => frame("progress", <Progress id="jsx-progress" value={0.66} width={260} height={10} />)),
   preview("radio", "Radio", "controls", RadioPreviewDemo),
   preview("select", "Select", "controls", SelectPreviewDemo),
-  preview("separator", "Separator", "primitives", () => frame("separator", <div className="flex flex-col gap-1.5"><Label text="Before" /><Separator id="jsx-separator" /><LabelMuted text="After" /></div>)),
+  preview("separator", "Separator", "primitives", () => frame("separator", <div className="flex flex-col items-stretch gap-1.5"><Label text="Before" /><Separator id="jsx-separator" /><LabelMuted text="After" /></div>)),
   preview("sidebar", "Sidebar", "surfaces", () => frame("sidebar", <Sidebar id="jsx-sidebar" title="Workspace" side="right" open={false}><Button variant="secondary">Close</Button></Sidebar>)),
   preview("skeleton", "Skeleton", "feedback", () => frame("skeleton", <Skeleton id="jsx-skeleton" width={260} height={16} cornerRadius={8} />)),
   preview("slider", "Slider", "controls", SliderPreviewDemo),
@@ -190,7 +190,7 @@ function CommandPreviewDemo() {
 function DropdownMenuPreviewDemo() {
   const [lastAction, setLastAction] = useState("profile");
 
-  return frame("dropdown-menu", <div className="flex flex-col items-start gap-2"><DropdownMenu id="jsx-dropdown-menu" triggerLabel="Actions" entries={menuEntries} onCommand={(_, value) => setLastAction(resolveItemId(value, lastAction))} /><LabelMuted id="jsx-dropdown-menu-selection" text={`Last action: ${lastAction}`} /></div>);
+  return frame("dropdown-menu", <div className="flex flex-col items-stretch gap-2"><DropdownMenu id="jsx-dropdown-menu" triggerLabel="Actions" entries={menuEntries} onCommand={(_, value) => setLastAction(resolveItemId(value, lastAction))} /><LabelMuted id="jsx-dropdown-menu-selection" text={`Last action: ${lastAction}`} /></div>);
 }
 
 function EmojiSelectorPreviewDemo() {
@@ -208,13 +208,13 @@ function FieldPreviewDemo() {
 function FileTreePreviewDemo() {
   const [selectedItemId, setSelectedItemId] = useState("button");
 
-  return frame("file-tree", <div className="flex flex-col items-start gap-2"><FileTree id="jsx-file-tree" selectedItemId={selectedItemId} width={280} items={fileTreeItems} onSelect={(_, value) => setSelectedItemId(resolveItemId(value, selectedItemId))} /><LabelMuted id="jsx-file-tree-selection" text={`Selected item: ${selectedItemId}`} /></div>);
+  return frame("file-tree", <div className="flex flex-col items-stretch gap-2"><FileTree id="jsx-file-tree" selectedItemId={selectedItemId} width={280} items={fileTreeItems} onSelect={(_, value) => setSelectedItemId(resolveItemId(value, selectedItemId))} /><LabelMuted id="jsx-file-tree-selection" text={`Selected item: ${selectedItemId}`} /></div>);
 }
 
 function HierarchyPreviewDemo() {
   const [selectedItemId, setSelectedItemId] = useState("player");
 
-  return frame("hierarchy", <div className="flex flex-col items-start gap-2"><Hierarchy id="jsx-hierarchy" selectedItemId={selectedItemId} width={320} iconStyle="icons" style="component" items={hierarchyItems} onSelect={(_, value) => setSelectedItemId(resolveItemId(value, selectedItemId))} /><LabelMuted id="jsx-hierarchy-selection" text={`Selected item: ${selectedItemId}`} /></div>);
+  return frame("hierarchy", <div className="flex flex-col items-stretch gap-2"><Hierarchy id="jsx-hierarchy" selectedItemId={selectedItemId} width={320} iconStyle="icons" style="component" items={hierarchyItems} onSelect={(_, value) => setSelectedItemId(resolveItemId(value, selectedItemId))} /><LabelMuted id="jsx-hierarchy-selection" text={`Selected item: ${selectedItemId}`} /></div>);
 }
 
 function IconToolbarPreviewDemo() {
@@ -263,7 +263,7 @@ function SelectPreviewDemo() {
 function SliderPreviewDemo() {
   const [value, setValue] = useState(42);
 
-  return frame("slider", <div className="flex flex-col gap-2"><Slider id="jsx-slider" value={value} min={0} max={100} width={260} onChange={(event) => setValue(nextNumber(event, value))} /><NumberInput id="jsx-number-input" value={value} width={90} suffix="px" onChange={(event) => setValue(nextNumber(event, value))} /></div>);
+  return frame("slider", <div className="flex flex-col items-stretch gap-2"><Slider id="jsx-slider" value={value} min={0} max={100} width={260} onChange={(event) => setValue(nextNumber(event, value))} /><NumberInput id="jsx-number-input" value={value} width={90} suffix="px" onChange={(event) => setValue(nextNumber(event, value))} /></div>);
 }
 
 function SwitchPreviewDemo() {

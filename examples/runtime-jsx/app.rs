@@ -5,10 +5,9 @@ use std::{
 };
 
 use clay_jsx_egui_bridge::{HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame};
-use egui::{CentralPanel, Context, RichText, ScrollArea, TopBottomPanel};
+use egui::{CentralPanel, Context, RichText, TopBottomPanel};
 use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree},
-    primitives::ScrollAreaExt,
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
 
@@ -69,32 +68,26 @@ impl RuntimeJsxApp {
         let mut frame_events = Vec::new();
 
         ui.add_space(16.0);
-        ScrollArea::vertical()
-            .no_drag_to_scroll()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if let Some(error) = &self.error {
-                    ui.label(
-                        RichText::new("Runtime error")
-                            .strong()
-                            .color(ui.visuals().error_fg_color),
-                    );
-                    ui.label(RichText::new(error.as_str()).small().weak());
-                    return;
-                }
-
-                match self.rendered.as_ref() {
-                    Some(tree) => {
-                        let events = render_tree(ui, tree);
-                        if !events.is_empty() {
-                            frame_events = events;
-                        }
-                    }
-                    None => {
-                        ui.label(RichText::new("No JSX tree has been rendered yet.").weak());
+        if let Some(error) = &self.error {
+            ui.label(
+                RichText::new("Runtime error")
+                    .strong()
+                    .color(ui.visuals().error_fg_color),
+            );
+            ui.label(RichText::new(error.as_str()).small().weak());
+        } else {
+            match self.rendered.as_ref() {
+                Some(tree) => {
+                    let events = render_tree(ui, tree);
+                    if !events.is_empty() {
+                        frame_events = events;
                     }
                 }
-            });
+                None => {
+                    ui.label(RichText::new("No JSX tree has been rendered yet.").weak());
+                }
+            }
+        }
 
         if !frame_events.is_empty() {
             self.dispatch_events_to_runtime(&frame_events);

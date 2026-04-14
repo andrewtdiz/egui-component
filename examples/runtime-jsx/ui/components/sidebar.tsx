@@ -106,9 +106,9 @@ export function Sidebar({
   const baseId = props.id ?? props.nodeId ?? "sidebar";
   return (
     <SidebarRoot {...props} side={side} className={className}>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col items-stretch gap-2.5">
         {title != null && title !== "" && (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col items-stretch gap-2.5">
             <SidebarHeader id={`${baseId}-header`}>
               <SidebarTitle text={title} />
               <div data-slot="spacer" />

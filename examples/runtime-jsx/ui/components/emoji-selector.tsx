@@ -21,7 +21,7 @@ export function EmojiSelectorItem({ emoji, selected = false, onSelect }: { emoji
 export function EmojiSelectorContent({ emojis = DEFAULT_EMOJIS, value, onSelect, className, ...props }: NodeProps & { emojis?: string[]; value?: string; onSelect?: Handler } & Record<string, unknown>) {
   return (
     <Card {...props} className={cn("bg-popover border border-border rounded-lg shadow-md", className)} paddingX={12} paddingY={12}>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col items-stretch gap-1.5">
         <LabelMuted text="Choose an emoji" className="text-xs font-semibold" />
         <div className="flex flex-row flex-wrap items-center gap-1">
           {emojis.map((emoji) => <EmojiSelectorItem key={emoji} emoji={emoji} selected={emoji === value} onSelect={onSelect} />)}

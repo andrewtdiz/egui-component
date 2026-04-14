@@ -32,7 +32,7 @@ export function HierarchyRow({ item, selectedIds, iconStyle, depth, treeId, fall
   const mutedIconClassName = selected ? "text-accent-foreground" : "text-muted-foreground";
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col items-stretch gap-0">
       <div {...nodeProps({ id: `${treeId}-${id}`, paddingLeft: depth * 18, onClick: (event) => onSelect?.(itemEvent(event, item, id, depth), id) })}>
         <Card variant="plain" className={rowClassName} paddingX={8} paddingY={6}>
           <div className="flex flex-row items-center gap-2">

@@ -7,11 +7,11 @@ import { Label, LabelMuted } from "../primary/label.tsx";
 import { NumberInput } from "../slider.tsx";
 
 export function CanvaInspectorCard({ children, title = "Inspector", description, className, ...props }: NodeProps & { title?: string; description?: string } & Record<string, unknown>) {
-  return <Card {...props} className={cn("bg-card border-border rounded-lg", className)}><div className="flex flex-col gap-2"><CanvaInspectorHeader title={title} description={description} />{children}</div></Card>;
+  return <Card {...props} className={cn("bg-card border-border rounded-lg", className)}><div className="flex flex-col items-stretch gap-2"><CanvaInspectorHeader title={title} description={description} />{children}</div></Card>;
 }
 
 export function CanvaInspectorHeader({ title = "Inspector", description, className, ...props }: NodeProps & { title?: string; description?: string } & Record<string, unknown>) {
-  return <div {...nodeProps(props, cn("flex flex-col gap-1", className))}><Label text={title} className="text-base font-semibold" />{description != null && <LabelMuted text={description} />}</div>;
+  return <div {...nodeProps(props, cn("flex flex-col items-stretch gap-1", className))}><Label text={title} className="text-base font-semibold" />{description != null && <LabelMuted text={description} />}</div>;
 }
 
 export function CanvaAxisField({ axis = "X", value = 0, className, onChange, ...props }: NodeProps & { axis?: string; value?: number; onChange?: Handler } & Record<string, unknown>) {

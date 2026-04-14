@@ -25,7 +25,7 @@ export function FileTreeRow({ item, selectedItemId, depth, treeId, fallback, onS
   const iconClassName = selected ? "text-accent-foreground" : "text-muted-foreground";
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col items-stretch gap-0">
       <div {...nodeProps({ id: `${treeId}-${id}`, paddingLeft: depth * 14, onClick: (event) => onSelect?.(itemEvent(event, item, id, depth), id) })}>
         <Card variant="plain" className={rowClassName} paddingX={4} paddingY={2}>
           <div className="flex flex-row items-center gap-1.5">

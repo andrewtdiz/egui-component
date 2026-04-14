@@ -60,7 +60,7 @@ export function DialogueHeader({
   const baseId = props.id ?? props.nodeId ?? "dialogue";
   return (
     <div {...nodeProps(props, cn("flex flex-row items-start gap-2", className))}>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col items-stretch gap-1">
         <DialogueTitle title={title} intent={intent} />
         <DialogueDescription description={description} />
         {children}
@@ -80,7 +80,7 @@ export function DialogueAction({ children, variant = "secondary", ...props }: No
 }
 
 export function DialogueContent({ children, className, ...props }: NodeProps & Record<string, unknown>) {
-  return <div {...nodeProps(props, cn("flex flex-col gap-12", className))}>{children}</div>;
+  return <div {...nodeProps(props, cn("flex flex-col items-stretch gap-12", className))}>{children}</div>;
 }
 
 export function DialogueModal({ children, open = false, title = "Dialog", description, intent = "default", className, confirmLabel = "Confirm", cancelLabel = "Cancel", onCancel, onClose, onConfirm, ...props }: NodeProps & { open?: boolean; title?: string; description?: string; intent?: string; confirmLabel?: string; cancelLabel?: string } & Record<string, unknown>) {
