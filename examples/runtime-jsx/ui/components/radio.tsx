@@ -1,4 +1,4 @@
-import { boolValue, cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, textFromChildren } from "../component-support.ts";
+import { boolValue, cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId, textFromChildren } from "../component-support.ts";
 
 function itemEvent(event: unknown, item: Item, value: string, label: string, index: number) {
   const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
@@ -8,11 +8,11 @@ function itemEvent(event: unknown, item: Item, value: string, label: string, ind
 
 export function Radio({ children, checked, value, label, description, className, ...props }: NodeProps & { checked?: boolean; value?: boolean; label?: string; description?: string } & Record<string, unknown>) {
   const resolvedValue = boolValue(value, checked);
-  return <input data-slot="radio" type="radio" {...nodeProps(props, className)} checked={resolvedValue} label={label ?? textFromChildren(children)} description={description} />;
+  return <input data-slot="radio" type="radio" {...nodeProps({ ...props, id: requireNodeId(props, "Radio") }, className)} checked={resolvedValue} label={label ?? textFromChildren(children)} description={description} />;
 }
 
 export function RadioGroup({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "radio-group";
+  const baseId = requireNodeId(props, "RadioGroup");
   return (
     <div {...nodeProps(props, cn("flex flex-col items-stretch gap-2", className))}>
       {items.map((item, index) => {

@@ -1,4 +1,4 @@
-import { cn, type Handler, type NodeProps, nodeProps, scopedId } from "../component-support.ts";
+import { cn, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Color } from "./primary/color.tsx";
 import { Input } from "./input.tsx";
 import { LabelMuted } from "./primary/label.tsx";
@@ -6,11 +6,12 @@ import { LabelMuted } from "./primary/label.tsx";
 export type ColorInputProps = NodeProps & { value?: string; label?: string; onChange?: Handler } & Record<string, unknown>;
 
 export function ColorInput({ value = "#2896ff", label = "Color", className, onChange, ...props }: ColorInputProps) {
+  const baseId = requireNodeId(props, "ColorInput");
   return (
     <ColorInputRoot {...props} className={className}>
-      <ColorInputSwatch id={scopedId(props, "color-input", "swatch")} fill={value} />
-      <ColorInputControl id={scopedId(props, "color-input", "value")} value={value} onChange={onChange} />
-      <ColorInputLabel id={scopedId(props, "color-input", "label")} text={label} />
+      <ColorInputSwatch id={`${baseId}-swatch`} fill={value} />
+      <ColorInputControl id={`${baseId}-value`} value={value} onChange={onChange} />
+      <ColorInputLabel id={`${baseId}-label`} text={label} />
     </ColorInputRoot>
   );
 }

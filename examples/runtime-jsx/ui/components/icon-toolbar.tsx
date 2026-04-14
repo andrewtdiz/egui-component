@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -33,7 +33,7 @@ export function IconToolbarItemButton({ item, index = 0, selected = false, baseI
 }
 
 export function IconToolbar({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "icon-toolbar";
+  const baseId = requireNodeId(props, "IconToolbar");
   return (
     <IconToolbarRoot {...props} className={className}>
       <div {...nodeProps({}, "flex flex-row items-center gap-1")}>

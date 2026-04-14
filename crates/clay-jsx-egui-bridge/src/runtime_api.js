@@ -1,460 +1,37 @@
-const elementMarker = Symbol.for("egui-component.element");
-export const Fragment = Symbol.for("egui-component.fragment");
+import React from "react";
+import Reconciler from "clay-internal:/react-reconciler";
+
+import {
+  createContractMetadataView,
+  familyUsesTextContent,
+  lowerCommittedRoot,
+  normalizedFamilyForType,
+} from "clay-internal:/egui-lowering";
 
 const contractMetadata = globalThis.__eguiContract ?? {};
-const knownFamilies = new Set(contractMetadata.families ?? []);
-const familiesWithChildren = new Set(contractMetadata.familiesWithChildren ?? []);
-const familyPropNames = new Map(
-  Object.entries(contractMetadata.familyProps ?? {}).map(([family, props]) => [
-    family,
-    new Set(Array.isArray(props) ? props : []),
-  ]),
-);
-const compactFamilyAliases = Object.fromEntries(
-  [...knownFamilies].map((family) => [family.replace(/-/g, ""), family]),
-);
+const metadataView = createContractMetadataView(contractMetadata);
+const loggedWarnings = new Set();
 
-const sharedLayoutPropNames = new Set([
-  "display",
-  "direction",
-  "grow",
-  "shrink",
-  "basis",
-  "width",
-  "height",
-  "min_width",
-  "min_height",
-  "max_width",
-  "max_height",
-  "padding",
-  "margin",
-  "align",
-  "justify",
-  "wrap",
-  "columns",
-  "rows",
-  "col_span",
-  "row_span",
-  "overflow_x",
-  "overflow_y",
-]);
+let currentUpdatePriority = 0;
+let pendingRuntimeError = null;
+let rootRendered = false;
+let allowEmptyCommit = false;
 
-const contractLengthPropNames = new Set([
-  "basis",
-  "width",
-  "height",
-  "min_width",
-  "min_height",
-  "max_width",
-  "max_height",
-]);
+delete globalThis.__eguiHotReloadState;
+globalThis.__eguiCaptureHotReloadState = () => ({ hook_state: {} });
 
-const motionPropNames = new Set([
-  "initial",
-  "animate",
-  "transition",
-  "exit",
-  "whileHover",
-  "whileTap",
-  "whileFocus",
-  "whileInView",
-]);
-
-const unsupportedMotionPropNames = new Set([
-  "exit",
-  "whileHover",
-  "whileTap",
-  "whileFocus",
-  "whileInView",
-]);
-
-const motionPropAliases = {
-  scaleX: "scale_x",
-  scaleY: "scale_y",
-  paddingX: "padding_x",
-  paddingY: "padding_y",
-  cornerRadius: "corner_radius",
-};
-
-const supportedMotionValueProps = new Set([
-  "opacity",
-  "x",
-  "y",
-  "scale",
-  "scale_x",
-  "scale_y",
-  "rotate",
-  "width",
-  "height",
-  "gap",
-  "padding_x",
-  "padding_y",
-  "corner_radius",
-]);
-
-const nonSerializableValue = Symbol("egui-component.non-serializable");
-
-let rootElement = null;
-let rootInstance = null;
-let isDispatching = false;
-let currentHookKey = null;
-let hookCursor = 0;
-
-const hotReloadSeed = takeHotReloadSeed(globalThis.__eguiHotReloadState);
-const hookState = hotReloadSeed.hookState;
-let restoredHookCounts = hotReloadSeed.hookCounts;
-let lastRenderedHookKeys = new Set();
-let eventHandlers = new Map();
-
-globalThis.__eguiCaptureHotReloadState = captureHotReloadState;
-
-const handlerEventKinds = {
-  onClick: "clicked",
-  onInput: "changed",
-  onChange: "changed",
-  onChanged: "changed",
-  onSubmit: "submitted",
-  onSubmitted: "submitted",
-  onSelect: "selected",
-  onSelected: "selected",
-  onToggle: "toggled",
-  onToggled: "toggled",
-  onConfirm: "confirmed",
-  onConfirmed: "confirmed",
-  onCancel: "cancelled",
-  onCancelled: "cancelled",
-  onOpen: "opened",
-  onOpened: "opened",
-  onClose: "closed",
-  onClosed: "closed",
-  onCommand: "command_invoked",
-  onCommandInvoked: "command_invoked",
-  onEvent: "*",
-};
-
-const htmlHostElements = new Set([
-  "a",
-  "article",
-  "aside",
-  "button",
-  "code",
-  "dialog",
-  "div",
-  "em",
-  "footer",
-  "form",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "header",
-  "hr",
-  "img",
-  "input",
-  "kbd",
-  "label",
-  "li",
-  "main",
-  "nav",
-  "ol",
-  "p",
-  "pre",
-  "progress",
-  "section",
-  "small",
-  "span",
-  "strong",
-  "textarea",
-  "ul",
-]);
-
-const htmlContainerElements = new Set([
-  "article",
-  "aside",
-  "div",
-  "footer",
-  "form",
-  "header",
-  "li",
-  "main",
-  "nav",
-  "ol",
-  "section",
-  "ul",
-]);
-
-const htmlTextElements = new Set([
-  "a",
-  "code",
-  "em",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "p",
-  "pre",
-  "small",
-  "span",
-  "strong",
-]);
-
-const htmlElementFamilies = {
-  button: "button",
-  dialog: "dialogue-modal",
-  hr: "separator",
-  img: "image",
-  kbd: "kbd",
-  label: "label",
-  progress: "progress",
-  textarea: "input",
-};
-
-const deprecatedHostElementWarnings = new Set();
-
-const familyAliases = {
-  box: "sized-box",
-  sizedbox: "sized-box",
-  img: "image",
-  hr: "separator",
-  section: "column",
-  main: "column",
-  header: "column",
-  footer: "column",
-  nav: "column",
-  article: "column",
-  aside: "column",
-  dialog: "dialogue-modal",
-  dialogue: "dialogue-modal",
-  dialogueModal: "dialogue-modal",
-  dropdown: "dropdown-menu",
-  dropdownMenu: "dropdown-menu",
-  filetree: "file-tree",
-  imageTile: "image-tile",
-  iconToolbar: "icon-toolbar",
-  radioGroup: "radio-group",
-  toast: "toast-viewport",
-};
-
-const propAliases = {
-  className: "class",
-  classNames: "class",
-  classList: "class_list",
-  checked: "value",
-  defaultChecked: "value",
-  htmlFor: "for",
-  src: "source",
-  nodeId: "node_id",
-  actionId: "action_id",
-  selectedItemId: "selected_item_id",
-  selectedItemIds: "selected_item_ids",
-  itemId: "item_id",
-  helperText: "helper_text",
-  paddingX: "padding_x",
-  paddingY: "padding_y",
-  offsetX: "offset_x",
-  offsetY: "offset_y",
-  leadingIcon: "leading_icon",
-  trailingIcon: "trailing_icon",
-  trailingText: "trailing_text",
-  iconOnly: "icon_only",
-  confirmLabel: "confirm_label",
-  cancelLabel: "cancel_label",
-  confirmActionId: "confirm_action_id",
-  cancelActionId: "cancel_action_id",
-  selected: "selected",
-  maxHeight: "max_height",
-  filterPlaceholder: "filter_placeholder",
-  popupWidth: "popup_width",
-  popupMaxHeight: "popup_max_height",
-  currentPage: "current_page",
-  pageCount: "page_count",
-  siblingCount: "sibling_count",
-  triggerLabel: "trigger_label",
-  triggerVariant: "trigger_variant",
-  delayMs: "delay_ms",
-  sideOffset: "side_offset",
-  regionWidth: "region_width",
-  regionHeight: "region_height",
-  leftTitle: "left_title",
-  rightTitle: "right_title",
-  rowHeight: "row_height",
-  indentWidth: "indent_width",
-  badgeFill: "badge_fill",
-  playbackState: "playback_state",
-  durationSeconds: "duration_seconds",
-  playPauseActionId: "play_pause_action_id",
-  imageWidth: "image_width",
-  imageHeight: "image_height",
-  imageFrame: "image_frame",
-  iconSize: "icon_size",
-  maxVisible: "max_visible",
-  durationSecs: "duration_secs",
-  cornerRadius: "corner_radius",
-};
-
-function takeHotReloadSeed(rawState) {
-  delete globalThis.__eguiHotReloadState;
-
-  const nextHookState = new Map();
-  if (!isPlainObject(rawState) || !isPlainObject(rawState.hook_state)) {
-    return { hookState: nextHookState, hookCounts: new Map() };
-  }
-
-  for (const [hookKey, hooks] of Object.entries(rawState.hook_state)) {
-    const clonedHooks = cloneSerializableValue(hooks);
-    if (!Array.isArray(clonedHooks)) {
-      continue;
-    }
-    nextHookState.set(String(hookKey), clonedHooks);
-  }
-
-  return {
-    hookState: nextHookState,
-    hookCounts: new Map(
-      [...nextHookState.entries()].map(([hookKey, hooks]) => [hookKey, hooks.length]),
-    ),
-  };
-}
-
-function captureHotReloadState() {
-  const snapshot = {};
-  for (const hookKey of lastRenderedHookKeys) {
-    const hooks = hookState.get(hookKey);
-    if (hooks == null) {
-      continue;
-    }
-    const clonedHooks = cloneSerializableValue(hooks);
-    if (!Array.isArray(clonedHooks)) {
-      continue;
-    }
-    snapshot[hookKey] = clonedHooks;
-  }
-  return { hook_state: snapshot };
-}
-
-function consumeRestoredHookMismatches(renderedHookCounts) {
-  const mismatched = [];
-  for (const [hookKey, actualCount] of renderedHookCounts) {
-    if (!restoredHookCounts.has(hookKey)) {
-      continue;
-    }
-    const expectedCount = restoredHookCounts.get(hookKey);
-    if (expectedCount !== actualCount) {
-      mismatched.push(hookKey);
-      continue;
-    }
-    restoredHookCounts.delete(hookKey);
-  }
-  return mismatched;
-}
-
-function cloneSerializableValue(value, stack = new Set()) {
-  if (value == null) {
-    return null;
-  }
-
-  if (typeof value === "string" || typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : nonSerializableValue;
-  }
-
-  if (Array.isArray(value)) {
-    if (stack.has(value)) {
-      return nonSerializableValue;
-    }
-    stack.add(value);
-    const out = [];
-    for (const item of value) {
-      const cloned = cloneSerializableValue(item, stack);
-      if (cloned === nonSerializableValue) {
-        stack.delete(value);
-        return nonSerializableValue;
-      }
-      out.push(cloned);
-    }
-    stack.delete(value);
-    return out;
-  }
-
-  if (!isPlainObject(value) || isElement(value)) {
-    return nonSerializableValue;
-  }
-
-  if (stack.has(value)) {
-    return nonSerializableValue;
-  }
-  stack.add(value);
-
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    const cloned = cloneSerializableValue(entry, stack);
-    if (cloned === nonSerializableValue) {
-      stack.delete(value);
-      return nonSerializableValue;
-    }
-    out[key] = cloned;
-  }
-
-  stack.delete(value);
-  return out;
-}
-
-export function jsx(type, props, key) {
-  const nextProps = props == null ? {} : props;
-  if (key === undefined || key === null) {
-    return { $$typeof: elementMarker, type, props: nextProps };
-  }
-  return {
-    $$typeof: elementMarker,
-    type,
-    props: { ...nextProps, key: String(key) },
-  };
-}
-
-export const jsxs = jsx;
-export const jsxDEV = jsx;
+export const createContext = React.createContext;
+export const startTransition = React.startTransition;
+export const useContext = React.useContext;
+export const useDeferredValue = React.useDeferredValue;
+export const useEffect = React.useEffect;
+export const useReducer = React.useReducer;
+export const useRef = React.useRef;
+export const useState = React.useState;
+export const useSyncExternalStore = React.useSyncExternalStore;
 
 export function log(level, message) {
   Deno.core.ops.op_host_log(String(level), String(message));
-}
-
-export function useState(initialValue) {
-  if (currentHookKey == null) {
-    throw new Error("useState() can only be called inside a JSX function component.");
-  }
-
-  let hooks = hookState.get(currentHookKey);
-  if (hooks == null) {
-    hooks = [];
-    hookState.set(currentHookKey, hooks);
-  }
-
-  const hookKey = currentHookKey;
-  const index = hookCursor;
-  hookCursor += 1;
-
-  if (index >= hooks.length) {
-    hooks.push(typeof initialValue === "function" ? initialValue() : initialValue);
-  }
-
-  const setState = (nextValue) => {
-    const targetHooks = hookState.get(hookKey);
-    const previous = targetHooks[index];
-    targetHooks[index] =
-      typeof nextValue === "function" ? nextValue(previous) : nextValue;
-    if (!isDispatching) {
-      rerenderRoot();
-    }
-  };
-
-  return [hooks[index], setState];
 }
 
 export function eventValue(event) {
@@ -465,92 +42,120 @@ export function eventValue(event) {
   return value.value;
 }
 
-export function render(element) {
-  rootElement = element;
-  rerenderRoot();
+export function requestRepaint() {
+  if (typeof globalThis.requestRepaint === "function") {
+    globalThis.requestRepaint();
+  }
 }
 
-globalThis.__eguiDispatchEvents = function dispatchEguiEvents(events) {
-  if (!Array.isArray(events)) {
-    return;
-  }
+function createHostNode(type, props) {
+  return {
+    children: [],
+    hidden: false,
+    kind: "host",
+    parent: null,
+    props: props ?? {},
+    type: String(type),
+  };
+}
 
-  isDispatching = true;
+function createTextNode(text) {
+  return {
+    hidden: false,
+    kind: "text",
+    parent: null,
+    text: String(text),
+  };
+}
+
+function detachLinkedChild(parent, child) {
+  const children = parent.children ?? [];
+  const index = children.indexOf(child);
+  if (index >= 0) {
+    children.splice(index, 1);
+  }
+  if (child.parent === parent) {
+    child.parent = null;
+  }
+}
+
+function detachFromCurrentParent(child) {
+  if (child.parent != null) {
+    detachLinkedChild(child.parent, child);
+  }
+}
+
+function linkChild(parent, child, beforeChild = null) {
+  detachFromCurrentParent(child);
+  child.parent = parent;
+  const children = parent.children ?? [];
+  const index = beforeChild == null ? -1 : children.indexOf(beforeChild);
+  if (index >= 0) {
+    children.splice(index, 0, child);
+  } else {
+    children.push(child);
+  }
+}
+
+function commitContainer(container) {
   try {
-    for (const event of events) {
-      dispatchEvent(event);
-    }
-  } finally {
-    isDispatching = false;
-  }
-
-  rerenderRoot();
-};
-
-function rerenderRoot() {
-  if (rootElement == null) {
-    throw new Error("render(<... />) must be called before dispatching events.");
-  }
-
-  let { context, rootDescriptor } = renderRootDescriptor();
-  let mismatchedHookKeys = consumeRestoredHookMismatches(context.renderedHookCounts);
-  if (mismatchedHookKeys.length > 0) {
-    for (const hookKey of mismatchedHookKeys) {
-      hookState.delete(hookKey);
+    const lowered = lowerCommittedRoot(container.children, metadataView);
+    for (const warning of lowered.warnings) {
+      if (loggedWarnings.has(warning)) {
+        continue;
+      }
+      loggedWarnings.add(warning);
+      log("warn", warning);
     }
 
-    restoredHookCounts = new Map(
-      [...restoredHookCounts.entries()].filter(
-        ([hookKey]) => !mismatchedHookKeys.includes(hookKey),
-      ),
+    if (lowered.root == null) {
+      if (rootRendered && !allowEmptyCommit) {
+        throw new Error("render() expected a JSX element.");
+      }
+      container.rootInstance = null;
+      container.handlers = new Map();
+      return;
+    }
+
+    const mutations = [];
+    const previousIndex = indexInstanceTree(container.rootInstance);
+    container.rootInstance = reconcileRoot(
+      container.rootInstance,
+      lowered.root,
+      mutations,
+      previousIndex,
     );
+    container.handlers = lowered.handlers;
 
-    ({ context, rootDescriptor } = renderRootDescriptor());
-    mismatchedHookKeys = consumeRestoredHookMismatches(context.renderedHookCounts);
-    if (mismatchedHookKeys.length > 0) {
-      throw new Error("render() could not restore compatible hook state.");
+    if (mutations.length > 0) {
+      Deno.core.ops.op_commit_mutations(
+        JSON.stringify({ version: metadataView.version, mutations }),
+      );
     }
-  }
-
-  restoredHookCounts = new Map();
-  lastRenderedHookKeys = new Set(context.renderedHookCounts.keys());
-
-  const mutations = [];
-  rootInstance = reconcileRoot(rootInstance, rootDescriptor, mutations);
-  if (mutations.length > 0) {
-    Deno.core.ops.op_commit_mutations(
-      JSON.stringify({ version: contractMetadata.version ?? 1, mutations }),
-    );
+  } catch (error) {
+    pendingRuntimeError = error;
   }
 }
 
-function renderRootDescriptor() {
-  eventHandlers = new Map();
-  const context = { seenNodeIds: new Set(), renderedHookCounts: new Map() };
-  const rootDescriptor = describeNode(rootElement, "root", context);
-  if (rootDescriptor == null) {
-    throw new Error("render() expected a JSX element.");
-  }
-  return { context, rootDescriptor };
-}
-
-function reconcileRoot(previous, descriptor, mutations) {
+function reconcileRoot(previous, descriptor, mutations, previousIndex) {
   if (
     previous == null ||
     previous.nodeId !== descriptor.nodeId ||
     previous.family !== descriptor.family
   ) {
+    // Root identity is the normalized family + nodeId pair. Either side changing
+    // remounts the subtree so renderer-local egui state cannot drift across identities.
     const next = mountInstance(descriptor, null);
     mutations.push({ kind: "replace_root", subtree: materializeInstance(next) });
     appendMountedMotionMutations(next, mutations);
     return next;
   }
 
-  reconcileInstance(previous, descriptor, mutations);
+  reconcileInstance(previous, descriptor, mutations, previousIndex);
   return previous;
 }
 
-function reconcileInstance(instance, descriptor, mutations) {
+function reconcileInstance(instance, descriptor, mutations, previousIndex) {
   if (!sameValue(instance.props, descriptor.props)) {
     instance.props = descriptor.props;
     mutations.push({ kind: "update_node", node: { ...descriptor.props } });
@@ -561,32 +166,55 @@ function reconcileInstance(instance, descriptor, mutations) {
     appendMotionMutation(instance, mutations);
   }
 
-  reconcileChildren(instance, descriptor.children, mutations);
+  reconcileChildren(instance, descriptor.children, mutations, previousIndex);
 }
 
-function reconcileChildren(parent, descriptors, mutations) {
+function reconcileChildren(parent, descriptors, mutations, previousIndex) {
   const previousChildren = parent.children;
   const previousOrder = previousChildren.map((child) => child.nodeId);
-  const previousById = new Map();
-  for (const child of previousChildren) {
-    previousById.set(child.nodeId, child);
-  }
+  const previousById = new Map(previousChildren.map((child) => [child.nodeId, child]));
 
   const nextChildren = [];
   const handledPrevious = new Set();
+
   descriptors.forEach((descriptor, index) => {
     const existing = previousById.get(descriptor.nodeId);
     if (existing != null && existing.family === descriptor.family) {
       existing.parent = parent;
-      reconcileInstance(existing, descriptor, mutations);
+      reconcileInstance(existing, descriptor, mutations, previousIndex);
       nextChildren.push(existing);
       handledPrevious.add(existing);
+      return;
+    }
+
+    const globalExisting = previousIndex.get(descriptor.nodeId);
+    const positionalChild = previousChildren[index];
+    if (
+      positionalChild != null &&
+      !handledPrevious.has(positionalChild) &&
+      positionalChild.family === descriptor.family &&
+      positionalChild.nodeId !== descriptor.nodeId &&
+      globalExisting == null
+    ) {
+      // Same-family, same-slot replacements with a fresh nodeId are deliberate remounts.
+      // This keeps identity-sensitive widgets from inheriting egui-local state when the
+      // authored identity changes in place.
+      const next = mountInstance(descriptor, parent);
+      nextChildren.push(next);
+      mutations.push({
+        kind: "replace_subtree",
+        node_id: positionalChild.nodeId,
+        subtree: materializeInstance(next),
+      });
+      appendMountedMotionMutations(next, mutations);
+      handledPrevious.add(positionalChild);
       return;
     }
 
     const next = mountInstance(descriptor, parent);
     nextChildren.push(next);
     if (existing != null) {
+      // A reused nodeId with a different normalized family is also a remount boundary.
       mutations.push({
         kind: "replace_subtree",
         node_id: existing.nodeId,
@@ -597,8 +225,8 @@ function reconcileChildren(parent, descriptors, mutations) {
     } else {
       mutations.push({
         kind: "insert_subtree",
-        parent_id: parent.nodeId,
         index,
+        parent_id: parent.nodeId,
         subtree: materializeInstance(next),
       });
       appendMountedMotionMutations(next, mutations);
@@ -622,14 +250,30 @@ function reconcileChildren(parent, descriptors, mutations) {
   }
 }
 
+function indexInstanceTree(root) {
+  const index = new Map();
+  visitInstance(root, index);
+  return index;
+}
+
+function visitInstance(instance, index) {
+  if (instance == null) {
+    return;
+  }
+  index.set(instance.nodeId, instance);
+  for (const child of instance.children) {
+    visitInstance(child, index);
+  }
+}
+
 function mountInstance(descriptor, parent) {
   const instance = {
-    nodeId: descriptor.nodeId,
-    family: descriptor.family,
-    props: descriptor.props,
-    motion: descriptor.motion,
-    parent,
     children: [],
+    family: descriptor.family,
+    motion: descriptor.motion,
+    nodeId: descriptor.nodeId,
+    parent,
+    props: descriptor.props,
   };
   instance.children = descriptor.children.map((child) => mountInstance(child, instance));
   return instance;
@@ -637,7 +281,7 @@ function mountInstance(descriptor, parent) {
 
 function materializeInstance(instance) {
   const node = { ...instance.props };
-  if (familiesWithChildren.has(instance.family) && instance.children.length > 0) {
+  if (instance.children.length > 0) {
     node.children = instance.children.map(materializeInstance);
   }
   return node;
@@ -697,785 +341,241 @@ function sameValue(a, b) {
   return false;
 }
 
-function dispatchEvent(event) {
+function dispatchEvent(container, event) {
   const nodeId = String(event?.node_id ?? "");
   const kind = String(event?.kind ?? "");
+  const actionId = event?.action_id == null ? null : String(event.action_id);
   const candidates = [
     `${nodeId}:${kind}`,
     `${nodeId}:*`,
-    event?.action_id == null ? null : `action:${event.action_id}:${kind}`,
-    event?.action_id == null ? null : `action:${event.action_id}:*`,
+    actionId == null ? null : `action:${actionId}:${kind}`,
+    actionId == null ? null : `action:${actionId}:*`,
   ].filter(Boolean);
 
   for (const key of candidates) {
-    for (const handler of eventHandlers.get(key) ?? []) {
+    for (const handler of container.handlers.get(key) ?? []) {
       handler(event, eventValue(event));
     }
   }
-}
-
-function registerEventHandler(nodeId, propName, handler) {
-  const kind = handlerEventKinds[propName];
-  if (kind == null) {
-    return false;
-  }
-  pushHandler(`${nodeId}:${kind}`, handler);
-  return true;
-}
-
-function pushHandler(key, handler) {
-  const handlers = eventHandlers.get(key) ?? [];
-  handlers.push(handler);
-  eventHandlers.set(key, handlers);
-}
-
-function describeNode(value, path, context) {
-  if (value == null || value === false || value === true) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    const children = describeChildren(value, path, context);
-    return children.length === 0
-      ? null
-      : hostDescriptor(
-          "column",
-          path,
-          { family: "column", node_id: path, gap: 8 },
-          children,
-          null,
-          context,
-        );
-  }
-
-  if (typeof value === "string" || typeof value === "number") {
-    const text = String(value).trim();
-    return text === ""
-      ? null
-      : hostDescriptor(
-          "label",
-          path,
-          { family: "label", node_id: path, text },
-          [],
-          null,
-          context,
-        );
-  }
-
-  if (!isElement(value)) {
-    throw new Error(`Cannot render ${Object.prototype.toString.call(value)} as JSX.`);
-  }
-
-  if (typeof value.type === "function") {
-    return describeFunctionComponent(value, path, context);
-  }
-
-  if (value.type === Fragment) {
-    const children = describeChildren(value.props?.children, path, context);
-    return children.length === 0
-      ? null
-      : hostDescriptor(
-          "column",
-          path,
-          { family: "column", node_id: path, gap: 8 },
-          children,
-          null,
-          context,
-        );
-  }
-
-  const props = value.props ?? {};
-  const family = normalizeFamilyName(value.type, props);
-  const motion = props.__motion_host === true ? normalizeMotionSpec(props) : null;
-  const node = {
-    family,
-    node_id: String(props.nodeId ?? props.node_id ?? props.id ?? path),
-  };
-
-  for (const [rawName, rawValue] of Object.entries(props)) {
-    if (
-      rawName === "children" ||
-      rawName === "key" ||
-      rawName === "id" ||
-      rawName === "type" ||
-      rawName === "role" ||
-      rawName === "data-slot" ||
-      rawName === "dataSlot" ||
-      rawName === "aria-label" ||
-      rawName === "ariaLabel" ||
-      rawName === "aria-hidden" ||
-      rawName === "ariaHidden" ||
-      rawName === "aria-busy" ||
-      rawName === "ariaBusy" ||
-      rawName === "__motion_host"
-    ) {
-      continue;
-    }
-    if (props.__motion_host === true && motionPropNames.has(rawName)) {
-      continue;
-    }
-    if (rawValue === undefined) {
-      continue;
-    }
-    if (typeof rawValue === "function") {
-      if (!registerEventHandler(node.node_id, rawName, rawValue)) {
-        throw new Error(`Unsupported function prop "${rawName}" on ${family}.`);
-      }
-      continue;
-    }
-
-    const propName = normalizePropName(rawName);
-    if (propName === "node_id") {
-      continue;
-    }
-    if (propName === "layout") {
-      node.layout = mergeLayoutProps(node.layout, normalizeLayoutObject(rawValue));
-      continue;
-    }
-    if (shouldHoistPropToLayout(family, propName)) {
-      node.layout = mergeLayoutProps(node.layout, {
-        [propName]: normalizeLayoutPropValue(propName, rawValue),
-      });
-      continue;
-    }
-    node[propName] = normalizePropValue(family, propName, rawValue);
-  }
-
-  const childNodes = familiesWithChildren.has(family)
-    ? describeChildren(props.children, `${node.node_id}.child`, context)
-    : [];
-
-  applyFamilyDefaults(node, props.children);
-  return hostDescriptor(family, node.node_id, node, childNodes, motion, context);
-}
-
-function hostDescriptor(family, nodeId, props, children, motion, context) {
-  if (nodeId === "") {
-    throw new Error("Contract nodes must have a stable node_id.");
-  }
-  if (context.seenNodeIds.has(nodeId)) {
-    throw new Error(`Duplicate contract node_id "${nodeId}".`);
-  }
-  context.seenNodeIds.add(nodeId);
-  return { family, nodeId, props, children, motion };
-}
-
-function describeFunctionComponent(value, path, context) {
-  const componentName = value.type.displayName || value.type.name || "Component";
-  const hookKey = `${path}:${componentName}`;
-  const previousHookKey = currentHookKey;
-  const previousHookCursor = hookCursor;
-  currentHookKey = hookKey;
-  hookCursor = 0;
-  try {
-    return describeNode(value.type({ ...(value.props ?? {}) }), path, context);
-  } finally {
-    context.renderedHookCounts.set(hookKey, hookCursor);
-    currentHookKey = previousHookKey;
-    hookCursor = previousHookCursor;
-  }
-}
-
-function describeChildren(value, path, context) {
-  const result = [];
-  let index = 0;
-  for (const child of flattenChildren(value)) {
-    if (isBlankText(child)) {
-      continue;
-    }
-
-    if (isElement(child) && child.type === Fragment) {
-      const childPath = childPathFor(path, child, index);
-      result.push(...describeChildren(child.props?.children, childPath, context));
-      index += 1;
-      continue;
-    }
-
-    const node = describeNode(child, childPathFor(path, child, index), context);
-    if (node != null) {
-      result.push(node);
-      index += 1;
-    }
-  }
-  return result;
-}
-
-function childPathFor(path, child, index) {
-  const key = isElement(child) ? child.props?.key : null;
-  return key == null ? `${path}.${index}` : `${path}.${sanitizePathSegment(key)}`;
-}
-
-function sanitizePathSegment(value) {
-  return String(value).replace(/[^A-Za-z0-9_-]/g, "_");
-}
-
-function flattenChildren(value) {
-  if (value == null || value === false || value === true) {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    return [value];
-  }
-  const result = [];
-  for (const child of value) {
-    result.push(...flattenChildren(child));
-  }
-  return result;
-}
-
-function applyFamilyDefaults(node, children) {
-  if (node.family === "label" && node.text == null) {
-    node.text = textFromChildren(children);
-  }
-  if (node.family === "button" && node.label == null) {
-    node.label = textFromChildren(children) || "Button";
-  }
-  if (node.family === "input" && node.value == null) {
-    node.value = "";
-  }
-  if (node.family === "field") {
-    node.label ??= "Field";
-    node.value ??= "";
-  }
-  if (node.family === "number-input" && node.value == null) {
-    node.value = 0;
-  }
-  if ((node.family === "checkbox" || node.family === "switch") && node.value == null) {
-    node.value = false;
-  }
-  if (node.family === "progress" && node.value == null) {
-    node.value = 0;
-  }
-  if (node.family === "collapsible") {
-    node.title ??= "Section";
-  }
-  if (node.family === "dialogue-modal") {
-    node.title ??= "Dialog";
-  }
-  if (node.family === "color") {
-    node.fill ??= "#ffffff";
-  }
-  if (node.family === "icon") {
-    node.name ??= "sparkles";
-  }
-  if (node.family === "image" || node.family === "image-tile") {
-    node.source ??= "builtin:showcase-image";
-  }
-  if (node.family === "twemoji") {
-    node.emoji ??= "🙂";
-  }
-  if (node.family === "kbd") {
-    node.text ??= textFromChildren(children) || "Ctrl";
-  }
-  if (node.family === "slider" && node.value == null) {
-    node.value = 0;
-  }
-  if (node.family === "radio" && node.value == null) {
-    node.value = false;
-  }
-  if (node.family === "emoji-selector") {
-    node.value ??= "🙂";
-  }
-  if (node.family === "tooltip") {
-    node.trigger_label ??= "Hover this trigger";
-    node.text ??= textFromChildren(children) || "Tooltip content";
-  }
-  if (node.family === "popover") {
-    node.open ??= false;
-  }
-  if (node.family === "dropdown-menu") {
-    node.trigger_label ??= "Open";
-    node.entries ??= [];
-  }
-  if (node.family === "context-menu" || node.family === "open-with") {
-    node.entries ??= [];
-  }
-  if (node.family === "collab-cursor") {
-    node.name ??= "Collaborator";
-  }
-  if (node.family === "audio-playback") {
-    node.playback_state ??= "Paused";
-  }
-  if (node.family === "command") {
-    node.query ??= "";
-    node.items ??= [];
-  }
-}
-
-function normalizeMotionSpec(props) {
-  for (const name of unsupportedMotionPropNames) {
-    if (props[name] !== undefined && props[name] !== null) {
-      throw new Error(
-        `Motion prop "${name}" is not supported by the retained JSX host yet.`,
-      );
-    }
-  }
-
-  const initial =
-    props.initial === undefined || props.initial === null || props.initial === false
-      ? null
-      : normalizeMotionValues("initial", props.initial);
-  const animate =
-    props.animate === undefined || props.animate === null || props.animate === false
-      ? null
-      : normalizeMotionValues("animate", props.animate);
-
-  if (initial == null && animate == null) {
-    return null;
-  }
-
-  return {
-    initial,
-    animate: animate ?? initial ?? {},
-    transition: normalizeMotionTransition(props.transition),
-  };
-}
-
-function normalizeMotionValues(propName, values) {
-  if (!isPlainObject(values) || isElement(values)) {
-    throw new Error(`Motion prop "${propName}" must be an object of numeric values.`);
-  }
-
-  const out = {};
-  for (const [rawName, rawValue] of Object.entries(values)) {
-    if (rawValue === undefined) {
-      continue;
-    }
-    if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
-      throw new Error(`Motion value "${rawName}" must be a finite number.`);
-    }
-
-    const name = normalizeMotionValueName(rawName);
-    if (!supportedMotionValueProps.has(name)) {
-      throw new Error(
-        `Unsupported motion value "${rawName}". Supported values are ${[
-          ...supportedMotionValueProps,
-        ].join(", ")}.`,
-      );
-    }
-    out[name] = rawValue;
-  }
-
-  return Object.keys(out).length === 0 ? null : out;
-}
-
-function normalizeMotionTransition(transition) {
-  if (transition === undefined || transition === null) {
-    return {};
-  }
-  if (!isPlainObject(transition) || isElement(transition)) {
-    throw new Error('Motion prop "transition" must be an object.');
-  }
-  if (
-    transition.type !== undefined &&
-    transition.type !== null &&
-    transition.type !== "tween"
-  ) {
-    throw new Error('Only tween motion transitions are supported by the retained JSX host.');
-  }
-
-  const out = {};
-  if (transition.duration !== undefined) {
-    out.duration = normalizeMotionTransitionNumber("duration", transition.duration);
-  }
-  if (transition.delay !== undefined) {
-    out.delay = normalizeMotionTransitionNumber("delay", transition.delay);
-  }
-  if (transition.ease !== undefined && transition.ease !== null) {
-    out.ease = normalizeMotionEase(transition.ease);
-  }
-  return out;
-}
-
-function normalizeMotionTransitionNumber(name, value) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`Motion transition "${name}" must be a non-negative finite number.`);
-  }
-  return value;
-}
-
-function normalizeMotionEase(value) {
-  if (typeof value !== "string") {
-    throw new Error('Motion transition "ease" must be a string.');
-  }
-  const ease = camelToSnake(value);
-  if (
-    ease !== "linear" &&
-    ease !== "ease_in" &&
-    ease !== "ease_out" &&
-    ease !== "ease_in_out"
-  ) {
-    throw new Error(
-      'Motion transition "ease" must be one of linear, easeIn, easeOut, or easeInOut.',
-    );
-  }
-  return ease;
-}
-
-function normalizeMotionValueName(name) {
-  return motionPropAliases[name] ?? camelToSnake(name);
-}
-
-function normalizeFamilyName(type, props = {}) {
-  if (typeof type !== "string") {
-    throw new Error(`Unsupported JSX element type ${String(type)}.`);
-  }
-  const typeName = String(type);
-  const nativeFamily = nativeFamilyForElement(typeName, props);
-  if (nativeFamily != null) {
-    return nativeFamily;
-  }
-
-  const kebabName = camelToKebab(typeName);
-  const compactName = kebabName.replace(/-/g, "");
-  const family = knownFamilies.has(typeName)
-    ? typeName
-    : familyAliases[typeName] ??
-      familyAliases[kebabName] ??
-      compactFamilyAliases[typeName.toLowerCase()] ??
-      compactFamilyAliases[compactName] ??
-      kebabName;
-  if (knownFamilies.size > 0 && !knownFamilies.has(family)) {
-    throw new Error(`Unknown contract family "${family}" from JSX element "${typeName}".`);
-  }
-  warnDeprecatedHostElement(typeName, family);
-  return family;
-}
-
-function nativeFamilyForElement(typeName, props) {
-  if (!htmlHostElements.has(typeName)) {
-    return null;
-  }
-
-  const slotFamily = nativeSlotFamily(props);
-  if (slotFamily != null) {
-    return slotFamily;
-  }
-
-  if (typeName === "input") {
-    return nativeInputFamily(props);
-  }
-
-  if (htmlContainerElements.has(typeName)) {
-    return nativeContainerFamily(props);
-  }
-
-  if (htmlTextElements.has(typeName)) {
-    return "label";
-  }
-
-  return htmlElementFamilies[typeName] ?? null;
-}
-
-function nativeInputFamily(props) {
-  if (String(props?.role ?? "").toLowerCase() === "switch") {
-    return "switch";
-  }
-
-  const inputType = String(props?.type ?? "text").toLowerCase();
-  if (inputType === "checkbox") {
-    return "checkbox";
-  }
-  if (inputType === "radio") {
-    return "radio";
-  }
-  if (inputType === "range") {
-    return "slider";
-  }
-  if (inputType === "number") {
-    return "number-input";
-  }
-  return "input";
-}
-
-function warnDeprecatedHostElement(typeName, family) {
-  if (htmlHostElements.has(typeName)) {
-    return;
-  }
-  const warningKey = `${typeName}:${family}`;
-  if (deprecatedHostElementWarnings.has(warningKey)) {
-    return;
-  }
-  deprecatedHostElementWarnings.add(warningKey);
-  log(
-    "warn",
-    `Deprecated JSX host element <${typeName}> lowered to contract family "${family}". Use an HTML tag with data-slot="${family}" instead.`,
-  );
-}
-
-function nativeContainerFamily(props) {
-  const tokens = classTokens(props);
-  if (tokens.has("flex-col")) {
-    return "column";
-  }
-  if (tokens.has("flex") || tokens.has("flex-row")) {
-    return "row";
-  }
-  return "column";
-}
-
-function classTokens(props) {
-  const parts = [];
-  for (const name of ["class", "className", "classNames"]) {
-    const value = props?.[name];
-    if (typeof value === "string") {
-      parts.push(value);
-    }
-  }
-  if (Array.isArray(props?.classList)) {
-    for (const value of props.classList) {
-      if (typeof value === "string") {
-        parts.push(value);
-      }
-    }
-  }
-  return new Set(parts.flatMap((value) => value.split(/\s+/)).filter(Boolean));
-}
-
-function nativeSlotFamily(props) {
-  const rawSlotName = props?.["data-slot"] ?? props?.dataSlot;
-  if (rawSlotName == null) {
-    return null;
-  }
-
-  const slotName = String(rawSlotName).trim();
-  if (slotName === "") {
-    return null;
-  }
-
-  const family = normalizeSlotFamilyName(slotName);
-  if (family == null) {
-    throw new Error(`Unknown contract family "${slotName}" from data-slot.`);
-  }
-  return family;
-}
-
-function normalizeSlotFamilyName(slotName) {
-  const kebabName = camelToKebab(slotName);
-  const compactName = kebabName.replace(/-/g, "");
-  const family = knownFamilies.has(slotName)
-    ? slotName
-    : familyAliases[slotName] ??
-      familyAliases[kebabName] ??
-      compactFamilyAliases[slotName.toLowerCase()] ??
-      compactFamilyAliases[compactName] ??
-      kebabName;
-  if (knownFamilies.size > 0 && !knownFamilies.has(family)) {
-    return null;
-  }
-  return family;
-}
-
-function normalizePropName(name) {
-  return propAliases[name] ?? camelToSnake(name);
-}
-
-function shouldHoistPropToLayout(family, propName) {
-  return sharedLayoutPropNames.has(propName) && !familyOwnsProp(family, propName);
-}
-
-function familyOwnsProp(family, propName) {
-  return familyPropNames.get(family)?.has(propName) === true;
-}
-
-function mergeLayoutProps(previousLayout, nextLayout) {
-  if (!isPlainObject(nextLayout) || isElement(nextLayout)) {
-    return previousLayout;
-  }
-  return { ...(isPlainObject(previousLayout) ? previousLayout : {}), ...nextLayout };
-}
-
-function normalizeLayoutObject(value) {
-  if (!isPlainObject(value) || isElement(value)) {
-    throw new Error('Shared "layout" props must be plain objects.');
-  }
-  const out = {};
-  for (const [rawName, rawValue] of Object.entries(value)) {
-    if (rawValue === undefined) {
-      continue;
-    }
-    const propName = normalizePropName(rawName);
-    out[propName] = normalizeLayoutPropValue(propName, rawValue);
-  }
-  return out;
-}
-
-function normalizeLayoutPropValue(propName, value) {
-  const normalized = normalizePropValue("layout", propName, value);
-  if (contractLengthPropNames.has(propName)) {
-    return normalizeContractLength(propName, normalized);
-  }
-  if (propName === "display" || propName === "direction" || propName === "overflow_x" || propName === "overflow_y") {
-    return camelToKebab(normalized);
-  }
-  return normalized;
-}
-
-function normalizeContractLength(propName, value) {
-  if (value == null) {
-    return value;
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new Error(`Layout prop "${propName}" must be a finite number.`);
-    }
-    return { kind: "px", value };
-  }
-  if (typeof value === "string") {
-    const text = value.trim();
-    if (text === "auto") {
-      return { kind: "auto" };
-    }
-    if (/^-?\\d+(?:\\.\\d+)?%$/.test(text)) {
-      return { kind: "percent", value: Number(text.slice(0, -1)) / 100 };
-    }
-    if (/^-?\\d+(?:\\.\\d+)?$/.test(text)) {
-      return { kind: "px", value: Number(text) };
-    }
-    throw new Error(`Layout prop "${propName}" must be a number, "auto", or a percentage string.`);
-  }
-  if (isPlainObject(value) && typeof value.kind === "string") {
-    return value;
-  }
-  throw new Error(`Layout prop "${propName}" must be a contract length value.`);
-}
-
-function normalizePropValue(family, propName, value) {
-  if (propName === "entries" && Array.isArray(value)) {
-    return value.map(normalizeMenuEntry);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizePropValue(family, propName, item));
-  }
-
-  if (isPlainObject(value) && !isElement(value)) {
-    const out = {};
-    for (const [name, childValue] of Object.entries(value)) {
-      if (childValue === undefined) {
-        continue;
-      }
-      const normalizedName = normalizePropName(name);
-      out[normalizedName] = normalizePropValue(family, normalizedName, childValue);
-    }
-    return out;
-  }
-
-  if (typeof value === "string") {
-    const enumStyle = enumStyleForProp(family, propName);
-    if (enumStyle === "pascal") {
-      return toPascalEnum(value);
-    }
-    if (enumStyle === "snake") {
-      return camelToSnake(value);
-    }
-  }
-
-  return value;
-}
-
-function normalizeMenuEntry(entry) {
-  if (entry === "-" || entry === "separator") {
-    return { kind: "separator" };
-  }
-  if (!isPlainObject(entry)) {
-    throw new Error("Menu entries must be objects, '-' or 'separator'.");
-  }
-
-  const out = {};
-  for (const [name, value] of Object.entries(entry)) {
-    const normalizedName = normalizePropName(name);
-    out[normalizedName] = normalizePropValue("menu-entry", normalizedName, value);
-  }
-  out.kind ??= Array.isArray(out.entries) ? "submenu" : "action";
-  out.kind = camelToSnake(out.kind);
-  return out;
-}
-
-function enumStyleForProp(family, propName) {
-  if (family === "row" || family === "column") {
-    if (propName === "justify" || propName === "align") {
-      return "snake";
-    }
-  }
-  if (family === "tabs" && propName === "style") {
-    return "snake";
-  }
-  if (family === "toast-viewport" && (propName === "placement" || propName === "intent")) {
-    return "snake";
-  }
-  if (family === "menu-entry" && propName === "kind") {
-    return "snake";
-  }
-
-  if (
-    propName === "variant" ||
-    propName === "size" ||
-    propName === "tone" ||
-    propName === "weight" ||
-    propName === "axis" ||
-    propName === "side" ||
-    propName === "icon_style" ||
-    propName === "kind" ||
-    propName === "playback_state" ||
-    propName === "trigger_variant" ||
-    propName === "placement" ||
-    propName === "intent" ||
-    propName === "style" ||
-    propName === "align" ||
-    propName === "region"
-  ) {
-    return "pascal";
-  }
-
-  return null;
-}
-
-function textFromChildren(children) {
-  return flattenChildren(children)
-    .filter((child) => typeof child === "string" || typeof child === "number")
-    .map((child) => String(child).trim())
-    .filter(Boolean)
-    .join(" ");
-}
-
-function isElement(value) {
-  return isPlainObject(value) && value.$$typeof === elementMarker;
 }
 
 function isPlainObject(value) {
   return typeof value === "object" && value != null && !Array.isArray(value);
 }
 
-function isBlankText(value) {
-  return typeof value === "string" && value.trim() === "";
-}
-
-function toPascalEnum(value) {
-  const text = String(value);
-  if (text === "sm") {
-    return "Sm";
+function throwPendingRuntimeError() {
+  if (pendingRuntimeError == null) {
+    return;
   }
-  if (text === "md") {
-    return "Md";
+  const error = pendingRuntimeError;
+  pendingRuntimeError = null;
+  throw error;
+}
+
+const hostConfig = {
+  HostTransitionContext: React.createContext(null),
+  NotPendingTransition: null,
+  afterActiveInstanceBlur() {},
+  appendChild(parent, child) {
+    linkChild(parent, child, null);
+  },
+  appendChildToContainer(container, child) {
+    linkChild(container, child, null);
+  },
+  appendInitialChild(parent, child) {
+    linkChild(parent, child, null);
+  },
+  beforeActiveInstanceBlur() {},
+  cancelTimeout(id) {
+    if (typeof clearTimeout === "function" && id !== -1) {
+      clearTimeout(id);
+    }
+  },
+  clearContainer(container) {
+    for (const child of [...container.children]) {
+      detachLinkedChild(container, child);
+    }
+    container.children = [];
+  },
+  commitTextUpdate(textInstance, _oldText, newText) {
+    textInstance.text = String(newText);
+  },
+  commitUpdate(instance, _type, _prevProps, nextProps) {
+    instance.props = nextProps ?? {};
+  },
+  createInstance(type, props) {
+    return createHostNode(type, props);
+  },
+  createTextInstance(text) {
+    return createTextNode(text);
+  },
+  detachDeletedInstance() {},
+  finalizeInitialChildren() {
+    return false;
+  },
+  getChildHostContext(parentHostContext) {
+    return parentHostContext;
+  },
+  getCurrentUpdatePriority() {
+    return currentUpdatePriority;
+  },
+  getInstanceFromNode() {
+    return null;
+  },
+  getInstanceFromScope() {
+    return null;
+  },
+  getPublicInstance(instance) {
+    return instance;
+  },
+  getRootHostContext() {
+    return {};
+  },
+  hideInstance(instance) {
+    instance.hidden = true;
+  },
+  hideTextInstance(textInstance) {
+    textInstance.hidden = true;
+  },
+  insertBefore(parent, child, beforeChild) {
+    linkChild(parent, child, beforeChild);
+  },
+  insertInContainerBefore(container, child, beforeChild) {
+    linkChild(container, child, beforeChild);
+  },
+  isPrimaryRenderer: true,
+  noTimeout: -1,
+  prepareForCommit() {
+    return null;
+  },
+  preparePortalMount() {},
+  prepareScopeUpdate() {},
+  removeChild(parent, child) {
+    detachLinkedChild(parent, child);
+  },
+  removeChildFromContainer(container, child) {
+    detachLinkedChild(container, child);
+  },
+  requestPostPaintCallback(callback) {
+    queueMicrotask(() => callback(performance.now()));
+  },
+  resetAfterCommit(container) {
+    commitContainer(container);
+  },
+  resetFormInstance() {},
+  resetTextContent(instance) {
+    for (const child of [...instance.children]) {
+      detachLinkedChild(instance, child);
+    }
+    instance.children = [];
+  },
+  resolveEventTimeStamp() {
+    return performance.now();
+  },
+  resolveEventType() {
+    return null;
+  },
+  resolveUpdatePriority() {
+    return 16;
+  },
+  scheduleMicrotask(fn) {
+    queueMicrotask(fn);
+  },
+  scheduleTimeout(fn, delay) {
+    if (typeof setTimeout === "function") {
+      return setTimeout(fn, delay);
+    }
+    queueMicrotask(fn);
+    return -1;
+  },
+  setCurrentUpdatePriority(priority) {
+    currentUpdatePriority = priority;
+  },
+  shouldAttemptEagerTransition() {
+    return false;
+  },
+  shouldSetTextContent(type, props) {
+    try {
+      const family = normalizedFamilyForType(type, props ?? {}, metadataView);
+      return familyUsesTextContent(family);
+    } catch (error) {
+      pendingRuntimeError = error;
+      return false;
+    }
+  },
+  supportsHydration: false,
+  supportsMicrotasks: true,
+  supportsMutation: true,
+  supportsPersistence: false,
+  trackSchedulerEvent() {},
+  unhideInstance(instance) {
+    instance.hidden = false;
+  },
+  unhideTextInstance(textInstance) {
+    textInstance.hidden = false;
+  },
+};
+
+const reconciler = Reconciler(hostConfig);
+const container = {
+  children: [],
+  handlers: new Map(),
+  kind: "container",
+  rootInstance: null,
+};
+const root = reconciler.createContainer(
+  container,
+  1,
+  null,
+  false,
+  null,
+  "",
+  console.log,
+  console.log,
+  console.log,
+  () => {},
+);
+
+export function render(element) {
+  pendingRuntimeError = null;
+  reconciler.flushSyncFromReconciler(() => {
+    reconciler.updateContainerSync(element, root, null, null);
+  });
+  throwPendingRuntimeError();
+  rootRendered = true;
+}
+
+globalThis.__eguiUnmountRuntime = function unmountEguiRuntime() {
+  pendingRuntimeError = null;
+  allowEmptyCommit = true;
+  try {
+    reconciler.flushSyncFromReconciler(() => {
+      reconciler.updateContainerSync(null, root, null, null);
+    });
+    container.children = [];
+    container.handlers = new Map();
+    container.rootInstance = null;
+    rootRendered = false;
+    throwPendingRuntimeError();
+  } finally {
+    allowEmptyCommit = false;
   }
-  return text
-    .split(/[-_\s]+/g)
-    .filter(Boolean)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join("");
-}
+};
 
-function camelToKebab(value) {
-  return String(value)
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/_/g, "-")
-    .toLowerCase();
-}
-
-function camelToSnake(value) {
-  return String(value)
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/-/g, "_")
-    .toLowerCase();
-}
+globalThis.__eguiDispatchEvents = function dispatchEguiEvents(events) {
+  if (!rootRendered) {
+    throw new Error("render(<... />) must be called before dispatching events.");
+  }
+  if (!Array.isArray(events) || events.length === 0) {
+    return;
+  }
+  pendingRuntimeError = null;
+  reconciler.flushSyncFromReconciler(() => {
+    reconciler.discreteUpdates(() => {
+      for (const event of events) {
+        dispatchEvent(container, event);
+      }
+    });
+  });
+  throwPendingRuntimeError();
+};

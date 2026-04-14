@@ -1,11 +1,12 @@
 use super::{api::ComponentUi, common::ControlSize};
 use crate::ui::tokens;
-use egui::{Align, CornerRadius, Layout, Response, Stroke, StrokeKind, Ui};
+use egui::{Align, CornerRadius, Id, Layout, Response, Stroke, StrokeKind, Ui};
 
 const SWITCH_LABEL_GAP: f32 = 10.0;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Switch<'a> {
+    pub id: Option<Id>,
     pub label: Option<&'a str>,
     pub size: ControlSize,
 }
@@ -13,9 +14,15 @@ pub struct Switch<'a> {
 impl<'a> Switch<'a> {
     pub fn new() -> Self {
         Self {
+            id: None,
             label: None,
             size: ControlSize::Md,
         }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     pub fn label(mut self, label: &'a str) -> Self {
@@ -59,6 +66,16 @@ impl ComponentUi<'_> {
 }
 
 fn draw_switch(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
+    if let Some(id) = props.id.clone() {
+        return ui
+            .push_id(id, |ui| draw_switch_inner(ui, value, props))
+            .inner;
+    }
+
+    draw_switch_inner(ui, value, props)
+}
+
+fn draw_switch_inner(ui: &mut Ui, value: &mut bool, props: Switch<'_>) -> Response {
     match props.label {
         Some(label) => {
             let control_slot_width = switch_metrics(props.size).width;

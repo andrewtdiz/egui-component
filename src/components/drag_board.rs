@@ -21,6 +21,7 @@ pub enum DragBoardRegion {
 
 #[derive(Debug, Clone, Copy)]
 pub struct DragBoardItem<'a> {
+    pub id: Option<Id>,
     pub title: &'a str,
     pub description: Option<&'a str>,
 }
@@ -28,9 +29,15 @@ pub struct DragBoardItem<'a> {
 impl<'a> DragBoardItem<'a> {
     pub const fn new(title: &'a str) -> Self {
         Self {
+            id: None,
             title,
             description: None,
         }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     pub const fn description(mut self, description: &'a str) -> Self {
@@ -190,7 +197,8 @@ fn draw_drag_board_region(
             item_index: index,
             source: region,
         };
-        let _ = child_ui.dnd_drag_source(props.id.with(("card", index)), payload, |ui| {
+        let drag_id = item.id.unwrap_or_else(|| props.id.with(("card", index)));
+        let _ = child_ui.dnd_drag_source(drag_id, payload, |ui| {
             draw_drag_board_item(ui, *item, runtime, inner_rect.width())
         });
         item_count += 1;

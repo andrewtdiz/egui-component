@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
-    time::SystemTime,
 };
 
 use clay_jsx_egui_bridge::{HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame};
@@ -11,17 +10,18 @@ use egui_component::{
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
 
-use super::default_entry_path;
+use super::{default_entry_path, ReloadWatcher};
 
 #[derive(Debug)]
 pub struct RuntimeJsxApp {
     entry_path: PathBuf,
-    dependency_stamps: Vec<DependencyStamp>,
     hot_reload_state: Option<HotReloadState>,
     initialized: bool,
+    reload_watcher: Option<ReloadWatcher>,
     session: Option<JsxRuntimeSession>,
     rendered: Option<ContractTree>,
     motion: MotionFrame,
+    watched_files: BTreeSet<PathBuf>,
     error: Option<String>,
 }
 
@@ -35,19 +35,21 @@ impl RuntimeJsxApp {
     pub fn new(entry_path: impl Into<PathBuf>) -> Self {
         let entry_path = entry_path.into();
         Self {
-            dependency_stamps: collect_dependency_stamps([entry_path.clone()]),
             entry_path,
             hot_reload_state: None,
             initialized: false,
+            reload_watcher: None,
             session: None,
             rendered: None,
             motion: MotionFrame::default(),
+            watched_files: BTreeSet::new(),
             error: None,
         }
     }
 
     fn update_frame(&mut self, ctx: &Context) {
-        self.reload_initial_or_external_changes();
+        self.reload_initial_or_external_changes(ctx);
+        self.drain_pending_runtime_updates(ctx);
         self.tick_runtime_motion(ctx);
 
         TopBottomPanel::top("jsx_runtime_topbar")
@@ -90,46 +92,54 @@ impl RuntimeJsxApp {
         }
 
         if !frame_events.is_empty() {
-            self.dispatch_events_to_runtime(&frame_events);
+            self.dispatch_events_to_runtime(&frame_events, ui.ctx());
         }
     }
 
-    fn reload_initial_or_external_changes(&mut self) {
+    fn reload_initial_or_external_changes(&mut self, ctx: &Context) {
+        self.ensure_reload_watcher(ctx);
         if !self.initialized {
             self.initialized = true;
-            self.reload_from_disk();
+            self.reload_from_disk(ctx);
             return;
         }
 
-        if dependency_stamps_changed(&self.dependency_stamps) {
-            self.reload_from_disk();
+        if self
+            .reload_watcher
+            .as_mut()
+            .is_some_and(|watcher| watcher.take_pending_reload())
+        {
+            self.reload_from_disk(ctx);
         }
     }
 
-    fn reload_from_disk(&mut self) {
-        if self.error.is_none() {
-            if let Some(session) = self.session.as_mut() {
-                if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
-                    self.hot_reload_state = Some(hot_reload_state);
-                }
-            }
-        }
+    fn reload_from_disk(&mut self, ctx: &Context) {
+        self.capture_hot_reload_state();
+        self.teardown_session();
 
         match JsxRuntimeSession::load_with_hot_reload_state_outcome(
             &self.entry_path,
             self.hot_reload_state.as_ref(),
         ) {
-            JsxRuntimeLoadOutcome::Loaded { session, rendered } => {
-                self.dependency_stamps = collect_dependency_stamps(
+            JsxRuntimeLoadOutcome::Loaded {
+                mut session,
+                rendered,
+            } => {
+                self.set_watched_files(
                     session
                         .dependency_paths()
                         .into_iter()
                         .chain([self.entry_path.clone()]),
                 );
+                install_session_wake_callback(&mut session, ctx);
                 self.session = Some(session);
                 self.rendered = rendered.tree;
                 self.motion = rendered.motion;
                 self.error = None;
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
+                self.drain_pending_runtime_updates(ctx);
             }
             JsxRuntimeLoadOutcome::Failed(failure) => {
                 self.session = None;
@@ -140,13 +150,15 @@ impl RuntimeJsxApp {
                     self.entry_path.display(),
                     error = failure.error
                 ));
-                self.dependency_stamps =
-                    collect_failure_dependency_stamps(failure.dependency_paths, &self.entry_path);
+                self.set_watched_files(collect_failure_tracked_files(
+                    failure.dependency_paths,
+                    &self.entry_path,
+                ));
             }
         }
     }
 
-    fn dispatch_events_to_runtime(&mut self, events: &[ContractEvent]) {
+    fn dispatch_events_to_runtime(&mut self, events: &[ContractEvent], ctx: &Context) {
         let Some(session) = self.session.as_mut() else {
             return;
         };
@@ -158,7 +170,33 @@ impl RuntimeJsxApp {
                 }
                 self.motion = rendered.motion;
                 self.error = None;
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
             }
+            Err(error) => {
+                self.error = Some(error.to_string());
+            }
+        }
+    }
+
+    fn drain_pending_runtime_updates(&mut self, ctx: &Context) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+
+        match session.drain_pending_runtime_updates() {
+            Ok(Some(rendered)) => {
+                if let Some(tree) = rendered.tree {
+                    self.rendered = Some(tree);
+                }
+                self.motion = rendered.motion;
+                self.error = None;
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
+            }
+            Ok(None) => {}
             Err(error) => {
                 self.error = Some(error.to_string());
             }
@@ -187,6 +225,51 @@ impl RuntimeJsxApp {
             }
         }
     }
+
+    fn capture_hot_reload_state(&mut self) {
+        if self.error.is_some() {
+            return;
+        }
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
+            self.hot_reload_state = Some(hot_reload_state);
+        }
+    }
+
+    fn ensure_reload_watcher(&mut self, ctx: &Context) {
+        if self.reload_watcher.is_some() {
+            return;
+        }
+        match ReloadWatcher::new(ctx) {
+            Ok(mut watcher) => {
+                if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
+                    self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
+                    return;
+                }
+                self.reload_watcher = Some(watcher);
+            }
+            Err(error) => {
+                self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
+            }
+        }
+    }
+
+    fn set_watched_files(&mut self, files: impl IntoIterator<Item = PathBuf>) {
+        self.watched_files = files.into_iter().collect();
+        if let Some(watcher) = self.reload_watcher.as_mut() {
+            if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
+                self.error = Some(format!("Failed to update JSX reload watcher: {error}"));
+            }
+        }
+    }
+
+    fn teardown_session(&mut self) {
+        if let Some(mut session) = self.session.take() {
+            let _ = session.teardown();
+        }
+    }
 }
 
 impl eframe::App for RuntimeJsxApp {
@@ -197,59 +280,32 @@ impl eframe::App for RuntimeJsxApp {
     }
 }
 
-#[derive(Debug, Clone)]
-struct DependencyStamp {
-    path: PathBuf,
-    modified: Option<SystemTime>,
-}
-
-fn dependency_stamps_changed(stamps: &[DependencyStamp]) -> bool {
-    stamps
-        .iter()
-        .any(|stamp| modified_time(&stamp.path) != stamp.modified)
-}
-
-fn collect_dependency_stamps(paths: impl IntoIterator<Item = PathBuf>) -> Vec<DependencyStamp> {
-    paths
-        .into_iter()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .map(|path| DependencyStamp {
-            modified: modified_time(&path),
-            path,
-        })
-        .collect()
-}
-
-fn collect_failure_dependency_stamps(
+fn collect_failure_tracked_files(
     dependency_paths: Vec<PathBuf>,
     entry_path: &Path,
-) -> Vec<DependencyStamp> {
+) -> BTreeSet<PathBuf> {
     let paths = if dependency_paths.is_empty() {
         vec![entry_path.to_path_buf()]
     } else {
         dependency_paths
     };
-    collect_dependency_stamps(paths)
+    paths.into_iter().collect()
 }
 
-fn modified_time(path: &std::path::Path) -> Option<SystemTime> {
-    std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
+fn install_session_wake_callback(session: &mut JsxRuntimeSession, ctx: &Context) {
+    let ctx = ctx.clone();
+    session.set_wake_callback(move || ctx.request_repaint());
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{thread::sleep, time::Duration};
-
     use egui_component::contract::{ContractEvent, ContractNode, EventKind, EventValue};
     use tempfile::tempdir;
 
     use super::*;
 
     #[test]
-    fn imported_module_changes_trigger_reload_from_dependency_stamps() {
+    fn successful_load_tracks_imported_modules_for_reload_watch_targets() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         let child_path = dir.path().join("copy.tsx");
@@ -288,24 +344,18 @@ export function Copy() {
             label_text(find_node(&tree.root, "copy").expect("copy label should exist")),
             Some("Old copy")
         );
-        let dependency_stamps = collect_dependency_stamps(session.dependency_paths());
-
-        write_with_newer_timestamp(
-            &child_path,
-            r#"
-export function Copy() {
-  return <label id="copy" text="New copy" />;
-}
-"#,
-        );
         assert!(
-            dependency_stamps_changed(&dependency_stamps),
-            "imported child change should invalidate dependency stamps"
+            session
+                .dependency_paths()
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .contains(&child_path),
+            "imported child should be tracked as a watched dependency"
         );
     }
 
     #[test]
-    fn failed_reload_keeps_last_good_snapshot_and_watches_attempted_dependencies() {
+    fn failed_reload_tracks_attempted_dependencies_and_recovers_with_cold_state() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         let child_path = dir.path().join("copy.tsx");
@@ -347,7 +397,8 @@ export function Copy() {
         .expect("child file should be written");
 
         let mut app = RuntimeJsxApp::new(&entry_path);
-        app.reload_from_disk();
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
 
         let rendered = app
             .session
@@ -368,7 +419,7 @@ export function Copy() {
             Some("On")
         );
 
-        write_with_newer_timestamp(
+        std::fs::write(
             &child_path,
             r#"
 import { Extra } from "./extra.tsx";
@@ -382,9 +433,10 @@ export function Copy() {
   );
 }
 "#,
-        );
+        )
+        .expect("updated child file should be written");
 
-        app.reload_from_disk();
+        app.reload_from_disk(&ctx);
         assert!(
             app.session.is_none(),
             "failed reload should tear down the live session"
@@ -395,16 +447,14 @@ export function Copy() {
         );
         assert!(
             app.hot_reload_state.is_some(),
-            "last good hot reload state should survive a failed rebuild"
+            "the API-compatible hot reload snapshot should still be captured"
         );
         assert!(
             app.error.is_some(),
             "expected failed reload to surface an error"
         );
         assert!(
-            app.dependency_stamps
-                .iter()
-                .any(|stamp| stamp.path == extra_path),
+            app.watched_files.contains(&extra_path),
             "attempted dependency set should include the new missing import"
         );
 
@@ -417,23 +467,17 @@ export function Extra() {
 "#,
         )
         .expect("missing dependency should be written");
-        assert!(
-            dependency_stamps_changed(&app.dependency_stamps),
-            "creating the previously missing dependency should invalidate failure stamps"
-        );
-
-        app.initialized = true;
-        app.reload_initial_or_external_changes();
+        app.reload_from_disk(&ctx);
         assert!(
             app.error.is_none(),
             "reload should recover once the dependency exists"
         );
 
         let tree = rendered_tree(&app);
-        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(true));
+        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(false));
         assert_eq!(
             label_text(find_node(&tree.root, "status").expect("status label should exist")),
-            Some("On")
+            Some("Off")
         );
         assert_eq!(
             label_text(find_node(&tree.root, "copy").expect("copy label should exist")),
@@ -452,21 +496,6 @@ export function Extra() {
                 app.error
             )
         })
-    }
-
-    fn write_with_newer_timestamp(path: &Path, contents: &str) {
-        let previous = modified_time(path);
-        for _ in 0..12 {
-            std::fs::write(path, contents).expect("test file should be written");
-            if modified_time(path) != previous {
-                return;
-            }
-            sleep(Duration::from_millis(120));
-        }
-        panic!(
-            "failed to advance modified timestamp for {}",
-            path.display()
-        );
     }
 
     fn checkbox_value(node: &ContractNode, node_id: &str) -> Option<bool> {

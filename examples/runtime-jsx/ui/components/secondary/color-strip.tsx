@@ -1,10 +1,10 @@
-import { cn, type NodeProps, nodeProps } from "../../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../../component-support.ts";
 import { Color } from "../primary/color.tsx";
 
 export type ColorStripProps = NodeProps & { colors?: string[] } & Record<string, unknown>;
 
 export function ColorStrip({ colors = ["#2896ff", "#10b981", "#f43f5e"], className, ...props }: ColorStripProps) {
-  const baseId = props.id ?? props.nodeId ?? "color-strip";
+  const baseId = requireNodeId(props, "ColorStrip");
 
   return (
     <ColorStripRoot {...props} className={className}>

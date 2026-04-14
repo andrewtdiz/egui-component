@@ -84,8 +84,15 @@ var taskQueue = [],
   isHostCallbackScheduled = !1,
   isHostTimeoutScheduled = !1,
   needsPaint = !1,
-  localSetTimeout = "function" === typeof setTimeout ? setTimeout : null,
-  localClearTimeout = "function" === typeof clearTimeout ? clearTimeout : null,
+  localSetTimeout =
+    "function" === typeof setTimeout
+      ? setTimeout
+      : function (callback) {
+          queueMicrotask(callback);
+          return 0;
+        },
+  localClearTimeout =
+    "function" === typeof clearTimeout ? clearTimeout : function () {},
   localSetImmediate = "undefined" !== typeof setImmediate ? setImmediate : null;
 function advanceTimers(currentTime) {
   for (var timer = peek(timerQueue); null !== timer; ) {

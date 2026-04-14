@@ -208,6 +208,45 @@ impl ContractFamilyId {
             Self::Command => "command",
         }
     }
+
+    pub fn is_identity_sensitive(self) -> bool {
+        matches!(
+            self,
+            Self::Sidebar
+                | Self::MenuBar
+                | Self::Tabs
+                | Self::Input
+                | Self::NumberInput
+                | Self::Checkbox
+                | Self::Switch
+                | Self::Select
+                | Self::Field
+                | Self::Collapsible
+                | Self::DialogueModal
+                | Self::Hierarchy
+                | Self::ToastViewport
+                | Self::Slider
+                | Self::Radio
+                | Self::RadioGroup
+                | Self::Combobox
+                | Self::EmojiSelector
+                | Self::Popover
+                | Self::DropdownMenu
+                | Self::ContextMenu
+                | Self::OpenWith
+                | Self::FileTree
+                | Self::DragBoard
+                | Self::Command
+        )
+    }
+
+    pub fn allows_fallback_node_id(self) -> bool {
+        !self.is_identity_sensitive()
+    }
+
+    pub fn requires_explicit_node_id(self) -> bool {
+        !self.allows_fallback_node_id()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

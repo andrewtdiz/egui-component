@@ -1,4 +1,4 @@
-import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -9,7 +9,7 @@ function itemEvent(event: unknown, item: Item, value: string, label: string, ind
 }
 
 export function TabsList({ items = [], selectedItemId, style = "underline", className, onSelect, children, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; style?: string } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "tabs";
+  const baseId = requireNodeId(props, "TabsList");
   const segmented = style === "segmented" || style === "blenderTopbar" || style === "blender_topbar";
   const vertical = style === "stacked" || style === "rail";
   const layoutClassName = vertical ? "flex flex-col items-start" : "flex flex-row items-center";

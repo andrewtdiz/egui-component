@@ -1,4 +1,18 @@
-import { eventValue, log, render, useState } from "egui";
+import {
+  createContext,
+  eventValue,
+  log,
+  render,
+  requestRepaint,
+  startTransition,
+  useContext,
+  useDeferredValue,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "egui";
 import {
   AudioPlayback,
   Button,
@@ -92,6 +106,81 @@ const commandItems = [
   { itemId: "navmesh", group: "tools", label: "build nav mesh", shortcut: "Ctrl+B" },
 ];
 
+const RuntimeModeContext = createContext("idle");
+
+function createRuntimePulseStore() {
+  let snapshot = { phase: "idle", tick: 0 };
+  let intervalHandle = null;
+  const listeners = new Set();
+
+  const emit = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+    requestRepaint();
+  };
+
+  return {
+    getSnapshot() {
+      return snapshot;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      if (intervalHandle == null) {
+        snapshot = { ...snapshot, phase: "live" };
+        emit();
+        intervalHandle = setInterval(() => {
+          snapshot = { phase: "live", tick: snapshot.tick + 1 };
+          emit();
+        }, 1000);
+      }
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0 && intervalHandle != null) {
+          clearInterval(intervalHandle);
+          intervalHandle = null;
+          snapshot = { ...snapshot, phase: "idle" };
+        }
+      };
+    },
+  };
+}
+
+const runtimePulseStore = createRuntimePulseStore();
+
+const runtimeAsyncInitialState = {
+  requestId: 0,
+  status: "idle",
+  summary: "Waiting for an async effect to resolve.",
+};
+
+function runtimeAsyncReducer(state, action) {
+  switch (action.type) {
+    case "loading":
+      return {
+        requestId: action.requestId,
+        status: "loading",
+        summary: `Scheduling async work for "${action.query}".`,
+      };
+    case "resolved":
+      if (action.requestId !== state.requestId) {
+        return state;
+      }
+      return {
+        requestId: action.requestId,
+        status: "ready",
+        summary: action.summary,
+      };
+    default:
+      return state;
+  }
+}
+
+function RuntimeModeBadge() {
+  const mode = useContext(RuntimeModeContext);
+  return <Label nodeId="runtime-effects-mode" text={`Context mode: ${mode}`} tone="muted" size={11} />;
+}
+
 function Section({ title, children }) {
   return (
     <Card paddingX={14} paddingY={14}>
@@ -136,7 +225,7 @@ function Primitives() {
       <Skeleton width={240} height={14} cornerRadius={7} animated={true} />
       <div className="flex flex-row gap-[12px] items-center">
         <Spinner size={18} />
-        <Progress value={0.72} width={260} height={10} />
+        <Progress nodeId="primitives-progress" value={0.72} width={260} height={10} />
       </div>
     </Section>
   );
@@ -260,6 +349,107 @@ function Controls() {
           onSelect={(event) => setPage(Math.round(eventValue(event) ?? page))}
         />
       </div>
+    </Section>
+  );
+}
+
+function RuntimeEffects() {
+  const [query, setQuery] = useState("shader compiler");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const deferredQuery = useDeferredValue(query);
+  const pulse = useSyncExternalStore(
+    runtimePulseStore.subscribe,
+    runtimePulseStore.getSnapshot,
+    runtimePulseStore.getSnapshot,
+  );
+  const [asyncState, dispatchAsync] = useReducer(
+    runtimeAsyncReducer,
+    runtimeAsyncInitialState,
+  );
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    log("info", "RuntimeEffects mounted local interval");
+    const intervalHandle = setInterval(() => {
+      setElapsedSeconds((value) => value + 1);
+    }, 1000);
+    return () => {
+      clearInterval(intervalHandle);
+      log("info", "RuntimeEffects cleaned local interval");
+    };
+  }, []);
+
+  useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    dispatchAsync({ type: "loading", query, requestId });
+    const timeoutHandle = setTimeout(() => {
+      startTransition(() => {
+        dispatchAsync({
+          type: "resolved",
+          requestId,
+          summary: `Resolved "${query}" after ${String(query.length)} token checks.`,
+        });
+      });
+    }, 800);
+    return () => {
+      clearTimeout(timeoutHandle);
+      log("info", `RuntimeEffects cleaned async request ${String(requestId)}`);
+    };
+  }, [query]);
+
+  return (
+    <Section title="Effects and async">
+      <RuntimeModeContext.Provider value={asyncState.status}>
+        <div className="flex flex-col gap-[10px]">
+          <Label
+            text="Timers, subscriptions, transitions, and effect cleanup now run as authored React behavior."
+            tone="muted"
+            size={11}
+          />
+          <Input
+            nodeId="runtime-effects-query"
+            value={query}
+            width={280}
+            leadingIcon="search"
+            placeholder="Search runtime work"
+            onChange={(event) => setQuery(eventValue(event) ?? "")}
+          />
+          <div className="flex flex-row gap-[12px] items-center">
+            <Label
+              nodeId="runtime-effects-elapsed"
+              text={`Elapsed interval: ${elapsedSeconds}s`}
+              tone="primary"
+              weight="semibold"
+            />
+            <Label
+              nodeId="runtime-effects-store-tick"
+              text={`Store tick: ${pulse.tick}`}
+              tone="secondary"
+            />
+            <RuntimeModeBadge />
+          </div>
+          <div className="flex flex-col gap-[4px]">
+            <Label
+              nodeId="runtime-effects-deferred"
+              text={`Deferred query: ${deferredQuery}`}
+              tone="secondary"
+            />
+            <Label
+              nodeId="runtime-effects-async"
+              text={`Async reducer: ${asyncState.summary}`}
+              tone="muted"
+              size={11}
+            />
+            <Label
+              nodeId="runtime-effects-store-phase"
+              text={`External store phase: ${pulse.phase}`}
+              tone="muted"
+              size={11}
+            />
+          </div>
+        </div>
+      </RuntimeModeContext.Provider>
     </Section>
   );
 }
@@ -563,7 +753,7 @@ function CanvaRecipes() {
       <Card paddingX={16} paddingY={16}>
         <div className="flex flex-col gap-[10px]">
           <Label text="Backgrounds" tone="primary" weight="semibold" />
-          <Input value="" placeholder="Search backgrounds" width={320} leadingIcon="search" />
+          <Input nodeId="canva-background-search" value="" placeholder="Search backgrounds" width={320} leadingIcon="search" />
           <div className="flex flex-row gap-[8px] items-center">
             <Button iconOnly={true} leadingIcon="palette" variant="secondary" />
             <Color fill="#9ab5d0" size={32} cornerRadius={8} />
@@ -578,6 +768,7 @@ function CanvaRecipes() {
         <div className="flex flex-col gap-[10px]">
           <Label text="Brand Kit" tone="primary" weight="semibold" />
           <Tabs
+            nodeId="canva-brand-kit-tabs"
             style="segmented"
             selectedItemId="logos"
             items={[
@@ -606,6 +797,7 @@ function CanvaRecipes() {
         <div className="flex flex-col gap-[10px]">
           <Label text="Position" tone="primary" weight="semibold" />
           <Tabs
+            nodeId="canva-position-tabs"
             style="segmented"
             selectedItemId="arrange"
             items={[
@@ -614,9 +806,9 @@ function CanvaRecipes() {
             ]}
           />
           <div className="flex flex-row gap-[8px] items-center">
-            <NumberInput value={1920} width={90} suffix="px" />
-            <NumberInput value={1080} width={90} suffix="px" />
-            <NumberInput value={0} width={90} suffix="deg" />
+            <NumberInput nodeId="canva-position-width" value={1920} width={90} suffix="px" />
+            <NumberInput nodeId="canva-position-height" value={1080} width={90} suffix="px" />
+            <NumberInput nodeId="canva-position-rotation" value={0} width={90} suffix="deg" />
           </div>
         </div>
       </Card>
@@ -641,6 +833,7 @@ function App() {
       <Separator nodeId="intro-separator" />
       <Primitives />
       <Controls />
+      <RuntimeEffects />
       <MenusAndSurfaces />
       <ShowcaseExamples />
       <CanvaRecipes />

@@ -1,4 +1,5 @@
 mod app;
+mod watch;
 
 use std::path::PathBuf;
 
@@ -6,6 +7,7 @@ use egui::{Context, ViewportBuilder};
 use egui_component::theme::{self, BaseColor, ThemeMode, ThemeSpec};
 
 pub use app::RuntimeJsxApp;
+pub use watch::ReloadWatcher;
 
 pub const WINDOW_TITLE: &str = "egui-component JSX Runtime";
 pub const WINDOW_INNER_SIZE: [f32; 2] = [1360.0, 940.0];
@@ -56,6 +58,8 @@ pub fn run_native(entry_path: PathBuf) -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use super::default_entry_path;
     use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionFrame, MotionProperty};
     use egui_component::contract::{
@@ -122,6 +126,60 @@ mod tests {
             JsxRuntimeSession::load(&default_entry_path()).expect("jsx file should render");
         let tree = rendered.tree.expect("initial render should return a tree");
         assert_eq!(tree.root.family_id().as_str(), "column");
+    }
+
+    #[test]
+    fn default_jsx_file_demonstrates_effect_driven_runtime_updates() {
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&default_entry_path()).expect("jsx file should render");
+        let tree = rendered.tree.expect("initial render should return a tree");
+        assert!(find_node(&tree.root, "runtime-effects-query").is_some());
+        assert_eq!(
+            label_text(
+                find_node(&tree.root, "runtime-effects-deferred")
+                    .expect("runtime effects deferred label should exist")
+            ),
+            Some("Deferred query: shader compiler")
+        );
+
+        let rendered = drain_async_until_update(&mut session, Duration::from_millis(100))
+            .expect("mount effects should publish an initial external-store update");
+        let tree = rendered.tree.expect("effect-driven update should rerender");
+        assert_eq!(
+            label_text(
+                find_node(&tree.root, "runtime-effects-store-phase")
+                    .expect("runtime effects store phase label should exist")
+            ),
+            Some("External store phase: live")
+        );
+
+        let rendered = drain_async_until(&mut session, Duration::from_millis(1200), |rendered| {
+            let Some(tree) = rendered.tree.as_ref() else {
+                return false;
+            };
+            label_text(
+                find_node(&tree.root, "runtime-effects-store-tick")
+                    .expect("runtime effects store tick label should exist"),
+            ) == Some("Store tick: 1")
+        })
+        .expect("timer-driven update should rerender the example app");
+        let tree = rendered
+            .tree
+            .expect("timer-driven update should return a tree");
+        assert_eq!(
+            label_text(
+                find_node(&tree.root, "runtime-effects-async")
+                    .expect("runtime effects async label should exist")
+            ),
+            Some("Async reducer: Resolved \"shader compiler\" after 15 token checks.")
+        );
+        assert_eq!(
+            label_text(
+                find_node(&tree.root, "runtime-effects-store-tick")
+                    .expect("runtime effects store tick label should exist")
+            ),
+            Some("Store tick: 1")
+        );
     }
 
     #[test]
@@ -1039,6 +1097,79 @@ render(<App />);
     }
 
     #[test]
+    fn keyed_reorder_keeps_handlers_attached_to_the_same_node_ids() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("reorder-handlers.jsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useState } from "egui";
+
+function App() {
+  const [items, setItems] = useState(["alpha", "beta"]);
+  const [selected, setSelected] = useState("none");
+  return (
+    <div id="root" data-slot="column">
+      <button id="swap" label="Swap" onClick={() => setItems(["beta", "alpha"])} />
+      {items.map((item) => (
+        <button
+          key={item}
+          id={item}
+          label={item}
+          onClick={() => setSelected(item)}
+        />
+      ))}
+      <label id="selected" text={selected} />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("jsx file should be written");
+
+        let (mut session, _) =
+            JsxRuntimeSession::load(&entry_path).expect("jsx file should render");
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("swap", EventKind::Clicked)])
+            .expect("swap event should rerender");
+        let tree = rendered
+            .tree
+            .expect("reordered render should return a tree");
+        assert_eq!(
+            contract_children(&tree.root)
+                .iter()
+                .map(|child| child.node_id().as_str())
+                .collect::<Vec<_>>(),
+            vec!["swap", "beta", "alpha", "selected"]
+        );
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("alpha", EventKind::Clicked)])
+            .expect("reordered alpha click should rerender");
+        let tree = rendered
+            .tree
+            .expect("selection render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "selected").expect("selected label should exist")),
+            Some("alpha")
+        );
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("beta", EventKind::Clicked)])
+            .expect("reordered beta click should rerender");
+        let tree = rendered
+            .tree
+            .expect("selection render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "selected").expect("selected label should exist")),
+            Some("beta")
+        );
+    }
+
+    #[test]
     fn stable_jsx_node_ids_can_move_between_parents() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("move-between-parents.jsx");
@@ -1467,6 +1598,45 @@ render(<App />);
         match node {
             ContractNode::Button(props) => Some(props.label.as_str()),
             _ => None,
+        }
+    }
+
+    fn drain_async_until_update(
+        session: &mut JsxRuntimeSession,
+        timeout: Duration,
+    ) -> Option<clay_jsx_egui_bridge::RenderedJsx> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match session
+                .drain_pending_runtime_updates()
+                .expect("draining runtime updates should succeed")
+            {
+                Some(rendered) => return Some(rendered),
+                None if Instant::now() >= deadline => return None,
+                None => std::thread::sleep(Duration::from_millis(5)),
+            }
+        }
+    }
+
+    fn drain_async_until(
+        session: &mut JsxRuntimeSession,
+        timeout: Duration,
+        predicate: impl Fn(&clay_jsx_egui_bridge::RenderedJsx) -> bool,
+    ) -> Option<clay_jsx_egui_bridge::RenderedJsx> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match session
+                .drain_pending_runtime_updates()
+                .expect("draining runtime updates should succeed")
+            {
+                Some(rendered) if predicate(&rendered) => return Some(rendered),
+                Some(_) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Some(_) => return None,
+                None if Instant::now() >= deadline => return None,
+                None => std::thread::sleep(Duration::from_millis(5)),
+            }
         }
     }
 

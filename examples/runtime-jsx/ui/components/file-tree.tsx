@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Icon } from "./primary/icon.tsx";
 import { Label } from "./primary/label.tsx";
@@ -41,7 +41,8 @@ export function FileTreeRow({ item, selectedItemId, depth, treeId, fallback, onS
 }
 
 export function FileTree({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler } & Record<string, unknown>) {
-  return <FileTreeRoot {...props} className={className}>{items.map((item, index) => <FileTreeRow key={itemId(item, String(index))} item={item} selectedItemId={selectedItemId} depth={0} treeId={props.id ?? props.nodeId ?? "file-tree"} fallback={String(index)} onSelect={onSelect} />)}</FileTreeRoot>;
+  const baseId = requireNodeId(props, "FileTree");
+  return <FileTreeRoot {...props} className={className}>{items.map((item, index) => <FileTreeRow key={itemId(item, String(index))} item={item} selectedItemId={selectedItemId} depth={0} treeId={baseId} fallback={String(index)} onSelect={onSelect} />)}</FileTreeRoot>;
 }
 
 function fileTreeIcon(kind: string, open: boolean) {

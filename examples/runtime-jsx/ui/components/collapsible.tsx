@@ -1,6 +1,6 @@
 import { useState } from "egui";
 import { styles } from "../lib/styles.ts";
-import { cn, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -39,7 +39,7 @@ export function Collapsible({
 }: NodeProps & { title?: string; open?: boolean; leadingIcon?: string; trailingIcon?: string } & Record<string, unknown>) {
   const [internalOpen, setInternalOpen] = useState(open ?? true);
   const resolvedOpen = open ?? internalOpen;
-  const baseId = props.id ?? props.nodeId ?? "collapsible";
+  const baseId = requireNodeId(props, "Collapsible");
 
   const setOpen = (next: boolean, event?: unknown) => {
     if (open == null) {

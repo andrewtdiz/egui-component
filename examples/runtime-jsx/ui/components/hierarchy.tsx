@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Icon } from "./primary/icon.tsx";
 import { Label } from "./primary/label.tsx";
@@ -52,7 +52,7 @@ export function HierarchyRow({ item, selectedIds, iconStyle, depth, treeId, fall
 
 export function Hierarchy({ items = [], selectedItemId, selectedItemIds, iconStyle = "emoji", className, onSelect, rowHeight = 32, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; selectedItemIds?: string[]; iconStyle?: string; rowHeight?: number } & Record<string, unknown>) {
   const selectedIds = selectedItemIds ?? (selectedItemId != null ? [selectedItemId] : []);
-  const baseId = props.id ?? props.nodeId ?? "hierarchy";
+  const baseId = requireNodeId(props, "Hierarchy");
   return <HierarchyRoot {...props} className={className}>{items.map((item, index) => <HierarchyRow key={itemId(item, String(index))} item={item} selectedIds={selectedIds} iconStyle={iconStyle} depth={0} treeId={baseId} fallback={String(index)} rowHeight={rowHeight} onSelect={onSelect} />)}</HierarchyRoot>;
 }
 

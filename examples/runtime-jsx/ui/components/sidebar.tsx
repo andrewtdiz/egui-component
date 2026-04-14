@@ -1,4 +1,4 @@
-import { cn, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Label } from "./primary/label.tsx";
@@ -103,7 +103,7 @@ export function Sidebar({
   ...props
 }: SidebarProps) {
   if (!open) return null;
-  const baseId = props.id ?? props.nodeId ?? "sidebar";
+  const baseId = requireNodeId(props, "Sidebar");
   return (
     <SidebarRoot {...props} side={side} className={className}>
       <div className="flex flex-col items-stretch gap-2.5">

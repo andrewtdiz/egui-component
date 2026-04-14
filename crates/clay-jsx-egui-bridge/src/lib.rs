@@ -5,7 +5,9 @@ pub mod motion;
 mod runtime;
 
 pub const EGUI_MODULE_SOURCE: &str = include_str!("mod.js");
-pub const EGUI_JSX_RUNTIME_SOURCE: &str = include_str!("runtime_api.js");
+pub const EGUI_RUNTIME_SOURCE: &str = include_str!("runtime_api.js");
+pub const EGUI_JSX_RUNTIME_SOURCE: &str = include_str!("jsx_runtime_api.js");
+pub const EGUI_LOWERING_SOURCE: &str = include_str!("lowering_api.js");
 pub const EGUI_MOTION_REACT_SOURCE: &str = include_str!("motion_api.js");
 
 pub use clay_jsx_runtime::{
@@ -22,14 +24,20 @@ pub use runtime::{
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
 
     use egui_component::contract::{
         ContractEvent, ContractLength, ContractNode, EventKind, EventValue, NodeId,
     };
     use tempfile::tempdir;
 
-    use super::{JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame, MotionProperty};
+    use super::{
+        HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame, MotionProperty,
+        RenderedJsx,
+    };
 
     #[test]
     fn tsx_entrypoint_transpiles_and_dispatches_hooks() {
@@ -129,7 +137,7 @@ render(<App />);
     }
 
     #[test]
-    fn reload_with_hot_state_preserves_serializable_use_state_across_import_updates() {
+    fn reload_with_hot_state_api_reloads_with_cold_state_across_import_updates() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         let child_path = dir.path().join("copy.tsx");
@@ -209,14 +217,18 @@ export function Copy() {
         let hot_reload_state = session
             .capture_hot_reload_state()
             .expect("hot reload state should be captured");
+        assert!(
+            hot_reload_state.hook_state.is_empty(),
+            "capture is API compatibility only in the React cutover bundle",
+        );
         let (_reloaded_session, rendered) =
             JsxRuntimeSession::load_with_hot_reload_state(&entry_path, Some(&hot_reload_state))
-                .expect("tsx should reload with restored state");
+                .expect("tsx should reload with a cold remount");
         let tree = rendered.tree.expect("reloaded render should return a tree");
-        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(true));
+        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(false));
         assert_eq!(
             label_text(find_node(&tree.root, "status").expect("status label should exist")),
-            Some("On")
+            Some("Off")
         );
         assert_eq!(
             label_text(find_node(&tree.root, "copy").expect("copy label should exist")),
@@ -268,6 +280,10 @@ render(<App />);
         let hot_reload_state = session
             .capture_hot_reload_state()
             .expect("hot reload state should be captured");
+        assert!(
+            hot_reload_state.hook_state.is_empty(),
+            "capture is API compatibility only in the React cutover bundle",
+        );
         std::fs::write(
             &entry_path,
             r#"
@@ -311,7 +327,7 @@ render(<App />);
     }
 
     #[test]
-    fn hot_reload_snapshot_only_includes_currently_rendered_components() {
+    fn hot_reload_capture_returns_the_default_empty_snapshot() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         std::fs::write(
@@ -358,16 +374,14 @@ render(<App />);
         let hot_reload_state = session
             .capture_hot_reload_state()
             .expect("hot reload state should be captured");
-        let hook_keys = hot_reload_state
-            .hook_state
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        assert_eq!(hook_keys, vec!["root:App".to_owned()]);
+        assert!(
+            hot_reload_state.hook_state.is_empty(),
+            "capture returns the default empty snapshot during the React cutover bundle",
+        );
     }
 
     #[test]
-    fn hot_reload_snapshot_drops_components_with_non_serializable_use_state() {
+    fn hot_reload_restore_input_is_ignored() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         std::fs::write(
@@ -409,17 +423,16 @@ render(<App />);
         let tree = rendered.tree.expect("changed render should return a tree");
         assert_eq!(checkbox_value(&tree.root, "toggle"), Some(true));
 
-        let hot_reload_state = session
-            .capture_hot_reload_state()
-            .expect("hot reload state should be captured");
-        assert!(
-            hot_reload_state.hook_state.is_empty(),
-            "non-serializable components should be omitted from hot reload snapshots"
-        );
+        let hot_reload_state = HotReloadState {
+            hook_state: std::collections::BTreeMap::from([(
+                "root:App".to_owned(),
+                vec![serde_json::json!(true)],
+            )]),
+        };
 
         let (_reloaded_session, rendered) =
             JsxRuntimeSession::load_with_hot_reload_state(&entry_path, Some(&hot_reload_state))
-                .expect("tsx should reload with dropped non-serializable state");
+                .expect("tsx should reload with ignored restore input");
         let tree = rendered.tree.expect("reloaded render should return a tree");
         assert_eq!(checkbox_value(&tree.root, "toggle"), Some(false));
         assert_eq!(
@@ -649,6 +662,115 @@ render(<App />);
             error.to_string().contains("Unknown contract family"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn identity_sensitive_families_require_explicit_stable_node_ids() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("missing-input-id.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+
+function App() {
+  return (
+    <div id="root" data-slot="column">
+      <input data-slot="input" value="Name" />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let error =
+            JsxRuntimeSession::load(&entry_path).expect_err("identity-sensitive input should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("requires an explicit stable node_id"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn duplicate_contract_node_ids_fail_clearly() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("duplicate-node-id.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+
+function App() {
+  return (
+    <div id="root" data-slot="column">
+      <label id="dup" text="One" />
+      <label id="dup" text="Two" />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let error =
+            JsxRuntimeSession::load(&entry_path).expect_err("duplicate node ids should fail");
+        assert!(
+            error
+                .to_string()
+                .contains(r#"Duplicate contract node_id "dup""#),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn stateless_layout_and_text_sugar_can_still_use_fallback_node_ids() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("fallback-layout.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+
+function App() {
+  return (
+    <div data-slot="column">
+      <div data-slot="row">
+        <label text="Fallback label" />
+      </div>
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (_session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("stateless fallback ids should render");
+        let tree = rendered.tree.expect("initial render should return a tree");
+        let ContractNode::Column(root) = tree.root else {
+            panic!("expected column root");
+        };
+        assert!(!root.common.node_id.as_str().is_empty());
+        assert_eq!(root.children.len(), 1);
+        let ContractNode::Row(row) = &root.children[0] else {
+            panic!("expected row child");
+        };
+        assert!(!row.common.node_id.as_str().is_empty());
+        assert_eq!(row.children.len(), 1);
+        let ContractNode::Label(label) = &row.children[0] else {
+            panic!("expected label grandchild");
+        };
+        assert!(!label.common.node_id.as_str().is_empty());
+        assert_eq!(label.text, "Fallback label");
     }
 
     #[test]
@@ -891,6 +1013,266 @@ render(
         );
     }
 
+    #[test]
+    fn supported_react_hooks_drive_async_and_subscription_updates() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("hooks.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import {
+  createContext,
+  render,
+  startTransition,
+  useContext,
+  useDeferredValue,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "egui";
+
+const PhaseContext = createContext("boot");
+
+function createStore() {
+  let snapshot = 0;
+  const listeners = new Set();
+  return {
+    getSnapshot() {
+      return snapshot;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    emit(nextValue) {
+      snapshot = nextValue;
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+  };
+}
+
+const store = createStore();
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "loading":
+      return { requestId: action.requestId, status: "loading", summary: "loading" };
+    case "ready":
+      if (action.requestId !== state.requestId) {
+        return state;
+      }
+      return {
+        requestId: action.requestId,
+        status: "ready",
+        summary: `ready:${action.query}`,
+      };
+    default:
+      return state;
+  }
+}
+
+function PhaseLabel() {
+  const phase = useContext(PhaseContext);
+  return <label id="phase" text={phase} />;
+}
+
+function App() {
+  const [query] = useState("runtime");
+  const deferred = useDeferredValue(query);
+  const [state, dispatch] = useReducer(reducer, {
+    requestId: 0,
+    status: "idle",
+    summary: "waiting",
+  });
+  const requestIdRef = useRef(0);
+  const tick = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot,
+  );
+
+  useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    dispatch({ type: "loading", requestId });
+    const timeoutHandle = setTimeout(() => {
+      store.emit(7);
+      startTransition(() => {
+        dispatch({ type: "ready", requestId, query: deferred });
+      });
+    }, 15);
+    return () => clearTimeout(timeoutHandle);
+  }, [deferred]);
+
+  return (
+    <PhaseContext.Provider value={state.status}>
+      <div id="root" data-slot="column">
+        <PhaseLabel />
+        <label id="deferred" text={deferred} />
+        <label id="summary" text={state.summary} />
+        <label id="tick" text={String(tick)} />
+      </div>
+    </PhaseContext.Provider>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        let tree = rendered.tree.expect("initial render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "summary").expect("summary label should exist")),
+            Some("waiting")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "tick").expect("tick label should exist")),
+            Some("0")
+        );
+
+        let rendered = drain_async_until(&mut session, Duration::from_millis(100), |rendered| {
+            let Some(tree) = rendered.tree.as_ref() else {
+                return false;
+            };
+            label_text(find_node(&tree.root, "phase").expect("phase label should exist"))
+                == Some("ready")
+        })
+        .expect("timer-driven async update should arrive");
+        let tree = rendered.tree.expect("async update should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "phase").expect("phase label should exist")),
+            Some("ready")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "deferred").expect("deferred label should exist")),
+            Some("runtime")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "summary").expect("summary label should exist")),
+            Some("ready:runtime")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "tick").expect("tick label should exist")),
+            Some("7")
+        );
+    }
+
+    #[test]
+    fn effect_cleanup_runs_on_dependency_change() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("cleanup.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { log, render, useEffect, useState } from "egui";
+
+function App() {
+  const [phase, setPhase] = useState("alpha");
+
+  useEffect(() => {
+    log("info", `mount:${phase}`);
+    return () => {
+      log("info", `cleanup:${phase}`);
+    };
+  }, [phase]);
+
+  return (
+    <div id="root" data-slot="column">
+      <button id="advance" label="Advance" onClick={() => setPhase("beta")} />
+      <label id="phase" text={phase} />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        assert!(
+            rendered
+                .logs
+                .iter()
+                .any(|entry| entry.contains("mount:alpha")),
+            "expected initial mount log, got {:?}",
+            rendered.logs
+        );
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("advance", EventKind::Clicked)])
+            .expect("event dispatch should rerender");
+        let tree = rendered.tree.expect("changed render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "phase").expect("phase label should exist")),
+            Some("beta")
+        );
+        assert!(
+            rendered
+                .logs
+                .iter()
+                .any(|entry| entry.contains("cleanup:alpha")),
+            "expected cleanup log for alpha, got {:?}",
+            rendered.logs
+        );
+        assert!(
+            rendered
+                .logs
+                .iter()
+                .any(|entry| entry.contains("mount:beta")),
+            "expected mount log for beta, got {:?}",
+            rendered.logs
+        );
+    }
+
+    #[test]
+    fn teardown_runs_effect_cleanup_for_the_live_session() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("teardown.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { log, render, useEffect } from "egui";
+
+function App() {
+  useEffect(() => {
+    const intervalHandle = setInterval(() => log("info", "tick"), 100);
+    return () => {
+      clearInterval(intervalHandle);
+      log("info", "cleanup:teardown");
+    };
+  }, []);
+
+  return (
+    <div id="root" data-slot="column">
+      <label id="status" text="mounted" />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, _rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        let logs = session.teardown().expect("teardown should succeed");
+        assert!(
+            logs.iter().any(|entry| entry.contains("cleanup:teardown")),
+            "expected teardown cleanup log, got {:?}",
+            logs
+        );
+    }
+
     fn repository_example_path() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -952,6 +1334,28 @@ render(
             ContractNode::AudioPlayback(props) => &props.children,
             ContractNode::ImageTile(props) => &props.children,
             _ => &[],
+        }
+    }
+
+    fn drain_async_until(
+        session: &mut JsxRuntimeSession,
+        timeout: Duration,
+        predicate: impl Fn(&RenderedJsx) -> bool,
+    ) -> Option<RenderedJsx> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match session
+                .drain_pending_runtime_updates()
+                .expect("draining runtime updates should succeed")
+            {
+                Some(rendered) if predicate(&rendered) => return Some(rendered),
+                Some(_) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Some(_) => return None,
+                None if Instant::now() >= deadline => return None,
+                None => std::thread::sleep(Duration::from_millis(5)),
+            }
         }
     }
 

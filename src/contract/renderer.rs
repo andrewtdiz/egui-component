@@ -514,9 +514,12 @@ impl FrameRenderer {
         let mut selected = None;
         ui.ui_mut().horizontal(|ui| {
             for menu in &props.menus {
-                ui.menu_button(menu.label.as_str(), |ui| {
-                    ui.set_min_width(menu.width.max(160.0));
-                    render_contract_menu_entries(ui, menu.entries.as_slice(), &mut selected);
+                let menu_id = make_item_id(&props.common.node_id, "menu", menu.menu_id.as_str());
+                let _ = ui.push_id(menu_id, |ui| {
+                    ui.menu_button(menu.label.as_str(), |ui| {
+                        ui.set_min_width(menu.width.max(160.0));
+                        render_contract_menu_entries(ui, menu.entries.as_slice(), &mut selected);
+                    });
                 });
             }
         });
@@ -567,6 +570,11 @@ impl FrameRenderer {
                     button = button.leading_icon(icon);
                 }
                 button = button
+                    .id(make_item_id(
+                        &props.common.node_id,
+                        "tab",
+                        item.item_id.as_str(),
+                    ))
                     .variant(match props.style {
                         ContractTabsStyle::Underline => {
                             if selected {
@@ -752,7 +760,9 @@ impl FrameRenderer {
 
     fn render_input(&mut self, ui: &mut ComponentUi<'_>, props: &ContractInput) {
         let mut value = props.value.clone();
-        let mut input = TextInput::new().width(props.width);
+        let mut input = TextInput::new()
+            .id(make_id(&props.common.node_id, "input"))
+            .width(props.width);
         if let Some(placeholder) = props.placeholder.as_deref() {
             input = input.placeholder(placeholder);
         }
@@ -813,8 +823,10 @@ impl FrameRenderer {
     fn render_checkbox(&mut self, ui: &mut ComponentUi<'_>, props: &ContractCheckbox) {
         let mut value = props.value;
         let checkbox = match props.label.as_deref() {
-            Some(label) => Checkbox::new().label(label),
-            None => Checkbox::new(),
+            Some(label) => Checkbox::new()
+                .id(make_id(&props.common.node_id, "checkbox"))
+                .label(label),
+            None => Checkbox::new().id(make_id(&props.common.node_id, "checkbox")),
         };
         let _ = ui.checkbox(&mut value, checkbox);
         if value != props.value {
@@ -830,7 +842,7 @@ impl FrameRenderer {
 
     fn render_switch(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSwitch) {
         let mut value = props.value;
-        let mut switch = Switch::new();
+        let mut switch = Switch::new().id(make_id(&props.common.node_id, "switch"));
         if let Some(label) = props.label.as_deref() {
             switch = switch.label(label);
         }
@@ -907,6 +919,7 @@ impl FrameRenderer {
             let response = components.text_input(
                 &mut value,
                 TextInput::new()
+                    .id(make_id(&props.common.node_id, "field_input"))
                     .width(props.width)
                     .placeholder(props.placeholder.as_deref().unwrap_or_default()),
             );
@@ -1193,15 +1206,13 @@ impl FrameRenderer {
     }
 
     fn render_hierarchy(&mut self, ui: &mut ComponentUi<'_>, props: &ContractHierarchy) {
-        let mut bindings = Vec::new();
-        let mut next_runtime_id = 0usize;
-        let mut runtime_nodes =
-            build_runtime_hierarchy(&props.items, &mut bindings, &mut next_runtime_id);
-        let mut selected_runtime = props.selected_item_id.as_deref().and_then(|item_id| {
-            bindings
-                .iter()
-                .position(|binding| binding.item_id == item_id)
-        });
+        let runtime_ids = hierarchy_runtime_ids(&props.items);
+        let mut bindings = BTreeMap::new();
+        let mut runtime_nodes = build_runtime_hierarchy(&props.items, &runtime_ids, &mut bindings);
+        let mut selected_runtime = props
+            .selected_item_id
+            .as_deref()
+            .and_then(|item_id| runtime_ids.get(item_id).copied());
         let previous_selected = selected_runtime;
         let mut hierarchy = HierarchyWidget::new(
             make_id(&props.common.node_id, "hierarchy"),
@@ -1220,7 +1231,7 @@ impl FrameRenderer {
         let _ = ui.hierarchy(&mut selected_runtime, hierarchy);
 
         if selected_runtime != previous_selected {
-            match selected_runtime.and_then(|index| bindings.get(index)) {
+            match selected_runtime.and_then(|id| bindings.get(&id)) {
                 Some(binding) => self.emit_item(
                     &props.common.node_id,
                     EventKind::Selected,
@@ -1242,7 +1253,7 @@ impl FrameRenderer {
             &props.common.node_id,
             props.action_id.as_ref(),
             runtime_nodes.as_slice(),
-            bindings.as_slice(),
+            &bindings,
         );
     }
 
@@ -1321,7 +1332,9 @@ impl FrameRenderer {
         let mut value = props.value;
         let _ = ui.slider(
             &mut value,
-            Slider::new(props.min..=props.max).width(props.width),
+            Slider::new(props.min..=props.max)
+                .id(make_id(&props.common.node_id, "slider"))
+                .width(props.width),
         );
         if (value - props.value).abs() > f32::EPSILON {
             self.emit_value(
@@ -1336,7 +1349,7 @@ impl FrameRenderer {
 
     fn render_radio(&mut self, ui: &mut ComponentUi<'_>, props: &ContractRadio) {
         let mut value = props.value;
-        let mut radio = Radio::new();
+        let mut radio = Radio::new().id(make_id(&props.common.node_id, "radio"));
         if let Some(label) = props.label.as_deref() {
             radio = radio.label(label);
         }
@@ -1408,44 +1421,56 @@ impl FrameRenderer {
         let previous_item_ids = selected_item_ids.clone();
         let summary = compat_combobox_summary(selected_item_ids.as_slice(), props);
 
-        ui.ui_mut().menu_button(summary, |ui| {
-            ui.set_min_width(props.width.max(180.0));
-            if props.searchable {
-                let mut components = ui.components();
-                let _ = components.text_input(
-                    &mut query,
-                    TextInput::new()
-                        .width(props.width.max(180.0))
-                        .placeholder(props.filter_placeholder.as_deref().unwrap_or("Filter")),
-                );
-                components.add_space(6.0);
-            }
-
-            let query_lower = query.trim().to_ascii_lowercase();
-            for item in &props.items {
-                if !query_lower.is_empty()
-                    && !item
-                        .label
-                        .to_ascii_lowercase()
-                        .contains(query_lower.as_str())
-                {
-                    continue;
+        let combobox_id = make_id(&props.common.node_id, "combobox");
+        let _ = ui.ui_mut().push_id(combobox_id, |ui| {
+            ui.menu_button(summary, |ui| {
+                ui.set_min_width(props.width.max(180.0));
+                if props.searchable {
+                    let mut components = ui.components();
+                    let _ = components.text_input(
+                        &mut query,
+                        TextInput::new()
+                            .id(make_id(&props.common.node_id, "combobox_query"))
+                            .width(props.width.max(180.0))
+                            .placeholder(props.filter_placeholder.as_deref().unwrap_or("Filter")),
+                    );
+                    components.add_space(6.0);
                 }
 
-                let selected = selected_item_ids.iter().any(|value| value == &item.item_id);
-                let label = if selected {
-                    format!("✓ {}", item.label)
-                } else {
-                    item.label.clone()
-                };
-                if ui.button(label).clicked() {
-                    if selected {
-                        selected_item_ids.retain(|value| value != &item.item_id);
+                let query_lower = query.trim().to_ascii_lowercase();
+                for item in &props.items {
+                    if !query_lower.is_empty()
+                        && !item
+                            .label
+                            .to_ascii_lowercase()
+                            .contains(query_lower.as_str())
+                    {
+                        continue;
+                    }
+
+                    let selected = selected_item_ids.iter().any(|value| value == &item.item_id);
+                    let label = if selected {
+                        format!("✓ {}", item.label)
                     } else {
-                        selected_item_ids.push(item.item_id.clone());
+                        item.label.clone()
+                    };
+                    let response = ui.push_id(
+                        make_item_id(
+                            &props.common.node_id,
+                            "combobox_item",
+                            item.item_id.as_str(),
+                        ),
+                        |ui| ui.button(label),
+                    );
+                    if response.inner.clicked() {
+                        if selected {
+                            selected_item_ids.retain(|value| value != &item.item_id);
+                        } else {
+                            selected_item_ids.push(item.item_id.clone());
+                        }
                     }
                 }
-            }
+            });
         });
 
         if selected_item_ids != previous_item_ids {
@@ -1473,14 +1498,22 @@ impl FrameRenderer {
         ];
         let label = props.placeholder.as_deref().unwrap_or(props.value.as_str());
         let mut next_value = None;
-        let _ = ui.ui_mut().menu_button(label, |ui| {
-            for emoji in COMPAT_EMOJIS {
-                if ui.button(*emoji).clicked() {
-                    next_value = Some((*emoji).to_owned());
-                    ui.close();
-                }
-            }
-        });
+        let _ = ui
+            .ui_mut()
+            .push_id(make_id(&props.common.node_id, "emoji_selector"), |ui| {
+                ui.menu_button(label, |ui| {
+                    for emoji in COMPAT_EMOJIS {
+                        let response = ui
+                            .push_id(make_item_id(&props.common.node_id, "emoji", emoji), |ui| {
+                                ui.button(*emoji)
+                            });
+                        if response.inner.clicked() {
+                            next_value = Some((*emoji).to_owned());
+                            ui.close();
+                        }
+                    }
+                });
+            });
         if let Some(value) = next_value.filter(|value| value != &props.value) {
             self.emit_value(
                 &props.common.node_id,
@@ -1625,7 +1658,12 @@ impl FrameRenderer {
         if let Some(variant) = props.trigger_variant {
             dropdown = dropdown.trigger_variant(variant);
         }
-        let (_, state) = ui.dropdown_menu(dropdown);
+        let (_, state) = ui
+            .ui_mut()
+            .push_id(make_id(&props.common.node_id, "dropdown_menu"), |ui| {
+                ComponentUi::new(ui).dropdown_menu(dropdown)
+            })
+            .inner;
         self.emit_menu_action(
             &props.common.node_id,
             props.action_id.as_ref(),
@@ -1670,7 +1708,12 @@ impl FrameRenderer {
         if let Some(variant) = props.trigger_variant {
             dropdown = dropdown.trigger_variant(variant);
         }
-        let (_, state) = ui.dropdown_menu(dropdown);
+        let (_, state) = ui
+            .ui_mut()
+            .push_id(make_id(&props.common.node_id, "open_with"), |ui| {
+                ComponentUi::new(ui).dropdown_menu(dropdown)
+            })
+            .inner;
         self.emit_menu_action(
             &props.common.node_id,
             props.action_id.as_ref(),
@@ -1732,13 +1775,13 @@ impl FrameRenderer {
     }
 
     fn render_file_tree(&mut self, ui: &mut ComponentUi<'_>, props: &ContractFileTree) {
-        let mut bindings = Vec::new();
-        let mut runtime_nodes = build_runtime_file_tree(&props.items, &mut bindings);
-        let mut selected_id = props.selected_item_id.as_deref().and_then(|item_id| {
-            bindings
-                .iter()
-                .position(|binding| binding.item_id == item_id)
-        });
+        let runtime_ids = file_tree_runtime_ids(&props.items);
+        let mut bindings = BTreeMap::new();
+        let mut runtime_nodes = build_runtime_file_tree(&props.items, &runtime_ids, &mut bindings);
+        let mut selected_id = props
+            .selected_item_id
+            .as_deref()
+            .and_then(|item_id| runtime_ids.get(item_id).copied());
         let previous_selected_id = selected_id;
         let _ = ui.file_tree(
             &mut selected_id,
@@ -1751,7 +1794,7 @@ impl FrameRenderer {
             .indent_width(props.indent_width),
         );
         if selected_id != previous_selected_id {
-            if let Some(binding) = selected_id.and_then(|index| bindings.get(index)) {
+            if let Some(binding) = selected_id.and_then(|id| bindings.get(&id)) {
                 self.emit_item(
                     &props.common.node_id,
                     EventKind::Selected,
@@ -1765,22 +1808,25 @@ impl FrameRenderer {
             &props.common.node_id,
             props.action_id.as_ref(),
             runtime_nodes.as_slice(),
-            bindings.as_slice(),
+            &bindings,
         );
     }
 
     fn render_drag_board(&mut self, ui: &mut ComponentUi<'_>, props: &ContractDragBoard) {
-        let items = props
-            .items
-            .iter()
-            .map(|item| {
-                let mut runtime_item = DragBoardItem::new(item.title.as_str());
-                if let Some(description) = item.description.as_deref() {
-                    runtime_item = runtime_item.description(description);
-                }
-                runtime_item
-            })
-            .collect::<Vec<_>>();
+        let items =
+            props
+                .items
+                .iter()
+                .map(|item| {
+                    let mut runtime_item = DragBoardItem::new(item.title.as_str()).id(
+                        make_item_id(&props.common.node_id, "drag_item", item.item_id.as_str()),
+                    );
+                    if let Some(description) = item.description.as_deref() {
+                        runtime_item = runtime_item.description(description);
+                    }
+                    runtime_item
+                })
+                .collect::<Vec<_>>();
         let mut regions = props
             .items
             .iter()
@@ -1919,11 +1965,23 @@ impl FrameRenderer {
                 12,
                 |ui| {
                     ui.set_min_height(props.preview_height.max(1.0));
-                    render_contract_command_panel(ui, &mut query, props, placeholder);
+                    render_contract_command_panel(
+                        ui,
+                        &props.common.node_id,
+                        &mut query,
+                        props,
+                        placeholder,
+                    );
                 },
             );
         } else {
-            render_contract_command_panel(ui.raw_mut(), &mut query, props, placeholder);
+            render_contract_command_panel(
+                ui.raw_mut(),
+                &props.common.node_id,
+                &mut query,
+                props,
+                placeholder,
+            );
         }
 
         if query != previous_query {
@@ -1960,10 +2018,10 @@ impl FrameRenderer {
         node_id: &crate::contract::NodeId,
         hierarchy_action: Option<&ActionId>,
         nodes: &[HierarchyWidgetNode],
-        bindings: &[HierarchyBinding<'_>],
+        bindings: &BTreeMap<usize, HierarchyBinding<'_>>,
     ) {
         for node in nodes {
-            if let Some(binding) = bindings.get(node.id) {
+            if let Some(binding) = bindings.get(&node.id) {
                 if node.expanded != binding.open {
                     self.emit_item(
                         node_id,
@@ -1992,10 +2050,10 @@ impl FrameRenderer {
         node_id: &NodeId,
         file_tree_action: Option<&ActionId>,
         nodes: &[FileTreeNode<'_>],
-        bindings: &[HierarchyBinding<'_>],
+        bindings: &BTreeMap<usize, HierarchyBinding<'_>>,
     ) {
         for node in nodes {
-            if let Some(binding) = bindings.get(node.id) {
+            if let Some(binding) = bindings.get(&node.id) {
                 if node.expanded != binding.open {
                     self.emit_item(
                         node_id,
@@ -2915,29 +2973,77 @@ fn make_id(node_id: &crate::contract::NodeId, suffix: &str) -> Id {
     Id::new(("contract", node_id.as_str(), suffix))
 }
 
+fn make_item_id(node_id: &crate::contract::NodeId, scope: &str, item_id: &str) -> Id {
+    Id::new(("contract", node_id.as_str(), scope, item_id))
+}
+
+fn hierarchy_runtime_ids<'a>(items: &'a [ContractHierarchyItem]) -> BTreeMap<&'a str, usize> {
+    let mut item_ids = BTreeSet::new();
+    collect_hierarchy_item_ids(items, &mut item_ids);
+    item_ids
+        .into_iter()
+        .enumerate()
+        .map(|(index, item_id)| (item_id, index))
+        .collect()
+}
+
+fn collect_hierarchy_item_ids<'a>(
+    items: &'a [ContractHierarchyItem],
+    item_ids: &mut BTreeSet<&'a str>,
+) {
+    for item in items {
+        item_ids.insert(item.item_id.as_str());
+        collect_hierarchy_item_ids(item.children.as_slice(), item_ids);
+    }
+}
+
+fn file_tree_runtime_ids<'a>(items: &'a [ContractFileTreeItem]) -> BTreeMap<&'a str, usize> {
+    let mut item_ids = BTreeSet::new();
+    collect_file_tree_item_ids(items, &mut item_ids);
+    item_ids
+        .into_iter()
+        .enumerate()
+        .map(|(index, item_id)| (item_id, index))
+        .collect()
+}
+
+fn collect_file_tree_item_ids<'a>(
+    items: &'a [ContractFileTreeItem],
+    item_ids: &mut BTreeSet<&'a str>,
+) {
+    for item in items {
+        item_ids.insert(item.item_id.as_str());
+        collect_file_tree_item_ids(item.children.as_slice(), item_ids);
+    }
+}
+
 fn build_runtime_hierarchy<'a>(
     items: &'a [ContractHierarchyItem],
-    bindings: &mut Vec<HierarchyBinding<'a>>,
-    next_runtime_id: &mut usize,
+    runtime_ids: &BTreeMap<&'a str, usize>,
+    bindings: &mut BTreeMap<usize, HierarchyBinding<'a>>,
 ) -> Vec<HierarchyWidgetNode> {
     items
         .iter()
         .map(|item| {
-            let runtime_id = *next_runtime_id;
-            *next_runtime_id = next_runtime_id.saturating_add(1);
-            bindings.push(HierarchyBinding {
-                item_id: item.item_id.as_str(),
-                label: item.label.as_str(),
-                action_id: item.action_id.as_ref(),
-                open: item.open,
-            });
+            let runtime_id = *runtime_ids
+                .get(item.item_id.as_str())
+                .expect("missing runtime hierarchy id");
+            let _ = bindings.insert(
+                runtime_id,
+                HierarchyBinding {
+                    item_id: item.item_id.as_str(),
+                    label: item.label.as_str(),
+                    action_id: item.action_id.as_ref(),
+                    open: item.open,
+                },
+            );
             HierarchyWidgetNode::new(runtime_id, item.label.as_str(), item.kind)
                 .expanded(item.open)
                 .locked(item.locked)
                 .children(build_runtime_hierarchy(
                     item.children.as_slice(),
+                    runtime_ids,
                     bindings,
-                    next_runtime_id,
                 ))
         })
         .collect()
@@ -2945,21 +3051,31 @@ fn build_runtime_hierarchy<'a>(
 
 fn build_runtime_file_tree<'a>(
     items: &'a [ContractFileTreeItem],
-    bindings: &mut Vec<HierarchyBinding<'a>>,
+    runtime_ids: &BTreeMap<&'a str, usize>,
+    bindings: &mut BTreeMap<usize, HierarchyBinding<'a>>,
 ) -> Vec<FileTreeNode<'a>> {
     items
         .iter()
         .map(|item| {
-            let runtime_id = bindings.len();
-            bindings.push(HierarchyBinding {
-                item_id: item.item_id.as_str(),
-                label: item.label.as_str(),
-                action_id: item.action_id.as_ref(),
-                open: item.open,
-            });
+            let runtime_id = *runtime_ids
+                .get(item.item_id.as_str())
+                .expect("missing runtime file-tree id");
+            let _ = bindings.insert(
+                runtime_id,
+                HierarchyBinding {
+                    item_id: item.item_id.as_str(),
+                    label: item.label.as_str(),
+                    action_id: item.action_id.as_ref(),
+                    open: item.open,
+                },
+            );
             FileTreeNode::new(runtime_id, item.label.as_str(), item.kind)
                 .expanded(item.open)
-                .children(build_runtime_file_tree(item.children.as_slice(), bindings))
+                .children(build_runtime_file_tree(
+                    item.children.as_slice(),
+                    runtime_ids,
+                    bindings,
+                ))
         })
         .collect()
 }
@@ -3016,6 +3132,7 @@ fn compat_combobox_summary(selected_item_ids: &[String], props: &ContractCombobo
 
 fn render_contract_command_panel(
     ui: &mut egui::Ui,
+    node_id: &crate::contract::NodeId,
     query: &mut String,
     props: &ContractCommand,
     placeholder: &str,
@@ -3036,7 +3153,10 @@ fn render_contract_command_panel(
             let mut components = ui.components();
             let _ = components.text_input(
                 query,
-                TextInput::new().width(props.width).placeholder(placeholder),
+                TextInput::new()
+                    .id(make_id(node_id, "command_query"))
+                    .width(props.width)
+                    .placeholder(placeholder),
             );
             components.add_space(6.0);
             let _ = components.separator();
@@ -3060,6 +3180,7 @@ fn render_contract_command_panel(
                 .collect::<Vec<_>>();
 
             let _ = egui::ScrollArea::vertical()
+                .id_salt(make_id(node_id, "command_scroll"))
                 .no_drag_to_scroll()
                 .max_height(props.max_height)
                 .auto_shrink([false, false])
@@ -3077,8 +3198,9 @@ fn render_contract_command_panel(
                             } else {
                                 format!("{} - {}", item.group, item.label)
                             };
-                            let mut button =
-                                Button::new(display.as_str()).variant(ButtonVariant::Ghost);
+                            let mut button = Button::new(display.as_str())
+                                .id(make_item_id(node_id, "command_item", item.item_id.as_str()))
+                                .variant(ButtonVariant::Ghost);
                             if let Some(shortcut) = item.shortcut.as_deref() {
                                 button = button.trailing_text(shortcut);
                             }
@@ -3619,15 +3741,15 @@ mod tests {
     use super::{
         class_background_color, class_corner_radius, class_label_weight, class_shadow, class_spec,
         class_text_color, class_text_size, container_layout_plan, contract_toast_shadow,
-        effective_layout, render_tree, resolved_icon_tint, should_emit_dialogue_closed,
+        effective_layout, make_id, render_tree, resolved_icon_tint, should_emit_dialogue_closed,
         taffy_item_style, TaffyDisplay,
     };
     use crate::contract::{
         ContractActions, ContractAlign, ContractButton, ContractColumn, ContractCommon,
-        ContractDirection, ContractDisplay, ContractEdges, ContractIcon, ContractJustify,
-        ContractLabel, ContractLayout, ContractLength, ContractNode, ContractOverflow,
-        ContractSizedBox, ContractToastItem, ContractToastViewport, ContractTrack, ContractTree,
-        EventKind,
+        ContractDirection, ContractDisplay, ContractDropdownMenu, ContractEdges, ContractIcon,
+        ContractInput, ContractJustify, ContractLabel, ContractLayout, ContractLength,
+        ContractMenuAction, ContractMenuEntry, ContractNode, ContractOverflow, ContractSizedBox,
+        ContractToastItem, ContractToastViewport, ContractTrack, ContractTree, EventKind, NodeId,
     };
     use crate::layout::taffy;
     use crate::runtime_components::{LabelWeight, ToastIntent};
@@ -3653,6 +3775,76 @@ mod tests {
             });
         });
         events
+    }
+
+    fn run_frame_output(
+        context: &Context,
+        input: RawInput,
+        tree: &ContractTree,
+    ) -> egui::FullOutput {
+        context.run(input, |context| {
+            CentralPanel::default().show(context, |ui| {
+                let _ = render_tree(ui, tree);
+            });
+        })
+    }
+
+    fn press_at(position: egui::Pos2) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            ..RawInput::default()
+        }
+    }
+
+    fn release_at(position: egui::Pos2) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            ..RawInput::default()
+        }
+    }
+
+    fn input_tree(node_id: &str, value: &str) -> ContractTree {
+        ContractTree::new(ContractNode::Input(ContractInput {
+            common: ContractCommon::new(node_id),
+            value: value.to_owned(),
+            action_id: None,
+            placeholder: Some("Search".to_owned()),
+            leading_icon: None,
+            width: 240.0,
+        }))
+    }
+
+    fn dropdown_menu_tree(node_id: &str) -> ContractTree {
+        ContractTree::new(ContractNode::DropdownMenu(ContractDropdownMenu {
+            common: ContractCommon::new(node_id),
+            action_id: None,
+            trigger_label: "Actions".to_owned(),
+            width: 220.0,
+            trigger_variant: None,
+            entries: vec![ContractMenuEntry::Action(ContractMenuAction {
+                item_id: "settings".to_owned(),
+                label: "Settings".to_owned(),
+                action_id: None,
+                leading_icon: None,
+                shortcut: None,
+            })],
+        }))
     }
 
     #[test]
@@ -3704,6 +3896,67 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::Clicked);
+    }
+
+    #[test]
+    fn text_input_focus_persists_for_a_stable_node_id_across_rerenders() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let focus_id = make_id(&NodeId::from("search"), "input");
+        let tree = input_tree("search", "alpha");
+
+        let _ = run_frame(&context, RawInput::default(), &tree);
+        let _ = run_frame(&context, press_at(pos2(20.0, 20.0)), &tree);
+        let _ = run_frame(&context, release_at(pos2(20.0, 20.0)), &tree);
+        assert_eq!(context.memory(|mem| mem.focused()), Some(focus_id));
+
+        let rerendered_tree = input_tree("search", "beta");
+        let _ = run_frame(&context, RawInput::default(), &rerendered_tree);
+        assert_eq!(context.memory(|mem| mem.focused()), Some(focus_id));
+    }
+
+    #[test]
+    fn changing_text_input_node_id_resets_focus_state() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let original_focus_id = make_id(&NodeId::from("search-a"), "input");
+        let next_focus_id = make_id(&NodeId::from("search-b"), "input");
+        let tree = input_tree("search-a", "alpha");
+
+        let _ = run_frame(&context, RawInput::default(), &tree);
+        let _ = run_frame(&context, press_at(pos2(20.0, 20.0)), &tree);
+        let _ = run_frame(&context, release_at(pos2(20.0, 20.0)), &tree);
+        assert_eq!(context.memory(|mem| mem.focused()), Some(original_focus_id));
+
+        let rerendered_tree = input_tree("search-b", "alpha");
+        let _ = run_frame(&context, RawInput::default(), &rerendered_tree);
+        let _ = run_frame(&context, RawInput::default(), &rerendered_tree);
+        assert!(!context.memory(|mem| mem.has_focus(original_focus_id)));
+        assert!(!context.memory(|mem| mem.has_focus(next_focus_id)));
+    }
+
+    #[test]
+    fn dropdown_menu_open_state_tracks_node_id_identity() {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+        let tree = dropdown_menu_tree("menu-a");
+
+        let _ = run_frame(&context, RawInput::default(), &tree);
+        let _ = run_frame(&context, press_at(pos2(20.0, 20.0)), &tree);
+        let _ = run_frame(&context, release_at(pos2(20.0, 20.0)), &tree);
+
+        let stable_output = run_frame_output(&context, RawInput::default(), &tree);
+        assert!(
+            find_text_shape(&stable_output.shapes, "Settings").is_some(),
+            "same node_id should retain the open dropdown menu"
+        );
+
+        let changed_output =
+            run_frame_output(&context, RawInput::default(), &dropdown_menu_tree("menu-b"));
+        assert!(
+            find_text_shape(&changed_output.shapes, "Settings").is_none(),
+            "changing node_id should reset the open dropdown menu state"
+        );
     }
 
     #[test]

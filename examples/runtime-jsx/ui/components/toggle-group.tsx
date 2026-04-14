@@ -1,4 +1,4 @@
-import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -54,7 +54,7 @@ export function ToggleGroupItem({
 }
 
 export function ToggleGroup({ items = [], selectedItemId, className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "toggle";
+  const baseId = requireNodeId(props, "ToggleGroup");
   return (
     <ToggleGroupRoot {...props} className={className}>
       {items.map((item, index) => (

@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, type Handler, type NodeProps, nodeProps, scopedId } from "../component-support.ts";
+import { cn, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Image } from "./primary/image.tsx";
@@ -12,7 +12,6 @@ export function ImageTilePlaybackButton({ playbackState = "paused", className, .
   return (
     <Button
       {...props}
-      id={scopedId(props, "image-tile", "playback")}
       iconOnly
       leadingIcon={playbackState === "playing" ? "pause" : "play"}
       variant="primary"
@@ -24,13 +23,14 @@ export function ImageTilePlaybackButton({ playbackState = "paused", className, .
 }
 
 export function ImageTileMedia({ source = "builtin:showcase-image", playbackState, className, ...props }: NodeProps & { source?: string; playbackState?: string } & Record<string, unknown>) {
+  const baseId = requireNodeId(props, "ImageTileMedia");
   return (
     <Card {...props} className={cn("bg-card border-border rounded-md", className)} paddingX={0} paddingY={0}>
       <div className="flex flex-col items-stretch gap-0">
-        <Image id={scopedId(props, "image-tile", "image")} source={source} width={props.width ?? 144} height={props.height ?? 96} cornerRadius={6} />
+        <Image id={`${baseId}-image`} source={source} width={props.width ?? 144} height={props.height ?? 96} cornerRadius={6} />
         {playbackState != null && (
           <div className="flex flex-row justify-end p-1">
-            <ImageTilePlaybackButton playbackState={playbackState} onToggle={props.onToggle} />
+            <ImageTilePlaybackButton id={`${baseId}-playback`} playbackState={playbackState} onToggle={props.onToggle} />
           </div>
         )}
       </div>
@@ -43,10 +43,11 @@ export function ImageTileContent({ children, className, ...props }: NodeProps & 
 }
 
 export function ImageTile({ children, source = "builtin:showcase-image", selected = false, playbackState, className, onClick, onToggle, ...props }: NodeProps & { selected?: boolean; playbackState?: string; onToggle?: Handler } & Record<string, unknown>) {
+  const baseId = requireNodeId(props, "ImageTile");
   return (
     <ImageTileRoot {...props} selected={selected} className={className} onClick={onClick}>
       <ImageTileContent>
-        <ImageTileMedia source={source} playbackState={playbackState} width={props.width} height={props.height} onToggle={onToggle} />
+        <ImageTileMedia id={`${baseId}-media`} source={source} playbackState={playbackState} width={props.width} height={props.height} onToggle={onToggle} />
         {children}
       </ImageTileContent>
     </ImageTileRoot>

@@ -8,8 +8,9 @@ const RADIO_GROUP_GAP: f32 = 8.0;
 const RADIO_LABEL_GAP: f32 = 10.0;
 const RADIO_TEXT_GAP: f32 = 2.0;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Radio<'a> {
+    pub id: Option<Id>,
     pub label: Option<&'a str>,
     pub description: Option<&'a str>,
 }
@@ -17,9 +18,15 @@ pub struct Radio<'a> {
 impl<'a> Radio<'a> {
     pub fn new() -> Self {
         Self {
+            id: None,
             label: None,
             description: None,
         }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     pub fn label(mut self, label: &'a str) -> Self {
@@ -165,6 +172,16 @@ fn draw_radio_group(ui: &mut Ui, current: &mut Option<usize>, props: RadioGroup<
 }
 
 fn draw_radio(ui: &mut Ui, selected: bool, props: Radio<'_>) -> Response {
+    if let Some(id) = props.id.clone() {
+        return ui
+            .push_id(id, |ui| draw_radio_inner(ui, selected, props))
+            .inner;
+    }
+
+    draw_radio_inner(ui, selected, props)
+}
+
+fn draw_radio_inner(ui: &mut Ui, selected: bool, props: Radio<'_>) -> Response {
     let has_text = props.label.is_some() || props.description.is_some();
     if !has_text {
         return draw_radio_control(ui, selected).on_hover_cursor(CursorIcon::PointingHand);

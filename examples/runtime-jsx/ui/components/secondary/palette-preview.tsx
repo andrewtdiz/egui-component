@@ -1,13 +1,14 @@
-import { cn, type NodeProps, scopedId } from "../../component-support.ts";
+import { cn, type NodeProps, requireNodeId } from "../../component-support.ts";
 import { Card } from "../card.tsx";
 import { ColorStrip } from "./color-strip.tsx";
 
 export type PalettePreviewProps = NodeProps & { colors?: string[] } & Record<string, unknown>;
 
 export function PalettePreview({ colors = ["#111827", "#2896ff", "#10b981", "#f43f5e"], className, ...props }: PalettePreviewProps) {
+  const baseId = requireNodeId(props, "PalettePreview");
   return (
     <PalettePreviewRoot {...props} className={className}>
-      <PalettePreviewSwatches id={scopedId(props, "palette", "strip")} colors={colors} />
+      <PalettePreviewSwatches id={`${baseId}-strip`} colors={colors} />
     </PalettePreviewRoot>
   );
 }

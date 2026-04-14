@@ -1,18 +1,27 @@
 use super::api::ComponentUi;
 use crate::ui::tokens;
-use egui::{CornerRadius, CursorIcon, Response, RichText, Sense, Stroke, StrokeKind, Ui};
+use egui::{CornerRadius, CursorIcon, Id, Response, RichText, Sense, Stroke, StrokeKind, Ui};
 
 const CHECKBOX_CONTROL_SIZE: f32 = 16.0;
 const CHECKBOX_CORNER_RADIUS: u8 = 4;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Checkbox<'a> {
+    pub id: Option<Id>,
     pub label: Option<&'a str>,
 }
 
 impl<'a> Checkbox<'a> {
     pub fn new() -> Self {
-        Self { label: None }
+        Self {
+            id: None,
+            label: None,
+        }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     pub fn label(mut self, label: &'a str) -> Self {
@@ -46,6 +55,16 @@ impl ComponentUi<'_> {
 }
 
 fn draw_checkbox(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response {
+    if let Some(id) = props.id.clone() {
+        return ui
+            .push_id(id, |ui| draw_checkbox_inner(ui, value, props))
+            .inner;
+    }
+
+    draw_checkbox_inner(ui, value, props)
+}
+
+fn draw_checkbox_inner(ui: &mut Ui, value: &mut bool, props: Checkbox<'_>) -> Response {
     let runtime = crate::theme::runtime_for_ui(ui);
     match props.label {
         Some(label_text) => {

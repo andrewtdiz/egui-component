@@ -6,6 +6,7 @@ mod runtime;
 pub const CLAY_JSX_RUNTIME_SPECIFIER: &str = "clay-internal:/jsx-runtime";
 pub const CLAY_JSX_RUNTIME_SOURCE_PATH: &str = "crates/clay-jsx-runtime/src/clay_jsx_runtime.ts";
 pub const CLAY_JSX_RUNTIME_SOURCE: &str = include_str!("clay_jsx_runtime.ts");
+pub const HOST_RUNTIME_SOURCE: &str = include_str!("host_runtime_api.js");
 
 pub const REACT_SOURCE: &str = include_str!("vendor/react_19_2_5.mjs");
 pub const REACT_JSX_RUNTIME_SOURCE: &str = include_str!("vendor/react_jsx_runtime_19_2_5.mjs");

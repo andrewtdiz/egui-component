@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, type NodeProps, nodeProps, scopedId } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Progress } from "./primary/progress.tsx";
@@ -7,14 +7,15 @@ import { Progress } from "./primary/progress.tsx";
 export type AudioPlaybackProps = NodeProps & { playbackState?: string } & Record<string, unknown>;
 
 export function AudioPlayback({ children, playbackState = "paused", className, onToggle, ...props }: AudioPlaybackProps) {
+  const baseId = requireNodeId(props, "AudioPlayback");
   const playing = playbackState === "playing" || playbackState === "Playing";
   const value = typeof props.value === "number" ? props.value : playing ? 0.66 : 0.28;
 
   return (
     <AudioPlaybackRoot {...props} className={className}>
       <AudioPlaybackControls>
-        <AudioPlaybackButton id={scopedId(props, "audio-playback", "playback")} playing={playing} onClick={onToggle ?? props.onClick} />
-        <AudioPlaybackScrubber id={scopedId(props, "audio-playback", "waveform")} value={value} width={props.width ?? 188} />
+        <AudioPlaybackButton id={`${baseId}-playback`} playing={playing} onClick={onToggle ?? props.onClick} />
+        <AudioPlaybackScrubber id={`${baseId}-waveform`} value={value} width={props.width ?? 188} />
         {children}
       </AudioPlaybackControls>
     </AudioPlaybackRoot>

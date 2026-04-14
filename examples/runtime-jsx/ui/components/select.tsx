@@ -1,4 +1,4 @@
-import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -9,7 +9,7 @@ function selectionEvent(event: unknown, item: Item, value: string, label: string
 }
 
 export function Select({ items = [], selectedItemId, placeholder = "Select an option", leadingIcon, variant = "default", className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; placeholder?: string; leadingIcon?: string; variant?: string } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "select";
+  const baseId = requireNodeId(props, "Select");
   const selectedItem = items.find((item, index) => itemId(item, String(index)) === selectedItemId);
   const selectedLabel = selectedItem == null ? placeholder : itemLabel(selectedItem, selectedItemId ?? "selected");
   const disabled = isDisabled(props);

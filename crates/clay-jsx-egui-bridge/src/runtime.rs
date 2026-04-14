@@ -12,7 +12,10 @@ use egui_component::contract::{
 
 use super::host_tree::{HostMutationBatch, HostTree};
 use super::motion::MotionFrame;
-use crate::{EGUI_JSX_RUNTIME_SOURCE, EGUI_MODULE_SOURCE, EGUI_MOTION_REACT_SOURCE};
+use crate::{
+    EGUI_JSX_RUNTIME_SOURCE, EGUI_LOWERING_SOURCE, EGUI_MODULE_SOURCE, EGUI_MOTION_REACT_SOURCE,
+    EGUI_RUNTIME_SOURCE,
+};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HotReloadState {
@@ -46,6 +49,7 @@ pub struct JsxRuntimeSession {
     entry_path: PathBuf,
     host_tree: HostTree,
     runtime: RuntimeSession,
+    torn_down: bool,
 }
 
 impl std::fmt::Debug for JsxRuntimeSession {
@@ -109,24 +113,41 @@ impl JsxRuntimeSession {
             entry_path,
             host_tree: HostTree::default(),
             runtime,
+            torn_down: false,
         };
         match session.take_rendered() {
             Ok(rendered) => JsxRuntimeLoadOutcome::Loaded { session, rendered },
-            Err(error) => load_failure(session.runtime, error),
+            Err(error) => JsxRuntimeLoadOutcome::Failed(JsxRuntimeLoadFailure {
+                dependency_paths: session.runtime.loaded_module_paths(),
+                error,
+            }),
         }
     }
 
     pub fn capture_hot_reload_state(&mut self) -> anyhow::Result<HotReloadState> {
-        self.runtime
-            .execute_json_expression_as(
-                "[egui:capture-hot-reload-state]",
-                "globalThis.__eguiCaptureHotReloadState == null ? { hook_state: {} } : globalThis.__eguiCaptureHotReloadState()",
-            )
-            .map_err(|error| anyhow!("failed to capture egui hot reload state: {error}"))
+        Ok(HotReloadState::default())
     }
 
     pub fn dependency_paths(&self) -> Vec<PathBuf> {
         self.runtime.loaded_module_paths()
+    }
+
+    pub fn set_wake_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.runtime.set_host_wake_callback(callback);
+    }
+
+    pub fn clear_wake_callback(&mut self) {
+        self.runtime.clear_host_wake_callback();
+    }
+
+    pub fn drain_pending_runtime_updates(&mut self) -> anyhow::Result<Option<RenderedJsx>> {
+        if !self.runtime.drain_host_callbacks()? {
+            return Ok(None);
+        }
+        self.take_rendered().map(Some)
     }
 
     pub fn dispatch_events(&mut self, events: &[ContractEvent]) -> anyhow::Result<RenderedJsx> {
@@ -135,6 +156,9 @@ impl JsxRuntimeSession {
         self.runtime
             .execute_script("[egui:dispatch-events]", source)
             .map_err(|error| anyhow!("failed to dispatch egui events into JSX runtime: {error}"))?;
+        self.runtime
+            .execute_script("[egui:post-dispatch-flush]", "undefined;")?;
+        let _ = self.runtime.drain_host_callbacks()?;
         self.take_rendered()
     }
 
@@ -149,6 +173,23 @@ impl JsxRuntimeSession {
             motion: tick.frame,
             logs: clay_jsx_runtime::RuntimeLogBuffer::new(),
         })
+    }
+
+    pub fn teardown(&mut self) -> anyhow::Result<clay_jsx_runtime::RuntimeLogBuffer> {
+        if self.torn_down {
+            return Ok(clay_jsx_runtime::RuntimeLogBuffer::new());
+        }
+        self.torn_down = true;
+        let result = self
+            .runtime
+            .execute_script(
+                "[egui:unmount-runtime]",
+                "globalThis.__eguiUnmountRuntime == null ? undefined : globalThis.__eguiUnmountRuntime();",
+            )
+            .map_err(|error| anyhow!("failed to tear down egui JSX runtime: {error}"));
+        self.runtime.shutdown_host_runtime();
+        result?;
+        Ok(self.runtime.take_update().logs)
     }
 
     fn take_rendered(&mut self) -> anyhow::Result<RenderedJsx> {
@@ -206,12 +247,15 @@ impl JsxRuntimeSession {
 
 fn egui_runtime_options() -> JsxRuntimeOptions {
     JsxRuntimeOptions::new("egui")
+        .with_react_runtime_modules()
         .with_virtual_module("egui", EGUI_MODULE_SOURCE)
         .with_virtual_module("clay", EGUI_MODULE_SOURCE)
         .with_virtual_module("egui/jsx-runtime", EGUI_JSX_RUNTIME_SOURCE)
         .with_virtual_module("clay/jsx-runtime", EGUI_JSX_RUNTIME_SOURCE)
         .with_virtual_module("egui/jsx-dev-runtime", EGUI_JSX_RUNTIME_SOURCE)
         .with_virtual_module("clay/jsx-dev-runtime", EGUI_JSX_RUNTIME_SOURCE)
+        .with_virtual_module("clay-internal:/egui-runtime", EGUI_RUNTIME_SOURCE)
+        .with_virtual_module("clay-internal:/egui-lowering", EGUI_LOWERING_SOURCE)
         .with_virtual_module("motion/react", EGUI_MOTION_REACT_SOURCE)
         .with_virtual_module("react/motion", EGUI_MOTION_REACT_SOURCE)
 }
@@ -239,11 +283,23 @@ fn install_contract_metadata(runtime: &mut RuntimeSession) -> anyhow::Result<()>
         .filter(|family| family.child_policy != ContractChildPolicy::None)
         .map(|family| family.id.as_str())
         .collect::<Vec<_>>();
+    let identity_sensitive_families = registry()
+        .iter()
+        .filter(|family| family.id.is_identity_sensitive())
+        .map(|family| family.id.as_str())
+        .collect::<Vec<_>>();
+    let fallback_node_id_families = registry()
+        .iter()
+        .filter(|family| family.id.allows_fallback_node_id())
+        .map(|family| family.id.as_str())
+        .collect::<Vec<_>>();
     let metadata = serde_json::json!({
         "version": CONTRACT_MODEL_VERSION,
         "families": families,
         "familyProps": family_props,
         "familiesWithChildren": families_with_children,
+        "identitySensitiveFamilies": identity_sensitive_families,
+        "fallbackNodeIdFamilies": fallback_node_id_families,
     });
     let source = format!(
         "globalThis.__eguiContract = Object.freeze({});",
@@ -401,4 +457,10 @@ fn load_failure(runtime: RuntimeSession, error: anyhow::Error) -> JsxRuntimeLoad
         dependency_paths: runtime.loaded_module_paths(),
         error,
     })
+}
+
+impl Drop for JsxRuntimeSession {
+    fn drop(&mut self) {
+        let _ = self.teardown();
+    }
 }

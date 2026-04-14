@@ -1,5 +1,5 @@
 import { useState } from "egui";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { DropdownMenuContent, type MenuEntry } from "./dropdown-menu.tsx";
@@ -41,7 +41,7 @@ export function MenuBarContent({ children, className, ...props }: NodeProps & Re
 }
 
 export function MenuBar({ menus = [], activeMenuId, activeMenuIndex, className, onCommand, onOpen, onClose, ...props }: MenuBarProps) {
-  const baseId = props.id ?? props.nodeId ?? "menu-bar";
+  const baseId = requireNodeId(props, "MenuBar");
   const [internalActive, setInternalActive] = useState<string | null>(null);
   const controlledId = activeMenuId ?? (activeMenuIndex != null && menus[activeMenuIndex] != null ? itemId(menus[activeMenuIndex], String(activeMenuIndex)) : null);
   const resolvedActive = controlledId ?? internalActive;

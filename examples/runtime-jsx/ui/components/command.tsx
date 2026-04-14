@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Input } from "./input.tsx";
@@ -9,7 +9,7 @@ import { Separator } from "./primary/separator.tsx";
 export type CommandProps = NodeProps & { query?: string; items?: Item[]; placeholder?: string; preview?: boolean } & Record<string, unknown>;
 
 export function Command({ query = "", items = [], placeholder = "Execute a command...", preview = false, className, onCommand, ...props }: CommandProps) {
-  const baseId = props.id ?? props.nodeId ?? "command";
+  const baseId = requireNodeId(props, "Command");
   const normalizedQuery = String(query).trim().toLowerCase();
   const visibleItems = items.filter((item) => itemLabel(item, "").toLowerCase().includes(normalizedQuery) || String(item.group ?? "").toLowerCase().includes(normalizedQuery));
   const panel = <CommandPanel id={baseId} query={query} placeholder={placeholder} items={visibleItems} onCommand={onCommand} inputProps={props} />;

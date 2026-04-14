@@ -1,4 +1,4 @@
-import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Input } from "./input.tsx";
@@ -15,7 +15,7 @@ function toggleSelection(values: string[], id: string) {
 }
 
 export function Combobox({ items = [], selectedItemIds = [], query = "", placeholder = "Select options", filterPlaceholder = "Filter", searchable = true, className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemIds?: string[]; query?: string; placeholder?: string; filterPlaceholder?: string; searchable?: boolean } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "combobox";
+  const baseId = requireNodeId(props, "Combobox");
   const disabled = isDisabled(props);
   const selected = new Set(selectedItemIds);
   const selectedLabels = items.map((item, index) => [itemId(item, String(index)), itemLabel(item, String(index))]).filter(([id]) => selected.has(id)).map(([, label]) => label);

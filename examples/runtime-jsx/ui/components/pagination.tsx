@@ -1,4 +1,4 @@
-import { cn, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Label } from "./primary/label.tsx";
 
@@ -83,7 +83,7 @@ export function PaginationContent({ currentPage = 1, pageCount = 1, siblingCount
 }
 
 export function Pagination({ currentPage = 1, pageCount = 1, siblingCount = 1, className, onSelect, ...props }: NodeProps & { currentPage?: number; pageCount?: number; siblingCount?: number } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "pagination";
+  const baseId = requireNodeId(props, "Pagination");
   return (
     <PaginationRoot {...props} className={className}>
       <PaginationContent currentPage={currentPage} pageCount={pageCount} siblingCount={siblingCount} baseId={baseId} onSelect={onSelect} />

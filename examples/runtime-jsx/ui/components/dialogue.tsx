@@ -1,4 +1,4 @@
-import { cn, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Label, LabelMuted } from "./primary/label.tsx";
@@ -57,7 +57,7 @@ export function DialogueHeader({
   children,
   ...props
 }: NodeProps & { title?: string; description?: string; intent?: string; onClose?: NodeProps["onClose"] } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "dialogue";
+  const baseId = requireNodeId(props, "DialogueHeader");
   return (
     <div {...nodeProps(props, cn("flex flex-row items-start gap-2", className))}>
       <div className="flex flex-col items-stretch gap-1">
@@ -85,7 +85,7 @@ export function DialogueContent({ children, className, ...props }: NodeProps & R
 
 export function DialogueModal({ children, open = false, title = "Dialog", description, intent = "default", className, confirmLabel = "Confirm", cancelLabel = "Cancel", onCancel, onClose, onConfirm, ...props }: NodeProps & { open?: boolean; title?: string; description?: string; intent?: string; confirmLabel?: string; cancelLabel?: string } & Record<string, unknown>) {
   if (!open) return null;
-  const baseId = props.id ?? props.nodeId ?? "dialogue";
+  const baseId = requireNodeId(props, "DialogueModal");
   const alert = intent === "alert" || intent === "destructive";
   return (
     <DialogueRoot {...nodeProps(props, className)}>

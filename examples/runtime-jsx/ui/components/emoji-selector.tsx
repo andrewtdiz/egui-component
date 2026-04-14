@@ -1,5 +1,5 @@
 import { useState } from "egui";
-import { cn, type Handler, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { LabelMuted } from "./primary/label.tsx";
@@ -33,7 +33,7 @@ export function EmojiSelectorContent({ emojis = DEFAULT_EMOJIS, value, onSelect,
 
 export function EmojiSelector({ value = "🙂", placeholder = "🙂", triggerVariant = "secondary", className, onSelect, ...props }: NodeProps & { value?: string; placeholder?: string; triggerVariant?: string; onSelect?: Handler } & Record<string, unknown>) {
   const [open, setOpen] = useState(false);
-  const baseId = props.id ?? props.nodeId ?? "emoji-selector";
+  const baseId = requireNodeId(props, "EmojiSelector");
   const resolvedValue = value ?? placeholder;
 
   return (

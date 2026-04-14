@@ -4,6 +4,13 @@ use std::{
     collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
     rc::Rc,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        mpsc::{self, RecvTimeoutError, Sender},
+        Arc, Mutex,
+    },
+    thread::JoinHandle,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Context as AnyhowContext};
@@ -19,7 +26,11 @@ use deno_core::{
 use deno_error::JsErrorBox;
 use serde::de::DeserializeOwned;
 
-use crate::diagnostics::{push_log, RuntimeLogBuffer};
+use crate::{
+    diagnostics::{push_log, RuntimeLogBuffer},
+    HOST_RUNTIME_SOURCE, REACT_JSX_DEV_RUNTIME_SOURCE, REACT_JSX_RUNTIME_SOURCE,
+    REACT_RECONCILER_SOURCE, REACT_SOURCE, SCHEDULER_SOURCE,
+};
 
 type SourceMapStore = Rc<RefCell<HashMap<String, Vec<u8>>>>;
 
@@ -46,6 +57,14 @@ impl JsxRuntimeOptions {
             .push(VirtualModule::new(import_specifier, source));
         self
     }
+
+    pub fn with_react_runtime_modules(self) -> Self {
+        self.with_virtual_module("react", REACT_SOURCE)
+            .with_virtual_module("react/jsx-runtime", REACT_JSX_RUNTIME_SOURCE)
+            .with_virtual_module("react/jsx-dev-runtime", REACT_JSX_DEV_RUNTIME_SOURCE)
+            .with_virtual_module("clay-internal:/react-reconciler", REACT_RECONCILER_SOURCE)
+            .with_virtual_module("clay-internal:/scheduler", SCHEDULER_SOURCE)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -69,10 +88,285 @@ pub struct RuntimeUpdate {
     pub logs: RuntimeLogBuffer,
 }
 
+#[derive(Debug, Clone, Default)]
+struct HostRuntimeBridge {
+    inner: Arc<HostRuntimeBridgeInner>,
+}
+
+struct HostRuntimeBridgeInner {
+    wake: RuntimeWakeState,
+    next_timer_handle: AtomicU32,
+    pending_due_timers: Mutex<Vec<u32>>,
+    timer_command_tx: Mutex<Option<Sender<TimerCommand>>>,
+    timer_worker: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[derive(Default)]
+struct RuntimeWakeState {
+    pending: AtomicBool,
+    callback: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TimerEntry {
+    handle: u32,
+    next_fire_at: Instant,
+    interval: Option<Duration>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TimerCommand {
+    Schedule(TimerEntry),
+    Cancel(u32),
+    Shutdown,
+}
+
+impl Default for HostRuntimeBridgeInner {
+    fn default() -> Self {
+        Self {
+            wake: RuntimeWakeState::default(),
+            next_timer_handle: AtomicU32::new(1),
+            pending_due_timers: Mutex::new(Vec::new()),
+            timer_command_tx: Mutex::new(None),
+            timer_worker: Mutex::new(None),
+        }
+    }
+}
+
+impl std::fmt::Debug for HostRuntimeBridgeInner {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HostRuntimeBridgeInner")
+            .field("next_timer_handle", &self.next_timer_handle)
+            .finish_non_exhaustive()
+    }
+}
+
+impl HostRuntimeBridge {
+    fn new() -> Self {
+        let (timer_command_tx, timer_command_rx) = mpsc::channel();
+        let inner = Arc::new(HostRuntimeBridgeInner {
+            timer_command_tx: Mutex::new(Some(timer_command_tx)),
+            ..Default::default()
+        });
+
+        let worker_inner = Arc::clone(&inner);
+        let worker = std::thread::Builder::new()
+            .name("clay-jsx-runtime-timers".to_owned())
+            .spawn(move || run_timer_worker(worker_inner, timer_command_rx))
+            .expect("timer worker should spawn");
+        *inner
+            .timer_worker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(worker);
+
+        Self { inner }
+    }
+
+    fn schedule_timer(&self, delay_ms: u64, interval_ms: Option<u64>) -> u32 {
+        let handle = self.inner.next_timer_handle.fetch_add(1, Ordering::Relaxed);
+        if delay_ms == 0 && interval_ms.is_none() {
+            self.inner
+                .pending_due_timers
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(handle);
+            self.inner.wake.trigger();
+            return handle;
+        }
+        let entry = TimerEntry {
+            handle,
+            next_fire_at: Instant::now() + Duration::from_millis(delay_ms),
+            interval: interval_ms.map(Duration::from_millis),
+        };
+        if let Some(timer_command_tx) = self
+            .inner
+            .timer_command_tx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .cloned()
+        {
+            let _ = timer_command_tx.send(TimerCommand::Schedule(entry));
+        }
+        handle
+    }
+
+    fn cancel_timer(&self, handle: u32) {
+        self.inner
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|pending_handle| *pending_handle != handle);
+        if let Some(timer_command_tx) = self
+            .inner
+            .timer_command_tx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .cloned()
+        {
+            let _ = timer_command_tx.send(TimerCommand::Cancel(handle));
+        }
+    }
+
+    fn take_due_timers_json(&self) -> String {
+        let mut pending_due_timers = self
+            .inner
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        serde_json::to_string(&std::mem::take(&mut *pending_due_timers))
+            .unwrap_or_else(|_| "[]".to_owned())
+    }
+
+    fn request_wake(&self) {
+        self.inner.wake.trigger();
+    }
+
+    fn set_wake_callback<F>(&self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        *self
+            .inner
+            .wake
+            .callback
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::new(callback));
+    }
+
+    fn clear_wake_callback(&self) {
+        *self
+            .inner
+            .wake
+            .callback
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    }
+
+    fn take_pending_wake(&self) -> bool {
+        self.inner.wake.take_pending()
+    }
+
+    fn shutdown(&self) {
+        let timer_command_tx = self
+            .inner
+            .timer_command_tx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        if let Some(timer_command_tx) = timer_command_tx {
+            let _ = timer_command_tx.send(TimerCommand::Shutdown);
+        }
+        if let Some(worker) = self
+            .inner
+            .timer_worker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            let _ = worker.join();
+        }
+        self.clear_wake_callback();
+        let _ = self.take_pending_wake();
+        self.inner
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
+}
+
+impl RuntimeWakeState {
+    fn trigger(&self) {
+        self.pending.store(true, Ordering::SeqCst);
+        let callback = self
+            .callback
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    fn take_pending(&self) -> bool {
+        self.pending.swap(false, Ordering::SeqCst)
+    }
+}
+
+fn run_timer_worker(
+    inner: Arc<HostRuntimeBridgeInner>,
+    timer_command_rx: mpsc::Receiver<TimerCommand>,
+) {
+    let mut timers = HashMap::<u32, TimerEntry>::new();
+    loop {
+        let now = Instant::now();
+        let next_deadline = timers.values().map(|timer| timer.next_fire_at).min();
+        let command = match next_deadline {
+            Some(next_deadline) if next_deadline > now => {
+                match timer_command_rx.recv_timeout(next_deadline.saturating_duration_since(now)) {
+                    Ok(command) => Some(command),
+                    Err(RecvTimeoutError::Timeout) => None,
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+            }
+            Some(_) => None,
+            None => match timer_command_rx.recv() {
+                Ok(command) => Some(command),
+                Err(_) => break,
+            },
+        };
+
+        match command {
+            Some(TimerCommand::Schedule(entry)) => {
+                timers.insert(entry.handle, entry);
+                continue;
+            }
+            Some(TimerCommand::Cancel(handle)) => {
+                timers.remove(&handle);
+                continue;
+            }
+            Some(TimerCommand::Shutdown) => break,
+            None => {}
+        }
+
+        let now = Instant::now();
+        let mut due_handles = Vec::new();
+        let mut completed_one_shots = Vec::new();
+        for timer in timers.values_mut() {
+            while timer.next_fire_at <= now {
+                due_handles.push(timer.handle);
+                if let Some(interval) = timer.interval {
+                    timer.next_fire_at += interval;
+                } else {
+                    completed_one_shots.push(timer.handle);
+                    break;
+                }
+            }
+        }
+        for handle in completed_one_shots {
+            timers.remove(&handle);
+        }
+        if due_handles.is_empty() {
+            continue;
+        }
+
+        inner
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .extend(due_handles);
+        inner.wake.trigger();
+    }
+}
+
 #[derive(Debug, Default)]
 struct RuntimeState {
     commit_batches_json: Vec<String>,
     logs: RuntimeLogBuffer,
+    host_runtime: HostRuntimeBridge,
 }
 
 #[op2(fast)]
@@ -98,9 +392,52 @@ fn op_host_log(
     Ok(())
 }
 
+#[op2(fast)]
+fn op_host_schedule_timer(
+    state: &mut OpState,
+    delay_ms: i32,
+    interval_ms: i32,
+) -> Result<u32, JsErrorBox> {
+    let host_runtime = state.borrow::<RuntimeState>().host_runtime.clone();
+    let delay_ms = delay_ms.max(0) as u64;
+    let interval_ms = (interval_ms >= 0).then_some(interval_ms as u64);
+    Ok(host_runtime.schedule_timer(delay_ms, interval_ms))
+}
+
+#[op2(fast)]
+fn op_host_cancel_timer(state: &mut OpState, handle: u32) -> Result<(), JsErrorBox> {
+    state
+        .borrow::<RuntimeState>()
+        .host_runtime
+        .cancel_timer(handle);
+    Ok(())
+}
+
+#[op2(fast)]
+fn op_host_request_wake(state: &mut OpState) -> Result<(), JsErrorBox> {
+    state.borrow::<RuntimeState>().host_runtime.request_wake();
+    Ok(())
+}
+
+#[op2]
+#[string]
+fn op_host_take_due_timers(state: &mut OpState) -> Result<String, JsErrorBox> {
+    Ok(state
+        .borrow::<RuntimeState>()
+        .host_runtime
+        .take_due_timers_json())
+}
+
 extension!(
     clay_jsx_host,
-    ops = [op_commit_mutations, op_host_log],
+    ops = [
+        op_commit_mutations,
+        op_host_log,
+        op_host_schedule_timer,
+        op_host_cancel_timer,
+        op_host_request_wake,
+        op_host_take_due_timers
+    ],
     docs = "Ops used by clay JSX host runtimes."
 );
 
@@ -183,6 +520,7 @@ impl ModuleLoader for JsxModuleLoader {
 
 pub struct RuntimeSession {
     entry_path: Option<PathBuf>,
+    host_runtime: HostRuntimeBridge,
     module_loader: Rc<JsxModuleLoader>,
     js_runtime: JsRuntime,
     tokio_runtime: tokio::runtime::Runtime,
@@ -200,15 +538,19 @@ impl std::fmt::Debug for RuntimeSession {
 impl RuntimeSession {
     pub fn new(options: JsxRuntimeOptions) -> anyhow::Result<Self> {
         let module_loader = Rc::new(JsxModuleLoader::new(options)?);
-        let js_runtime = JsRuntime::new(DenoRuntimeOptions {
+        let host_runtime = HostRuntimeBridge::new();
+        let mut js_runtime = JsRuntime::new(DenoRuntimeOptions {
             module_loader: Some(module_loader.clone()),
             extensions: vec![clay_jsx_host::init()],
             ..Default::default()
         });
+        js_runtime.op_state().borrow_mut().put(RuntimeState {
+            host_runtime: host_runtime.clone(),
+            ..Default::default()
+        });
         js_runtime
-            .op_state()
-            .borrow_mut()
-            .put(RuntimeState::default());
+            .execute_script("[clay:host-runtime]", HOST_RUNTIME_SOURCE)
+            .map_err(|error| anyhow!("failed to install clay host runtime globals: {error}"))?;
 
         let tokio_runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -217,6 +559,7 @@ impl RuntimeSession {
 
         Ok(Self {
             entry_path: None,
+            host_runtime,
             module_loader,
             js_runtime,
             tokio_runtime,
@@ -318,6 +661,42 @@ impl RuntimeSession {
         self.module_loader.loaded_module_paths()
     }
 
+    pub fn set_host_wake_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.host_runtime.set_wake_callback(callback);
+    }
+
+    pub fn clear_host_wake_callback(&mut self) {
+        self.host_runtime.clear_wake_callback();
+    }
+
+    pub fn take_pending_host_wake(&self) -> bool {
+        self.host_runtime.take_pending_wake()
+    }
+
+    pub fn drain_host_callbacks(&mut self) -> anyhow::Result<bool> {
+        let mut drained_any = false;
+        let mut iterations = 0usize;
+        while self.host_runtime.take_pending_wake() {
+            iterations += 1;
+            if iterations > 256 {
+                return Err(anyhow!("host callback drain exceeded 256 iterations"));
+            }
+            drained_any = true;
+            self.execute_script(
+                "[clay:drain-host-callbacks]",
+                "globalThis.__clayDrainHostCallbacks == null ? undefined : globalThis.__clayDrainHostCallbacks();",
+            )?;
+        }
+        Ok(drained_any)
+    }
+
+    pub fn shutdown_host_runtime(&mut self) {
+        self.host_runtime.shutdown();
+    }
+
     fn evaluate_main_module(&mut self, main_module: &ModuleSpecifier) -> anyhow::Result<()> {
         self.tokio_runtime.block_on(async {
             let module_id = self.js_runtime.load_main_es_module(main_module).await?;
@@ -332,6 +711,12 @@ impl RuntimeSession {
         self.tokio_runtime
             .block_on(self.js_runtime.run_event_loop(Default::default()))?;
         Ok(())
+    }
+}
+
+impl Drop for RuntimeSession {
+    fn drop(&mut self) {
+        self.shutdown_host_runtime();
     }
 }
 

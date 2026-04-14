@@ -60,6 +60,21 @@ export function nodeProps(props: NodeProps & Record<string, unknown>, className?
   return attrs;
 }
 
+export function resolveNodeId(props: { id?: string; nodeId?: string }) {
+  const value = props.nodeId ?? props.id;
+  if (value == null) return undefined;
+  const nodeId = String(value).trim();
+  return nodeId === "" ? undefined : nodeId;
+}
+
+export function requireNodeId(props: { id?: string; nodeId?: string }, componentName: string) {
+  const nodeId = resolveNodeId(props);
+  if (nodeId == null) {
+    throw new Error(`${componentName} requires an explicit id or nodeId.`);
+  }
+  return nodeId;
+}
+
 export function isDisabled(props: { disabled?: boolean; enabled?: boolean }) {
   return props.disabled === true || props.enabled === false;
 }
@@ -93,6 +108,14 @@ export function textFromChildren(children: Children): string | undefined {
 
 export function scopedId(props: { id?: string; nodeId?: string }, fallback: string, suffix: string) {
   return `${props.nodeId ?? props.id ?? fallback}-${suffix}`;
+}
+
+export function requiredScopedId(
+  props: { id?: string; nodeId?: string },
+  componentName: string,
+  suffix: string,
+) {
+  return `${requireNodeId(props, componentName)}-${suffix}`;
 }
 
 export { cn };

@@ -1,5 +1,5 @@
 import { useState } from "egui";
-import { cn, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -14,7 +14,7 @@ export function PopoverTrigger({ children, triggerLabel = "Open", className, ...
 }
 
 export function Popover({ children, open, triggerLabel = "Open", width, className, onOpen, onClose, ...props }: PopoverProps) {
-  const baseId = props.id ?? props.nodeId ?? "popover";
+  const baseId = requireNodeId(props, "Popover");
   const [internalOpen, setInternalOpen] = useState(false);
   const resolvedOpen = open ?? internalOpen;
   const setOpen = (next: boolean, event?: unknown) => {

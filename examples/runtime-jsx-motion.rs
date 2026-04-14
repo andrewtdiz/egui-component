@@ -1,8 +1,10 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
-    time::SystemTime,
 };
+
+#[path = "runtime-jsx/watch.rs"]
+mod runtime_jsx_watch;
 
 use clay_jsx_egui_bridge::{
     extend_logs, HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame,
@@ -16,6 +18,7 @@ use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree, NodeId},
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
+use runtime_jsx_watch::ReloadWatcher;
 
 const WINDOW_TITLE: &str = "egui-component JSX Motion Sync";
 const WINDOW_INNER_SIZE: [f32; 2] = [1120.0, 780.0];
@@ -45,29 +48,29 @@ fn main() -> eframe::Result {
 #[derive(Debug)]
 struct MotionSyncApp {
     entry_path: PathBuf,
-    dependency_stamps: Vec<DependencyStamp>,
     hot_reload_state: Option<HotReloadState>,
+    reload_watcher: Option<ReloadWatcher>,
     session: Option<JsxRuntimeSession>,
     rendered: Option<ContractTree>,
     motion: MotionFrame,
     logs: RuntimeLogBuffer,
+    watched_files: BTreeSet<PathBuf>,
     error: Option<String>,
 }
 
 impl Default for MotionSyncApp {
     fn default() -> Self {
-        let mut app = Self {
+        Self {
             entry_path: default_entry_path(),
-            dependency_stamps: collect_dependency_stamps([default_entry_path()]),
             hot_reload_state: None,
+            reload_watcher: None,
             session: None,
             rendered: None,
             motion: MotionFrame::default(),
             logs: RuntimeLogBuffer::new(),
+            watched_files: BTreeSet::new(),
             error: None,
-        };
-        app.reload_runtime();
-        app
+        }
     }
 }
 
@@ -76,6 +79,7 @@ impl eframe::App for MotionSyncApp {
         theme::set_theme(ctx, ThemeSpec::preset(BaseColor::Neutral));
         theme::set_mode(ctx, ThemeMode::System);
         self.reload_external_changes(ctx);
+        self.drain_pending_runtime_updates(ctx);
         self.tick_motion(ctx);
 
         TopBottomPanel::top("motion_sync_topbar")
@@ -110,7 +114,7 @@ impl MotionSyncApp {
     fn render_jsx_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if ui.button("Reload TSX").clicked() {
-                self.reload_runtime();
+                self.reload_runtime(ui.ctx());
             }
 
             if self.motion.active {
@@ -204,38 +208,49 @@ impl MotionSyncApp {
     }
 
     fn reload_external_changes(&mut self, ctx: &Context) {
-        if dependency_stamps_changed(&self.dependency_stamps) {
-            self.reload_runtime();
-            ctx.request_repaint();
+        self.ensure_reload_watcher(ctx);
+        if self.session.is_none() && self.rendered.is_none() && self.error.is_none() {
+            self.reload_runtime(ctx);
+            return;
+        }
+        if self
+            .reload_watcher
+            .as_mut()
+            .is_some_and(|watcher| watcher.take_pending_reload())
+        {
+            self.reload_runtime(ctx);
         }
     }
 
-    fn reload_runtime(&mut self) {
-        if self.error.is_none() {
-            if let Some(session) = self.session.as_mut() {
-                if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
-                    self.hot_reload_state = Some(hot_reload_state);
-                }
-            }
-        }
+    fn reload_runtime(&mut self, ctx: &Context) {
+        self.capture_hot_reload_state();
+        self.teardown_session();
 
         match JsxRuntimeSession::load_with_hot_reload_state_outcome(
             &self.entry_path,
             self.hot_reload_state.as_ref(),
         ) {
-            JsxRuntimeLoadOutcome::Loaded { session, rendered } => {
-                self.dependency_stamps = collect_dependency_stamps(
+            JsxRuntimeLoadOutcome::Loaded {
+                mut session,
+                rendered,
+            } => {
+                self.set_watched_files(
                     session
                         .dependency_paths()
                         .into_iter()
                         .chain([self.entry_path.clone()]),
                 );
+                install_session_wake_callback(&mut session, ctx);
                 self.session = Some(session);
                 self.rendered = rendered.tree;
                 self.motion = rendered.motion;
                 self.logs.clear();
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
+                self.drain_pending_runtime_updates(ctx);
             }
             JsxRuntimeLoadOutcome::Failed(failure) => {
                 self.session = None;
@@ -243,8 +258,10 @@ impl MotionSyncApp {
                 self.motion = MotionFrame::default();
                 self.logs.clear();
                 self.error = Some(failure.error.to_string());
-                self.dependency_stamps =
-                    collect_failure_dependency_stamps(failure.dependency_paths, &self.entry_path);
+                self.set_watched_files(collect_failure_tracked_files(
+                    failure.dependency_paths,
+                    &self.entry_path,
+                ));
             }
         }
     }
@@ -262,8 +279,34 @@ impl MotionSyncApp {
                 self.motion = rendered.motion;
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
-                ctx.request_repaint();
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
             }
+            Err(error) => {
+                self.error = Some(error.to_string());
+            }
+        }
+    }
+
+    fn drain_pending_runtime_updates(&mut self, ctx: &Context) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+
+        match session.drain_pending_runtime_updates() {
+            Ok(Some(rendered)) => {
+                if let Some(tree) = rendered.tree {
+                    self.rendered = Some(tree);
+                }
+                self.motion = rendered.motion;
+                extend_logs(&mut self.logs, rendered.logs);
+                self.error = None;
+                if self.motion.active {
+                    ctx.request_repaint();
+                }
+            }
+            Ok(None) => {}
             Err(error) => {
                 self.error = Some(error.to_string());
             }
@@ -291,6 +334,51 @@ impl MotionSyncApp {
             Err(error) => {
                 self.error = Some(error.to_string());
             }
+        }
+    }
+
+    fn capture_hot_reload_state(&mut self) {
+        if self.error.is_some() {
+            return;
+        }
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
+            self.hot_reload_state = Some(hot_reload_state);
+        }
+    }
+
+    fn ensure_reload_watcher(&mut self, ctx: &Context) {
+        if self.reload_watcher.is_some() {
+            return;
+        }
+        match ReloadWatcher::new(ctx) {
+            Ok(mut watcher) => {
+                if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
+                    self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
+                    return;
+                }
+                self.reload_watcher = Some(watcher);
+            }
+            Err(error) => {
+                self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
+            }
+        }
+    }
+
+    fn set_watched_files(&mut self, files: impl IntoIterator<Item = PathBuf>) {
+        self.watched_files = files.into_iter().collect();
+        if let Some(watcher) = self.reload_watcher.as_mut() {
+            if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
+                self.error = Some(format!("Failed to update JSX reload watcher: {error}"));
+            }
+        }
+    }
+
+    fn teardown_session(&mut self) {
+        if let Some(mut session) = self.session.take() {
+            let _ = session.teardown();
         }
     }
 }
@@ -430,46 +518,21 @@ fn default_entry_path() -> PathBuf {
         .join("motion-sync.tsx")
 }
 
-#[derive(Debug, Clone)]
-struct DependencyStamp {
-    path: PathBuf,
-    modified: Option<SystemTime>,
-}
-
-fn dependency_stamps_changed(stamps: &[DependencyStamp]) -> bool {
-    stamps
-        .iter()
-        .any(|stamp| modified_time(&stamp.path) != stamp.modified)
-}
-
-fn collect_dependency_stamps(paths: impl IntoIterator<Item = PathBuf>) -> Vec<DependencyStamp> {
-    paths
-        .into_iter()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .map(|path| DependencyStamp {
-            modified: modified_time(&path),
-            path,
-        })
-        .collect()
-}
-
-fn collect_failure_dependency_stamps(
+fn collect_failure_tracked_files(
     dependency_paths: Vec<PathBuf>,
     entry_path: &Path,
-) -> Vec<DependencyStamp> {
+) -> BTreeSet<PathBuf> {
     let paths = if dependency_paths.is_empty() {
         vec![entry_path.to_path_buf()]
     } else {
         dependency_paths
     };
-    collect_dependency_stamps(paths)
+    paths.into_iter().collect()
 }
 
-fn modified_time(path: &std::path::Path) -> Option<SystemTime> {
-    std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
+fn install_session_wake_callback(session: &mut JsxRuntimeSession, ctx: &Context) {
+    let ctx = ctx.clone();
+    session.set_wake_callback(move || ctx.request_repaint());
 }
 
 #[cfg(test)]

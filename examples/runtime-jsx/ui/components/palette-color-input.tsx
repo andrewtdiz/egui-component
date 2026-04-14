@@ -1,4 +1,4 @@
-import { cn, type Handler, type NodeProps, nodeProps, scopedId } from "../component-support.ts";
+import { cn, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Color } from "./primary/color.tsx";
 import { ColorInput } from "./color-input.tsx";
@@ -11,13 +11,13 @@ const SELECTED_SWATCH_STROKE = { width: 2, color: "#2896ff" };
 export type PaletteColorInputProps = NodeProps & { value?: string; palette?: string[]; allowCustom?: boolean; customLabel?: string; onChange?: Handler } & Record<string, unknown>;
 
 export function PaletteColorInput({ value = "#2896ff", palette = defaultPalette, allowCustom = true, customLabel = "Custom", className, onChange, ...props }: PaletteColorInputProps) {
-  const baseId = props.id ?? props.nodeId ?? "palette-color";
+  const baseId = requireNodeId(props, "PaletteColorInput");
 
   return (
     <PaletteColorInputRoot {...props} className={className}>
       <PaletteColorInputHeader />
       <PaletteColorInputSwatches id={`${baseId}-swatches`} value={value} palette={palette} />
-      {allowCustom && <PaletteColorInputCustom id={scopedId(props, "palette-color", "custom")} label={customLabel} value={value} onChange={onChange} />}
+      {allowCustom && <PaletteColorInputCustom id={`${baseId}-custom`} label={customLabel} value={value} onChange={onChange} />}
     </PaletteColorInputRoot>
   );
 }
@@ -31,7 +31,7 @@ export function PaletteColorInputHeader({ text = "Palette color", className, ...
 }
 
 export function PaletteColorInputSwatches({ value = "#2896ff", palette = defaultPalette, className, ...props }: NodeProps & { value?: string; palette?: string[] } & Record<string, unknown>) {
-  const baseId = props.id ?? props.nodeId ?? "palette-color-swatches";
+  const baseId = requireNodeId(props, "PaletteColorInputSwatches");
 
   return (
     <div {...nodeProps(props, cn("flex flex-row flex-wrap items-center gap-1.5", className))}>
@@ -49,5 +49,6 @@ export function PaletteColorInputCustomLabel({ text = "Custom", className, ...pr
 }
 
 export function PaletteColorInputCustom({ value = "#2896ff", label = "Custom", onChange, className, ...props }: NodeProps & { value?: string; label?: string; onChange?: Handler } & Record<string, unknown>) {
-  return <div {...nodeProps(props, cn("flex flex-col items-stretch gap-1", className))}><PaletteColorInputCustomLabel text={label} /><ColorInput id={scopedId(props, "palette-color", "input")} value={value} onChange={onChange} /></div>;
+  const baseId = requireNodeId(props, "PaletteColorInputCustom");
+  return <div {...nodeProps(props, cn("flex flex-col items-stretch gap-1", className))}><PaletteColorInputCustomLabel text={label} /><ColorInput id={`${baseId}-input`} value={value} onChange={onChange} /></div>;
 }

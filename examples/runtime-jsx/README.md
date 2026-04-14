@@ -50,12 +50,15 @@ Rust remains the internal JSX runtime layer for egui-owned primitives and behavi
 The runtime path is:
 
 1. `examples/runtime-jsx/mod.rs` wires the eframe shell and `examples/runtime-jsx/app.rs` owns the editor/preview UI.
-2. `crates/clay-jsx-runtime` owns the host-neutral `deno_core::JsRuntime` session and `.jsx`, `.tsx`, and `.ts` transpilation through `deno_ast`.
-3. `crates/clay-jsx-egui-bridge/src/mod.js`, `crates/clay-jsx-egui-bridge/src/runtime_api.js`, and `crates/clay-jsx-egui-bridge/src/motion_api.js` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules, `render`, `log`, `useState`, event dispatch, and the JSX runtime functions.
-4. `render(<App />)` lowers component-authored JSX into host contract nodes and commits incremental mutation batches through a Deno op.
-5. Rust applies those mutations to a retained host tree, materializes a `ContractTree`, checks the contract model version and registered families, and renders it with `egui_component::contract::render_tree`.
-6. Motion props such as `initial`, `animate`, and `transition` are stored beside the host tree and ticked by Rust as retained numeric values. The current egui renderer does not consume those values yet.
-7. egui events are sent back into the retained V8 session so JSX handlers and hooks can update the next host-tree commit without reloading the file.
+2. `crates/clay-jsx-runtime` owns the host-neutral `deno_core::JsRuntime` session, `.jsx`/`.tsx` transpilation through `deno_ast`, and the shared React/reconciler/scheduler virtual modules.
+3. `crates/clay-jsx-egui-bridge/src/mod.js`, `jsx_runtime_api.js`, `runtime_api.js`, `lowering_api.js`, and `motion_api.js` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules plus the egui-specific lowering and event runtime.
+4. `render(<App />)` updates one persistent React root for the session.
+5. The stable `egui` / `clay` surface now exposes the supported React hooks and helpers: `useState`, `useEffect`, `useReducer`, `useRef`, `useContext`, `useSyncExternalStore`, `startTransition`, `useDeferredValue`, `createContext`, `render`, `eventValue`, `log`, and `requestRepaint`.
+6. The host-neutral runtime installs `setTimeout`, `setInterval`, `requestAnimationFrame`, and explicit wake plumbing so timer-driven or effect-driven state updates can request the next egui frame without relying on incidental input.
+7. After each React commit, the bridge lowers the committed host tree into normalized egui contract descriptors and diffs those normalized descriptors into semantic host mutation batches.
+8. Rust applies those mutations to a retained host tree, materializes a `ContractTree`, checks the contract model version and registered families, and renders it with `egui_component::contract::render_tree`.
+9. Motion props such as `initial`, `animate`, and `transition` are stored beside the host tree and ticked by Rust as retained numeric values. The current egui renderer does not consume those values yet.
+10. egui events are sent back into the retained V8 session so React handlers and state can update the next host-tree commit without reloading the file. Async and timer callbacks follow the same retained-tree path once the host drains pending runtime work on wake.
 
 The host tree is inspired by the retained instance pattern in `THREEJS_FIBER.md`: JS authors declarative nodes, while Rust owns the authoritative tree, render submission, and validation.
 
@@ -75,6 +78,6 @@ import { motion } from "motion/react";
 
 Supported values are `opacity`, `x`, `y`, `scale`, `scaleX`, `scaleY`, `rotate`, `width`, `height`, `gap`, `paddingX`, `paddingY`, and `cornerRadius`.
 
-The authored entrypoint is `examples/runtime-jsx/app.jsx`. Edit it or any imported `.js`, `.jsx`, `.ts`, `.tsx`, or `.json` module on disk and the rendered egui surface reloads automatically. Reloads always rebuild a fresh JS session, then best-effort restore serializable `useState` for components that were still rendered in the last successful frame and whose component path/name plus hook count still match. Components with changed hook counts, changed identity, or non-serializable hook state remount cold. Failed rebuilds keep the last good hot-reload snapshot and continue watching the attempted dependency set so fixing the broken file or newly introduced import can restore prior serializable state on the next successful reload. Same-count hook reorders are still out of scope.
+The authored entrypoint is `examples/runtime-jsx/app.jsx`. Edit it or any imported `.js`, `.jsx`, `.ts`, `.tsx`, or `.json` module on disk and the rendered egui surface reloads automatically. The default app now includes effect-driven demos for timers, async reducer transitions, deferred values, context, refs, and `useSyncExternalStore` subscriptions. The host uses a watcher-driven wake-up path instead of per-frame file polling, and it also drains runtime-driven wake-ups from timers/effects before each frame render. Reloads rebuild a fresh JS session and remount cold in this cutover bundle; hook-state restoration is deferred until a later pass. Failed rebuilds still keep watching the attempted dependency set so fixing the broken file or newly introduced import wakes the next reload automatically.
 
 The focused motion entrypoint is `examples/runtime-jsx/motion-sync.tsx`. It authors opacity, translation, scale, and rotation values in TSX, then `runtime-jsx-motion` ticks those retained values from egui time and draws them with the egui painter.

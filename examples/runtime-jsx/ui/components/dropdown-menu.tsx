@@ -1,6 +1,6 @@
 import { useState } from "egui";
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { LabelMuted } from "./primary/label.tsx";
@@ -61,7 +61,7 @@ export function DropdownMenu({
   ...props
 }: DropdownMenuProps) {
   const resolvedEntries = entries.length > 0 ? entries : options.map((label, index) => ({ itemId: String(index), label }));
-  const baseId = props.id ?? props.nodeId ?? "dropdown-menu";
+  const baseId = requireNodeId(props, "DropdownMenu");
   const [internalOpen, setInternalOpen] = useState(false);
   const resolvedOpen = open ?? internalOpen;
   const setOpen = (next: boolean, event?: unknown) => {

@@ -1,5 +1,5 @@
 import { useState } from "egui";
-import { cn, itemId, itemLabel, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { DropdownMenuContent, type MenuEntry } from "./dropdown-menu.tsx";
@@ -41,7 +41,7 @@ export function OpenWithMenu({ children, className, ...props }: NodeProps & Reco
 }
 
 export function OpenWith({ entries = [], selectedItemId, placeholder = "Open With", open, triggerVariant = "secondary", className, onCommand, onOpen, onClose, ...props }: OpenWithProps) {
-  const baseId = props.id ?? props.nodeId ?? "open-with";
+  const baseId = requireNodeId(props, "OpenWith");
   const [internalOpen, setInternalOpen] = useState(false);
   const resolvedOpen = open ?? internalOpen;
   const current = entries.find((entry) => typeof entry === "object" && entry != null && itemId(entry, "") === selectedItemId);

@@ -1,4 +1,4 @@
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -11,7 +11,7 @@ function itemEvent(event: unknown, item: Item, value: string, label: string, ind
 }
 
 export function ButtonGroup({ children, items, selectedItemId, className, onSelect, onCommand, ...props }: ButtonGroupProps) {
-  const baseId = props.id ?? props.nodeId ?? "button-group";
+  const baseId = requireNodeId(props, "ButtonGroup");
 
   if (children != null) {
     return <ButtonGroupRoot {...props} className={className}>{children}</ButtonGroupRoot>;

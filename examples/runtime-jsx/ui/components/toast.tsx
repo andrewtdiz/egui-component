@@ -1,4 +1,4 @@
-import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Label, LabelMuted } from "./primary/label.tsx";
@@ -6,12 +6,13 @@ import { Label, LabelMuted } from "./primary/label.tsx";
 export type ToastViewportProps = NodeProps & { toasts?: Item[] } & Record<string, unknown>;
 
 export function ToastViewport({ toasts = [], children, className, onClose, ...props }: ToastViewportProps) {
+  const baseId = requireNodeId(props, "ToastViewport");
   const maxVisible = Number(props.maxVisible ?? props.max_visible ?? 4);
   const gap = Number(props.gap ?? 8);
   const visible = toasts.slice(0, maxVisible);
 
   return (
-    <div {...nodeProps(props, cn("flex flex-col", `gap-[${gap}px]`, className))}>
+    <div {...nodeProps({ ...props, id: baseId }, cn("flex flex-col", `gap-[${gap}px]`, className))}>
       {children != null
         ? children
         : visible.map((toast, index) => (

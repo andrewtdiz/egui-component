@@ -9,6 +9,7 @@ use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
 pub struct Slider {
+    pub id: Option<Id>,
     pub width: f32,
     pub range: RangeInclusive<f32>,
 }
@@ -16,9 +17,15 @@ pub struct Slider {
 impl Slider {
     pub fn new(range: RangeInclusive<f32>) -> Self {
         Self {
+            id: None,
             width: 156.0,
             range,
         }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     pub fn width(mut self, width: f32) -> Self {
@@ -50,6 +57,16 @@ impl ComponentUi<'_> {
 }
 
 fn draw_slider(ui: &mut Ui, value: &mut f32, props: Slider) -> Response {
+    if let Some(id) = props.id.clone() {
+        return ui
+            .push_id(id, |ui| draw_slider_inner(ui, value, props))
+            .inner;
+    }
+
+    draw_slider_inner(ui, value, props)
+}
+
+fn draw_slider_inner(ui: &mut Ui, value: &mut f32, props: Slider) -> Response {
     with_slider_chrome(ui, |ui| {
         ui.scope(|ui| {
             ui.spacing_mut().interact_size.y = 24.0;

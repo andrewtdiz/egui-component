@@ -52,4 +52,5 @@ twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg
 [dev-dependencies]
 eframe = "0.33.3"
 clay-jsx-egui-bridge = { path = "crates/clay-jsx-egui-bridge" }
+notify-debouncer-mini = "0.7.0"
 tempfile = "3.16.0"
