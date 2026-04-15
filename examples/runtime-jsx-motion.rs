@@ -3,12 +3,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "runtime-jsx/metrics.rs"]
+mod runtime_jsx_metrics;
 #[path = "runtime-jsx/watch.rs"]
 mod runtime_jsx_watch;
 
 use clay_jsx_egui_bridge::{
-    extend_logs, HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame,
-    MotionProperty, MotionValues, RuntimeLogBuffer,
+    extend_logs, HotReloadState, JsxRuntimeDebugMetrics, JsxRuntimeLoadOutcome, JsxRuntimeSession,
+    MotionFrame, MotionProperty, MotionValues, RuntimeLogBuffer,
 };
 use eframe::egui::{
     self, pos2, vec2, Align2, CentralPanel, Color32, Context, CornerRadius, FontId, Pos2, Rect,
@@ -17,6 +19,9 @@ use eframe::egui::{
 use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree, NodeId},
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
+};
+use runtime_jsx_metrics::{
+    request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker,
 };
 use runtime_jsx_watch::ReloadWatcher;
 
@@ -56,6 +61,8 @@ struct MotionSyncApp {
     logs: RuntimeLogBuffer,
     watched_files: BTreeSet<PathBuf>,
     error: Option<String>,
+    metrics: ExampleHostMetricsTracker,
+    last_torn_down_session: Option<JsxRuntimeDebugMetrics>,
 }
 
 impl Default for MotionSyncApp {
@@ -70,6 +77,8 @@ impl Default for MotionSyncApp {
             logs: RuntimeLogBuffer::new(),
             watched_files: BTreeSet::new(),
             error: None,
+            metrics: ExampleHostMetricsTracker::default(),
+            last_torn_down_session: None,
         }
     }
 }
@@ -223,6 +232,7 @@ impl MotionSyncApp {
     }
 
     fn reload_runtime(&mut self, ctx: &Context) {
+        self.metrics.note_reload_attempt();
         self.capture_hot_reload_state();
         self.teardown_session();
 
@@ -240,15 +250,16 @@ impl MotionSyncApp {
                         .into_iter()
                         .chain([self.entry_path.clone()]),
                 );
-                install_session_wake_callback(&mut session, ctx);
+                install_session_wake_callback(&mut session, ctx, self.metrics.clone());
                 self.session = Some(session);
                 self.rendered = rendered.tree;
                 self.motion = rendered.motion;
                 self.logs.clear();
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
+                self.metrics.note_reload_success();
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
                 self.drain_pending_runtime_updates(ctx);
             }
@@ -262,6 +273,7 @@ impl MotionSyncApp {
                     failure.dependency_paths,
                     &self.entry_path,
                 ));
+                self.metrics.note_reload_failure();
             }
         }
     }
@@ -280,7 +292,7 @@ impl MotionSyncApp {
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
             }
             Err(error) => {
@@ -296,6 +308,7 @@ impl MotionSyncApp {
 
         match session.drain_pending_runtime_updates() {
             Ok(Some(rendered)) => {
+                self.metrics.note_runtime_update_drain();
                 if let Some(tree) = rendered.tree {
                     self.rendered = Some(tree);
                 }
@@ -303,10 +316,10 @@ impl MotionSyncApp {
                 extend_logs(&mut self.logs, rendered.logs);
                 self.error = None;
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
             }
-            Ok(None) => {}
+            Ok(None) => self.metrics.note_runtime_update_drain_empty(),
             Err(error) => {
                 self.error = Some(error.to_string());
             }
@@ -327,7 +340,7 @@ impl MotionSyncApp {
                 self.motion = rendered.motion;
                 extend_logs(&mut self.logs, rendered.logs);
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
                 self.error = None;
             }
@@ -353,7 +366,9 @@ impl MotionSyncApp {
         if self.reload_watcher.is_some() {
             return;
         }
-        match ReloadWatcher::new(ctx) {
+        let repaint_ctx = ctx.clone();
+        let repaint_metrics = self.metrics.clone();
+        match ReloadWatcher::new(move || request_host_repaint(&repaint_ctx, &repaint_metrics)) {
             Ok(mut watcher) => {
                 if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
                     self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
@@ -379,6 +394,16 @@ impl MotionSyncApp {
     fn teardown_session(&mut self) {
         if let Some(mut session) = self.session.take() {
             let _ = session.teardown();
+            self.last_torn_down_session = Some(session.debug_metrics());
+        }
+    }
+
+    #[cfg(test)]
+    fn debug_snapshot(&self) -> ExampleHostDebugSnapshot {
+        ExampleHostDebugSnapshot {
+            host: self.metrics.snapshot(),
+            live_session: self.session.as_ref().map(JsxRuntimeSession::debug_metrics),
+            last_torn_down_session: self.last_torn_down_session.clone(),
         }
     }
 }
@@ -530,14 +555,18 @@ fn collect_failure_tracked_files(
     paths.into_iter().collect()
 }
 
-fn install_session_wake_callback(session: &mut JsxRuntimeSession, ctx: &Context) {
+fn install_session_wake_callback(
+    session: &mut JsxRuntimeSession,
+    ctx: &Context,
+    metrics: ExampleHostMetricsTracker,
+) {
     let ctx = ctx.clone();
-    session.set_wake_callback(move || ctx.request_repaint());
+    session.set_wake_callback(move || request_host_repaint(&ctx, &metrics));
 }
 
 #[cfg(test)]
 mod tests {
-    use super::default_entry_path;
+    use super::{default_entry_path, MotionSyncApp};
     use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionProperty};
     use egui_component::contract::{ContractEvent, EventKind, NodeId};
 
@@ -571,5 +600,32 @@ mod tests {
             .motion
             .values
             .contains_key(&NodeId::from("motion-translate")));
+    }
+
+    #[test]
+    fn motion_host_metrics_track_reloads_and_repaint_requests() {
+        let ctx = egui::Context::default();
+        let mut app = MotionSyncApp::default();
+        app.reload_runtime(&ctx);
+
+        let before = app.debug_snapshot();
+        assert_eq!(before.host.reload_attempt_count, 1);
+        assert_eq!(before.host.reload_success_count, 1);
+
+        app.dispatch_events(
+            &[ContractEvent::new("motion-toggle", EventKind::Clicked)],
+            &ctx,
+        );
+
+        let after = app.debug_snapshot();
+        assert!(
+            after.host.repaint_request_count > before.host.repaint_request_count,
+            "retargeting motion should request repaint"
+        );
+        let live = after
+            .live_session
+            .expect("motion host should retain a live session");
+        assert!(live.contract_tree_materialization_count >= 1);
+        assert_eq!(live.runtime.active_timer_count, 0);
     }
 }

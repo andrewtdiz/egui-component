@@ -64,6 +64,7 @@ globalThis.requestRepaint = function requestRepaint() {
 
 globalThis.__clayDrainHostCallbacks = function drainHostCallbacks() {
   const dueHandles = JSON.parse(Deno.core.ops.op_host_take_due_timers());
+  let invoked = 0;
   for (const rawHandle of dueHandles) {
     const handle = Number(rawHandle);
     const entry = hostTimerCallbacks.get(handle);
@@ -74,9 +75,12 @@ globalThis.__clayDrainHostCallbacks = function drainHostCallbacks() {
       hostTimerCallbacks.delete(handle);
     }
     if (entry.animationFrame) {
-      entry.callback(performance.now());
+      entry.callback(Date.now());
+      invoked += 1;
       continue;
     }
     entry.callback(...entry.args);
+    invoked += 1;
   }
+  return invoked;
 };

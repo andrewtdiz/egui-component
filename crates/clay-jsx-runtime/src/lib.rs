@@ -18,4 +18,7 @@ pub const SCHEDULER_SOURCE: &str = include_str!("vendor/scheduler_0_27_0.mjs");
 pub use diagnostics::{
     extend_logs, push_log, RuntimeLogBuffer, LOG_HISTORY_LIMIT, LOG_MESSAGE_LIMIT_BYTES,
 };
-pub use runtime::{JsxRuntimeOptions, RuntimeSession, RuntimeUpdate, VirtualModule};
+pub use runtime::{
+    JsxRuntimeOptions, RuntimeDebugMetrics, RuntimeHostDebugCounters, RuntimeSession, RuntimeUpdate,
+    VirtualModule,
+};

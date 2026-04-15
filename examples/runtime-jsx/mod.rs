@@ -1,4 +1,5 @@
 mod app;
+mod metrics;
 mod watch;
 
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ use egui::{Context, ViewportBuilder};
 use egui_component::theme::{self, BaseColor, ThemeMode, ThemeSpec};
 
 pub use app::RuntimeJsxApp;
+pub use metrics::{request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker};
 pub use watch::ReloadWatcher;
 
 pub const WINDOW_TITLE: &str = "egui-component JSX Runtime";
@@ -58,10 +60,17 @@ pub fn run_native(entry_path: PathBuf) -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::{
+        collections::BTreeMap,
+        path::PathBuf,
+        process::Command,
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    };
 
-    use super::default_entry_path;
-    use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionFrame, MotionProperty};
+    use super::{default_entry_path, metrics::ExampleHostMetrics};
+    use clay_jsx_egui_bridge::{
+        JsxRuntimeDebugMetrics, JsxRuntimeSession, MotionFrame, MotionProperty,
+    };
     use egui_component::contract::{
         ContractEvent, ContractLength, ContractNode, ContractOverflow, EventKind, EventValue,
         NodeId,
@@ -1438,6 +1447,651 @@ render(<App />);
             .expect("motion tick should advance");
         assert!(rendered.tree.is_none());
         assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 0.25);
+    }
+
+    #[test]
+    #[ignore = "ship-readiness stress harness"]
+    fn jsx_runtime_stress_harness() {
+        let event_batches = read_env_u64("CLAY_JSX_STRESS_EVENT_BATCHES", 1_000) as usize;
+        let reload_cycles = read_env_u64("CLAY_JSX_STRESS_RELOAD_CYCLES", 100) as usize;
+        let mount_cycles = read_env_u64("CLAY_JSX_STRESS_MOUNT_CYCLES", 100) as usize;
+        let command = "cargo test --example runtime-jsx-host jsx_runtime_stress_harness -- --ignored --nocapture";
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("stress.tsx");
+        let copy_path = dir.path().join("copy.tsx");
+        write_stress_copy(&copy_path, "v0");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useEffect, useState, useSyncExternalStore } from "egui";
+import { stressCopy } from "./copy.tsx";
+
+const items = Array.from({ length: 240 }, (_, index) => `stress-item-${String(index)}`);
+
+function createStore() {
+  let snapshot = 0;
+  const listeners = new Set();
+  return {
+    getSnapshot() {
+      return snapshot;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    emit(nextValue) {
+      snapshot = nextValue;
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+  };
+}
+
+const store = createStore();
+
+function App() {
+  const [reversed, setReversed] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const tick = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+
+  useEffect(() => {
+    const handle = setInterval(() => {
+      store.emit(store.getSnapshot() + 1);
+    }, 20);
+    return () => clearInterval(handle);
+  }, []);
+
+  const ordered = reversed ? [...items].reverse() : items;
+
+  return (
+    <div id="root" data-slot="column">
+      <button id="toggle-order" label="Toggle order" onClick={() => setReversed((value) => !value)} />
+      <button id="toggle-visible" label="Toggle visible" onClick={() => setVisible((value) => !value)} />
+      <button id="noop" label="No-op" onClick={() => setChecked((value) => value)} />
+      <input
+        id="checked"
+        type="checkbox"
+        checked={checked}
+        onToggle={(event, value) => setChecked(Boolean(value))}
+      />
+      <label id="stress-copy" text={stressCopy} />
+      <label id="stress-tick" text={String(tick)} />
+      {visible && (
+        <div id="stress-list" data-slot="column">
+          {ordered.map((item) => (
+            <label key={item} id={item} text={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("stress entry should be written");
+
+        let (initial_session, _rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("stress session should load");
+        let mut session = Some(initial_session);
+        let mut totals = StressHarnessTotals::default();
+        let mut reload_teardown_metrics = Vec::new();
+        let mut all_teardown_metrics = Vec::new();
+
+        for index in 0..event_batches {
+            let rendered = session
+                .as_mut()
+                .expect("stress session should stay loaded")
+                .dispatch_events(&[ContractEvent::new("toggle-order", EventKind::Clicked)])
+                .expect("reorder dispatch should succeed");
+            if let Some(tree) = rendered.tree {
+                assert!(find_node(&tree.root, "stress-list").is_some());
+            }
+
+            let rendered = session
+                .as_mut()
+                .expect("stress session should stay loaded")
+                .dispatch_events(&[ContractEvent::new("checked", EventKind::Toggled)
+                    .value(Some(EventValue::Boolean(index % 2 == 0)))])
+                .expect("checkbox dispatch should succeed");
+            if let Some(tree) = rendered.tree {
+                assert!(find_node(&tree.root, "checked").is_some());
+            }
+
+            let rendered = session
+                .as_mut()
+                .expect("stress session should stay loaded")
+                .dispatch_events(&[ContractEvent::new("noop", EventKind::Clicked)])
+                .expect("noop dispatch should succeed");
+            assert!(rendered.tree.is_none());
+
+            if index % 25 == 0 {
+                let _ = session
+                    .as_mut()
+                    .expect("stress session should stay loaded")
+                    .dispatch_events(&[ContractEvent::new("toggle-visible", EventKind::Clicked)])
+                    .expect("visibility toggle should succeed");
+            }
+
+            let _ = drain_async_until_update(
+                session.as_mut().expect("stress session should stay loaded"),
+                Duration::from_millis(30),
+            );
+        }
+
+        for reload_index in 0..reload_cycles {
+            write_stress_copy(&copy_path, format!("v{}", reload_index + 1).as_str());
+            let mut current = session
+                .take()
+                .expect("stress reload should have a live session");
+            let _ = current.teardown().expect("stress reload should tear down");
+            let metrics = current.debug_metrics();
+            totals.record(&metrics);
+            reload_teardown_metrics.push(metrics.clone());
+            all_teardown_metrics.push(metrics);
+            drop(current);
+            let (next_session, rendered) =
+                JsxRuntimeSession::load(&entry_path).expect("stress reload should recover");
+            let tree = rendered.tree.expect("stress reload should render");
+            let expected_copy = format!("v{}", reload_index + 1);
+            assert_eq!(
+                label_text(
+                    find_node(&tree.root, "stress-copy")
+                        .expect("stress copy label should exist after reload")
+                ),
+                Some(expected_copy.as_str())
+            );
+            session = Some(next_session);
+        }
+
+        for _ in 0..mount_cycles {
+            let (mut mounted, _rendered) =
+                JsxRuntimeSession::load(&entry_path).expect("mount/unmount cycle should load");
+            let _ = mounted
+                .teardown()
+                .expect("mount/unmount cycle should tear down");
+            let metrics = mounted.debug_metrics();
+            all_teardown_metrics.push(metrics);
+        }
+
+        let mut session = session.expect("stress harness should retain a final session");
+        let _ = session
+            .teardown()
+            .expect("final stress teardown should succeed");
+        let final_metrics = session.debug_metrics();
+        totals.record(&final_metrics);
+        all_teardown_metrics.push(final_metrics.clone());
+
+        let total_updates = totals.contract_tree_materialization_count
+            + totals.contract_tree_noop_update_count
+            + totals.motion_only_update_count;
+        let mut gates = BTreeMap::new();
+        gates.insert(
+            "no_active_timers_after_teardown".to_owned(),
+            all_teardown_metrics
+                .iter()
+                .all(|metrics| metrics.runtime.active_timer_count == 0),
+        );
+        gates.insert(
+            "no_pending_wake_after_teardown".to_owned(),
+            all_teardown_metrics
+                .iter()
+                .all(|metrics| !metrics.runtime.pending_host_wake),
+        );
+        gates.insert(
+            "materialization_short_circuiting_observed".to_owned(),
+            totals.contract_tree_materialization_count < total_updates,
+        );
+        gates.insert(
+            "reloads_leave_no_dead_session_timers".to_owned(),
+            reload_teardown_metrics.iter().all(|metrics| {
+                metrics.runtime.active_timer_count == 0 && !metrics.runtime.pending_host_wake
+            }),
+        );
+        let artifact = ReadinessArtifact {
+            git_sha: git_sha(),
+            timestamp_unix_secs: unix_timestamp_secs(),
+            scenario: "stress".to_owned(),
+            command: command.to_owned(),
+            passed: gates.values().all(|passed| *passed),
+            gates,
+            metrics: ReadinessArtifactMetrics {
+                runtime: serde_json::to_value(&final_metrics.runtime)
+                    .expect("runtime metrics should serialize"),
+                bridge: final_metrics.clone(),
+                host: ExampleHostMetrics::default(),
+                extras: serde_json::json!({
+                    "event_batches": event_batches,
+                    "reload_cycles": reload_cycles,
+                    "mount_cycles": mount_cycles,
+                    "totals": totals,
+                    "reload_teardown_count": reload_teardown_metrics.len(),
+                    "all_teardown_count": all_teardown_metrics.len(),
+                    "total_update_count": total_updates,
+                }),
+            },
+            samples: Vec::new(),
+        };
+        write_readiness_artifact("stress.json", &artifact, None);
+        assert!(
+            artifact.passed,
+            "stress readiness gates failed: {}",
+            serde_json::to_string_pretty(&artifact)
+                .unwrap_or_else(|error| format!("failed to serialize stress artifact: {error}"))
+        );
+    }
+
+    #[test]
+    #[ignore = "long-running ship-readiness soak harness"]
+    fn jsx_runtime_soak_harness() {
+        let sample_interval = Duration::from_secs(read_env_u64("CLAY_JSX_SOAK_SAMPLE_SECS", 5));
+        let idle_duration = Duration::from_secs(read_env_u64("CLAY_JSX_SOAK_IDLE_SECS", 15 * 60));
+        let active_duration =
+            Duration::from_secs(read_env_u64("CLAY_JSX_SOAK_ACTIVE_SECS", 15 * 60));
+        let reload_duration =
+            Duration::from_secs(read_env_u64("CLAY_JSX_SOAK_RELOAD_SECS", 5 * 60));
+        let rss_band_kb = read_env_u64("CLAY_JSX_SOAK_RSS_BAND_KB", 64 * 1024);
+        let idle_cpu_threshold = read_env_f64("CLAY_JSX_SOAK_IDLE_CPU_THRESHOLD", 5.0);
+        let command = "cargo test --example runtime-jsx-host jsx_runtime_soak_harness -- --ignored --nocapture";
+        let mut all_teardown_metrics = Vec::new();
+        let mut reload_teardown_metrics = Vec::new();
+
+        let motion_path = default_entry_path().with_file_name("motion-sync.tsx");
+        let (mut motion_session, _rendered) =
+            JsxRuntimeSession::load(&motion_path).expect("motion session should load");
+        let rendered = motion_session
+            .dispatch_events(&[ContractEvent::new("motion-toggle", EventKind::Clicked)])
+            .expect("motion should retarget");
+        assert!(rendered.motion.active);
+        let mut now_secs = 0.0;
+        let mut motion_frame = rendered.motion;
+        while motion_frame.active {
+            now_secs += 1.0 / 30.0;
+            motion_frame = motion_session
+                .tick_motion(now_secs)
+                .expect("motion tick should succeed")
+                .motion;
+        }
+
+        let mut idle_samples = Vec::new();
+        sample_phase(
+            "motion-idle",
+            idle_duration,
+            sample_interval,
+            &mut motion_session,
+            |session| {
+                assert!(session
+                    .drain_pending_runtime_updates()
+                    .expect("idle drain should succeed")
+                    .is_none());
+            },
+            &mut idle_samples,
+        );
+        let _ = motion_session
+            .teardown()
+            .expect("motion soak teardown should succeed");
+        let motion_metrics = motion_session.debug_metrics();
+        all_teardown_metrics.push(motion_metrics.clone());
+
+        let app_path = default_entry_path();
+        let (mut app_session, _rendered) =
+            JsxRuntimeSession::load(&app_path).expect("default app should load");
+        let mut active_samples = Vec::new();
+        sample_phase(
+            "default-active",
+            active_duration,
+            sample_interval,
+            &mut app_session,
+            |session| {
+                let _ = session
+                    .drain_pending_runtime_updates()
+                    .expect("active drain should succeed");
+            },
+            &mut active_samples,
+        );
+        let _ = app_session
+            .teardown()
+            .expect("default app teardown should succeed");
+        let app_metrics = app_session.debug_metrics();
+        all_teardown_metrics.push(app_metrics.clone());
+
+        let reload_deadline = Instant::now() + reload_duration;
+        let mut reload_samples = Vec::new();
+        while Instant::now() < reload_deadline {
+            let (mut session, _rendered) =
+                JsxRuntimeSession::load(&app_path).expect("reload soak session should load");
+            let _ = session
+                .drain_pending_runtime_updates()
+                .expect("reload soak drain should succeed");
+            reload_samples.push(sample_process("reload-phase", &session.debug_metrics()));
+            let _ = session
+                .teardown()
+                .expect("reload soak teardown should succeed");
+            let metrics = session.debug_metrics();
+            reload_teardown_metrics.push(metrics.clone());
+            all_teardown_metrics.push(metrics);
+            std::thread::sleep(sample_interval);
+        }
+
+        assert!(
+            !idle_samples.is_empty(),
+            "soak harness should collect idle samples"
+        );
+        let idle_tail = &idle_samples[idle_samples.len() / 2..];
+        let idle_avg_cpu = idle_tail
+            .iter()
+            .map(|sample| sample.cpu_percent)
+            .sum::<f64>()
+            / idle_tail.len().max(1) as f64;
+
+        let mut all_samples = Vec::new();
+        all_samples.extend(idle_samples);
+        all_samples.extend(active_samples);
+        all_samples.extend(reload_samples);
+        let final_metrics = all_teardown_metrics
+            .last()
+            .cloned()
+            .unwrap_or_else(|| app_metrics.clone());
+        let mut gates = BTreeMap::new();
+        gates.insert(
+            "no_active_timers_after_teardown".to_owned(),
+            all_teardown_metrics
+                .iter()
+                .all(|metrics| metrics.runtime.active_timer_count == 0),
+        );
+        gates.insert(
+            "no_pending_wake_after_teardown".to_owned(),
+            all_teardown_metrics
+                .iter()
+                .all(|metrics| !metrics.runtime.pending_host_wake),
+        );
+        gates.insert(
+            "reload_recovery_clean".to_owned(),
+            reload_teardown_metrics.iter().all(|metrics| {
+                metrics.runtime.active_timer_count == 0 && !metrics.runtime.pending_host_wake
+            }),
+        );
+        gates.insert(
+            "memory_plateau".to_owned(),
+            rss_plateau_within_band(&all_samples, rss_band_kb),
+        );
+        gates.insert(
+            "idle_cpu_near_zero".to_owned(),
+            idle_avg_cpu <= idle_cpu_threshold,
+        );
+        gates.insert(
+            "timer_count_stable".to_owned(),
+            !shows_monotonic_growth(
+                all_samples
+                    .iter()
+                    .map(|sample| sample.metrics.runtime.active_timer_count),
+            ),
+        );
+        gates.insert(
+            "pending_wake_stable".to_owned(),
+            !shows_monotonic_growth(
+                all_samples
+                    .iter()
+                    .map(|sample| sample.metrics.runtime.pending_host_wake),
+            ),
+        );
+        let artifact = ReadinessArtifact {
+            git_sha: git_sha(),
+            timestamp_unix_secs: unix_timestamp_secs(),
+            scenario: "soak".to_owned(),
+            command: command.to_owned(),
+            passed: gates.values().all(|passed| *passed),
+            gates,
+            metrics: ReadinessArtifactMetrics {
+                runtime: serde_json::to_value(&final_metrics.runtime)
+                    .expect("runtime metrics should serialize"),
+                bridge: final_metrics,
+                host: ExampleHostMetrics::default(),
+                extras: serde_json::json!({
+                    "sample_interval_secs": sample_interval.as_secs_f64(),
+                    "idle_duration_secs": idle_duration.as_secs_f64(),
+                    "active_duration_secs": active_duration.as_secs_f64(),
+                    "reload_duration_secs": reload_duration.as_secs_f64(),
+                    "rss_band_kb": rss_band_kb,
+                    "idle_cpu_threshold": idle_cpu_threshold,
+                    "idle_avg_cpu": idle_avg_cpu,
+                    "motion_session": motion_metrics,
+                    "default_app_session": app_metrics,
+                    "reload_teardown_count": reload_teardown_metrics.len(),
+                    "all_teardown_count": all_teardown_metrics.len(),
+                }),
+            },
+            samples: all_samples.clone(),
+        };
+        write_readiness_artifact("soak.json", &artifact, Some(&artifact.samples));
+        assert!(
+            artifact.passed,
+            "soak readiness gates failed: {}",
+            serde_json::to_string_pretty(&artifact)
+                .unwrap_or_else(|error| format!("failed to serialize soak artifact: {error}"))
+        );
+    }
+
+    #[derive(Debug, Clone, Default, serde::Serialize)]
+    struct StressHarnessTotals {
+        contract_tree_materialization_count: u64,
+        contract_tree_noop_update_count: u64,
+        motion_only_update_count: u64,
+    }
+
+    impl StressHarnessTotals {
+        fn record(&mut self, metrics: &JsxRuntimeDebugMetrics) {
+            self.contract_tree_materialization_count += metrics.contract_tree_materialization_count;
+            self.contract_tree_noop_update_count += metrics.contract_tree_noop_update_count;
+            self.motion_only_update_count += metrics.motion_only_update_count;
+        }
+    }
+
+    #[derive(Debug, Clone, serde::Serialize)]
+    struct ProcessSample {
+        timestamp_unix_secs: u64,
+        phase: String,
+        rss_kb: u64,
+        cpu_percent: f64,
+        metrics: JsxRuntimeDebugMetrics,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize)]
+    struct ReadinessArtifact {
+        git_sha: String,
+        timestamp_unix_secs: u64,
+        scenario: String,
+        command: String,
+        passed: bool,
+        gates: BTreeMap<String, bool>,
+        metrics: ReadinessArtifactMetrics,
+        samples: Vec<ProcessSample>,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize)]
+    struct ReadinessArtifactMetrics {
+        runtime: serde_json::Value,
+        bridge: JsxRuntimeDebugMetrics,
+        host: ExampleHostMetrics,
+        extras: serde_json::Value,
+    }
+
+    fn write_stress_copy(path: &std::path::Path, value: &str) {
+        std::fs::write(path, format!("export const stressCopy = \"{value}\";\n"))
+            .expect("stress copy should be written");
+    }
+
+    fn read_env_u64(name: &str, default: u64) -> u64 {
+        std::env::var(name)
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(default)
+    }
+
+    fn read_env_f64(name: &str, default: f64) -> f64 {
+        std::env::var(name)
+            .ok()
+            .and_then(|value| value.parse::<f64>().ok())
+            .unwrap_or(default)
+    }
+
+    fn sample_phase(
+        phase: &str,
+        duration: Duration,
+        sample_interval: Duration,
+        session: &mut JsxRuntimeSession,
+        mut pump: impl FnMut(&mut JsxRuntimeSession),
+        samples: &mut Vec<ProcessSample>,
+    ) {
+        let deadline = Instant::now() + duration;
+        while Instant::now() < deadline {
+            pump(session);
+            samples.push(sample_process(phase, &session.debug_metrics()));
+            std::thread::sleep(sample_interval);
+        }
+    }
+
+    fn sample_process(phase: &str, metrics: &JsxRuntimeDebugMetrics) -> ProcessSample {
+        let pid = std::process::id().to_string();
+        let rss_kb = command_output_value(&["-o", "rss=", "-p", pid.as_str()])
+            .parse::<u64>()
+            .unwrap_or_else(|error| panic!("failed to parse RSS sample: {error}"));
+        let cpu_percent = command_output_value(&["-o", "%cpu=", "-p", pid.as_str()])
+            .parse::<f64>()
+            .unwrap_or_else(|error| panic!("failed to parse CPU sample: {error}"));
+        ProcessSample {
+            timestamp_unix_secs: unix_timestamp_secs(),
+            phase: phase.to_owned(),
+            rss_kb,
+            cpu_percent,
+            metrics: metrics.clone(),
+        }
+    }
+
+    fn command_output_value(args: &[&str]) -> String {
+        String::from_utf8(
+            Command::new("ps")
+                .args(args)
+                .output()
+                .expect("ps should run")
+                .stdout,
+        )
+        .expect("ps output should be utf-8")
+        .trim()
+        .to_owned()
+    }
+
+    fn git_sha() -> String {
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .expect("git rev-parse should run");
+        String::from_utf8(output.stdout)
+            .expect("git sha output should be utf-8")
+            .trim()
+            .to_owned()
+    }
+
+    fn unix_timestamp_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_secs()
+    }
+
+    fn readiness_output_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("jsx-runtime-readiness")
+    }
+
+    fn write_readiness_artifact(
+        file_name: &str,
+        artifact: &ReadinessArtifact,
+        samples: Option<&[ProcessSample]>,
+    ) {
+        let output_dir = readiness_output_dir();
+        std::fs::create_dir_all(&output_dir).expect("readiness artifact dir should exist");
+        let artifact_path = output_dir.join(file_name);
+        let artifact_json =
+            serde_json::to_string_pretty(artifact).expect("artifact json should serialize");
+        std::fs::write(&artifact_path, artifact_json).expect("artifact json should be written");
+        if let Some(samples) = samples {
+            write_samples_csv(&output_dir.join("samples.csv"), &artifact.scenario, samples);
+        }
+    }
+
+    fn write_samples_csv(path: &std::path::Path, scenario: &str, samples: &[ProcessSample]) {
+        let mut csv = String::from(
+            "scenario,timestamp_unix_secs,phase,rss_kb,cpu_percent,active_timer_count,pending_host_wake,contract_tree_materialization_count,contract_tree_noop_update_count,motion_only_update_count,host_wake_count,host_callbacks_invoked\n",
+        );
+        for sample in samples {
+            csv.push_str(&format!(
+                "{scenario},{},{},{},{:.2},{},{},{},{},{},{},{}\n",
+                sample.timestamp_unix_secs,
+                sample.phase,
+                sample.rss_kb,
+                sample.cpu_percent,
+                sample.metrics.runtime.active_timer_count,
+                sample.metrics.runtime.pending_host_wake,
+                sample.metrics.contract_tree_materialization_count,
+                sample.metrics.contract_tree_noop_update_count,
+                sample.metrics.motion_only_update_count,
+                sample.metrics.runtime.host_wake_count,
+                sample.metrics.runtime.host_callbacks_invoked,
+            ));
+        }
+        std::fs::write(path, csv).expect("samples csv should be written");
+    }
+
+    fn rss_plateau_within_band(samples: &[ProcessSample], band_kb: u64) -> bool {
+        if samples.is_empty() {
+            return false;
+        }
+        let warmup_index = samples.len() / 3;
+        let steady_state = &samples[warmup_index..];
+        if steady_state.is_empty() {
+            return false;
+        }
+        let min_rss = steady_state
+            .iter()
+            .map(|sample| sample.rss_kb)
+            .min()
+            .expect("steady-state samples should exist");
+        let max_rss = steady_state
+            .iter()
+            .map(|sample| sample.rss_kb)
+            .max()
+            .expect("steady-state samples should exist");
+        let final_sample = steady_state
+            .last()
+            .expect("steady-state samples should have a final element");
+        max_rss.saturating_sub(min_rss) <= band_kb
+            && final_sample.metrics.runtime.active_timer_count
+                <= final_sample.metrics.runtime.active_timer_high_water
+    }
+
+    fn shows_monotonic_growth<T>(values: impl IntoIterator<Item = T>) -> bool
+    where
+        T: Copy + PartialOrd,
+    {
+        let mut previous = None;
+        let mut increased = false;
+        for value in values {
+            if let Some(previous_value) = previous {
+                if value < previous_value {
+                    return false;
+                }
+                if value > previous_value {
+                    increased = true;
+                }
+            }
+            previous = Some(value);
+        }
+        increased
     }
 
     fn checkbox_value(node: &ContractNode, node_id: &str) -> Option<bool> {

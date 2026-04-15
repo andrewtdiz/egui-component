@@ -28,7 +28,6 @@ members = [
     ".",
     "crates/clay-jsx-runtime",
     "crates/clay-jsx-egui-bridge",
-    "tools/example-runner",
 ]
 resolver = "2"
 

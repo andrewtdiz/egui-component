@@ -13,4 +13,6 @@ This crate owns the host-neutral pieces:
 7. JS can commit JSON batches through `Deno.core.ops.op_commit_mutations(...)` and write diagnostics through `op_host_log(...)`.
 8. Renderer-specific crates interpret the committed JSON and own their contract model, validation, retained tree, event dispatch semantics, and teardown behavior.
 
+For ship-readiness and test harnesses, `RuntimeSession::debug_metrics()` exposes host wake, callback-drain, timer, active-timer, and shutdown counters so bridges can assert cleanup and repaint behavior with hard gates instead of behavioral guesses.
+
 The egui-component bridge lives in `crates/clay-jsx-egui-bridge`.

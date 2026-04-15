@@ -4,7 +4,9 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context as AnyhowContext};
-use clay_jsx_runtime::{JsxRuntimeOptions, RuntimeSession};
+use clay_jsx_runtime::{
+    JsxRuntimeOptions, RuntimeDebugMetrics, RuntimeHostDebugCounters, RuntimeSession,
+};
 use egui_component::contract::{
     audit_tailwind_support, registry, ContractChildPolicy, ContractEvent, ContractNode,
     ContractTree, CONTRACT_MODEL_VERSION,
@@ -36,6 +38,27 @@ pub struct JsxRuntimeLoadFailure {
     pub error: anyhow::Error,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct JsxRuntimeDebugMetrics {
+    pub render_call_count: u64,
+    pub dispatch_event_batch_count: u64,
+    pub mutation_batch_count: u64,
+    pub contract_tree_materialization_count: u64,
+    pub contract_tree_noop_update_count: u64,
+    pub motion_only_update_count: u64,
+    pub teardown_count: u64,
+    pub unmount_count: u64,
+    pub replace_root_count: u64,
+    pub replace_subtree_count: u64,
+    pub update_node_count: u64,
+    pub insert_subtree_count: u64,
+    pub remove_subtree_count: u64,
+    pub set_children_count: u64,
+    pub set_motion_count: u64,
+    pub clear_motion_count: u64,
+    pub runtime: RuntimeDebugMetrics,
+}
+
 #[derive(Debug)]
 pub enum JsxRuntimeLoadOutcome {
     Loaded {
@@ -49,6 +72,7 @@ pub struct JsxRuntimeSession {
     entry_path: PathBuf,
     host_tree: HostTree,
     runtime: RuntimeSession,
+    metrics: JsxRuntimeDebugMetrics,
     torn_down: bool,
 }
 
@@ -113,6 +137,7 @@ impl JsxRuntimeSession {
             entry_path,
             host_tree: HostTree::default(),
             runtime,
+            metrics: JsxRuntimeDebugMetrics::default(),
             torn_down: false,
         };
         match session.take_rendered() {
@@ -130,6 +155,12 @@ impl JsxRuntimeSession {
 
     pub fn dependency_paths(&self) -> Vec<PathBuf> {
         self.runtime.loaded_module_paths()
+    }
+
+    pub fn debug_metrics(&self) -> JsxRuntimeDebugMetrics {
+        let mut metrics = self.metrics.clone();
+        metrics.runtime = self.runtime.debug_metrics();
+        metrics
     }
 
     pub fn set_wake_callback<F>(&mut self, callback: F)
@@ -151,6 +182,7 @@ impl JsxRuntimeSession {
     }
 
     pub fn dispatch_events(&mut self, events: &[ContractEvent]) -> anyhow::Result<RenderedJsx> {
+        self.metrics.dispatch_event_batch_count += 1;
         let events_json = serde_json::to_string(events)?;
         let source = format!("globalThis.__eguiDispatchEvents({events_json});");
         self.runtime
@@ -168,6 +200,7 @@ impl JsxRuntimeSession {
         }
         let tick = self.host_tree.tick_motion(now_secs);
         let _changed = tick.changed;
+        self.metrics.motion_only_update_count += 1;
         Ok(RenderedJsx {
             tree: None,
             motion: tick.frame,
@@ -180,6 +213,7 @@ impl JsxRuntimeSession {
             return Ok(clay_jsx_runtime::RuntimeLogBuffer::new());
         }
         self.torn_down = true;
+        self.metrics.teardown_count += 1;
         let result = self
             .runtime
             .execute_script(
@@ -189,11 +223,14 @@ impl JsxRuntimeSession {
             .map_err(|error| anyhow!("failed to tear down egui JSX runtime: {error}"));
         self.runtime.shutdown_host_runtime();
         result?;
-        Ok(self.runtime.take_update().logs)
+        let update = self.runtime.take_update();
+        self.apply_runtime_update_metrics(update.host_debug_counters);
+        Ok(update.logs)
     }
 
     fn take_rendered(&mut self) -> anyhow::Result<RenderedJsx> {
         let update = self.runtime.take_update();
+        self.apply_runtime_update_metrics(update.host_debug_counters);
         let mutation_batches_json = update.commit_batches_json;
         let mut logs = update.logs;
 
@@ -204,6 +241,7 @@ impl JsxRuntimeSession {
         let mut tree_changed = false;
         for mutations_json in mutation_batches_json {
             let batch = decode_mutation_batch(&self.entry_path, &mutations_json)?;
+            self.record_mutation_batch_metrics(&batch);
             if batch.version != CONTRACT_MODEL_VERSION {
                 bail!(
                     "{} returned contract model version {}, but this host supports version {}",
@@ -226,6 +264,7 @@ impl JsxRuntimeSession {
             bail!("{} did not call render(<... />)", self.entry_path.display());
         }
         if !tree_changed {
+            self.metrics.contract_tree_noop_update_count += 1;
             return Ok(RenderedJsx {
                 tree: None,
                 motion: self.host_tree.motion_frame(),
@@ -233,6 +272,7 @@ impl JsxRuntimeSession {
             });
         }
 
+        self.metrics.contract_tree_materialization_count += 1;
         let tree = self.host_tree.materialize()?;
         validate_contract_tree(&self.entry_path, &tree)?;
         append_tailwind_diagnostics(&tree, &mut logs);
@@ -242,6 +282,43 @@ impl JsxRuntimeSession {
             motion: self.host_tree.motion_frame(),
             logs,
         })
+    }
+
+    fn apply_runtime_update_metrics(&mut self, counters: RuntimeHostDebugCounters) {
+        self.metrics.render_call_count = counters.render_call_count;
+        self.metrics.unmount_count = counters.unmount_count;
+    }
+
+    fn record_mutation_batch_metrics(&mut self, batch: &HostMutationBatch) {
+        self.metrics.mutation_batch_count += 1;
+        for mutation in &batch.mutations {
+            match mutation {
+                super::host_tree::HostMutation::ReplaceRoot { .. } => {
+                    self.metrics.replace_root_count += 1;
+                }
+                super::host_tree::HostMutation::InsertSubtree { .. } => {
+                    self.metrics.insert_subtree_count += 1;
+                }
+                super::host_tree::HostMutation::RemoveSubtree { .. } => {
+                    self.metrics.remove_subtree_count += 1;
+                }
+                super::host_tree::HostMutation::ReplaceSubtree { .. } => {
+                    self.metrics.replace_subtree_count += 1;
+                }
+                super::host_tree::HostMutation::UpdateNode { .. } => {
+                    self.metrics.update_node_count += 1;
+                }
+                super::host_tree::HostMutation::SetChildren { .. } => {
+                    self.metrics.set_children_count += 1;
+                }
+                super::host_tree::HostMutation::SetMotion { .. } => {
+                    self.metrics.set_motion_count += 1;
+                }
+                super::host_tree::HostMutation::ClearMotion { .. } => {
+                    self.metrics.clear_motion_count += 1;
+                }
+            }
+        }
     }
 }
 

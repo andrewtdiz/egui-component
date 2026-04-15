@@ -19,7 +19,8 @@ pub use motion::{
     MotionValues,
 };
 pub use runtime::{
-    HotReloadState, JsxRuntimeLoadFailure, JsxRuntimeLoadOutcome, JsxRuntimeSession, RenderedJsx,
+    HotReloadState, JsxRuntimeDebugMetrics, JsxRuntimeLoadFailure, JsxRuntimeLoadOutcome,
+    JsxRuntimeSession, RenderedJsx,
 };
 
 #[cfg(test)]
@@ -1165,6 +1166,175 @@ render(<App />);
     }
 
     #[test]
+    fn noop_rerender_does_not_materialize_a_new_contract_tree() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("noop.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useState } from "egui";
+
+function App() {
+  const [label, setLabel] = useState("steady");
+  return (
+    <div id="root" data-slot="column">
+      <button id="noop" label="No-op" onClick={() => setLabel((current) => current)} />
+      <label id="status" text={label} />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        assert!(rendered.tree.is_some());
+        let initial_metrics = session.debug_metrics();
+        assert_eq!(initial_metrics.contract_tree_materialization_count, 1);
+        assert_eq!(initial_metrics.render_call_count, 1);
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("noop", EventKind::Clicked)])
+            .expect("noop dispatch should succeed");
+        assert!(rendered.tree.is_none());
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.contract_tree_materialization_count, 1);
+        assert_eq!(metrics.contract_tree_noop_update_count, 1);
+        assert_eq!(metrics.dispatch_event_batch_count, 1);
+        assert_eq!(
+            metrics.mutation_batch_count,
+            initial_metrics.mutation_batch_count
+        );
+    }
+
+    #[test]
+    fn motion_only_tick_keeps_the_contract_tree_materialization_count_flat() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("motion-metrics.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useState } from "egui";
+import { motion } from "motion/react";
+
+function App() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div id="root" data-slot="column">
+      <button id="toggle" label="Toggle" onClick={() => setOpen(true)} />
+      <motion.label
+        id="status"
+        text="Status"
+        animate={{ opacity: open ? 1 : 0, x: open ? 0 : -10 }}
+        transition={{ duration: 1, ease: "linear" }}
+      />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        assert!(rendered.tree.is_some());
+        assert_eq!(
+            session.debug_metrics().contract_tree_materialization_count,
+            1
+        );
+
+        let rendered = session
+            .dispatch_events(&[ContractEvent::new("toggle", EventKind::Clicked)])
+            .expect("motion retarget should succeed");
+        assert!(rendered.tree.is_none());
+
+        let rendered = session
+            .tick_motion(0.5)
+            .expect("motion-only tick should succeed");
+        assert!(rendered.tree.is_none());
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.contract_tree_materialization_count, 1);
+        assert_eq!(metrics.motion_only_update_count, 1);
+    }
+
+    #[test]
+    fn timer_driven_async_update_wakes_the_host_and_commits_once() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("async-metrics.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useEffect, useState } from "egui";
+
+function App() {
+  const [status, setStatus] = useState("idle");
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setStatus("ready");
+    }, 0);
+    return () => clearTimeout(handle);
+  }, []);
+
+  return <label id="status" text={status} />;
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        let (mut session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+        let tree = rendered.tree.expect("initial render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("idle")
+        );
+        let initial_metrics = session.debug_metrics();
+
+        let rendered = drain_async_until(&mut session, Duration::from_millis(100), |rendered| {
+            let Some(tree) = rendered.tree.as_ref() else {
+                return false;
+            };
+            label_text(find_node(&tree.root, "status").expect("status label should exist"))
+                == Some("ready")
+        })
+        .expect("timer-driven rerender should arrive");
+        let tree = rendered.tree.expect("async update should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("ready")
+        );
+
+        let metrics = session.debug_metrics();
+        assert_eq!(
+            metrics.mutation_batch_count,
+            initial_metrics.mutation_batch_count + 1
+        );
+        assert_eq!(
+            metrics.contract_tree_materialization_count,
+            initial_metrics.contract_tree_materialization_count + 1
+        );
+        assert!(metrics.runtime.host_wake_count >= 1);
+        assert!(
+            metrics.runtime.host_callback_drain_cycles
+                >= initial_metrics.runtime.host_callback_drain_cycles + 1
+        );
+        assert!(
+            metrics.runtime.host_callbacks_invoked
+                >= initial_metrics.runtime.host_callbacks_invoked + 1
+        );
+    }
+
+    #[test]
     fn effect_cleanup_runs_on_dependency_change() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("cleanup.tsx");
@@ -1271,6 +1441,146 @@ render(<App />);
             "expected teardown cleanup log, got {:?}",
             logs
         );
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.teardown_count, 1);
+        assert_eq!(metrics.unmount_count, 1);
+        assert_eq!(metrics.runtime.active_timer_count, 0);
+        assert!(!metrics.runtime.pending_host_wake);
+    }
+
+    #[test]
+    fn repeated_mount_unmount_cycles_do_not_accumulate_timers_or_pending_wakes() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("mount-unmount.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useEffect } from "egui";
+
+function App() {
+  useEffect(() => {
+    const handle = setInterval(() => {}, 100);
+    return () => clearInterval(handle);
+  }, []);
+
+  return <label id="status" text="mounted" />;
+}
+
+render(<App />);
+"#,
+        )
+        .expect("tsx file should be written");
+
+        for _ in 0..10 {
+            let (mut session, _rendered) =
+                JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+            let _ = session.teardown().expect("teardown should succeed");
+            let metrics = session.debug_metrics();
+            assert_eq!(metrics.runtime.active_timer_count, 0);
+            assert!(!metrics.runtime.pending_host_wake);
+        }
+    }
+
+    #[test]
+    fn failed_reload_recovery_does_not_leave_timers_running_in_the_dead_session() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("app.tsx");
+        let child_path = dir.path().join("copy.tsx");
+        let missing_path = dir.path().join("missing.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+import { Copy } from "./copy.tsx";
+
+function App() {
+  return (
+    <div id="root" data-slot="column">
+      <Copy />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("entry file should be written");
+        std::fs::write(
+            &child_path,
+            r#"
+import { useEffect } from "egui";
+
+export function Copy() {
+  useEffect(() => {
+    const handle = setInterval(() => {}, 100);
+    return () => clearInterval(handle);
+  }, []);
+  return <label id="copy" text="Old copy" />;
+}
+"#,
+        )
+        .expect("child file should be written");
+
+        let (mut old_session, _rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("tsx should transpile and render");
+
+        std::fs::write(
+            &child_path,
+            r#"
+import { Missing } from "./missing.tsx";
+
+export function Copy() {
+  return <Missing />;
+}
+"#,
+        )
+        .expect("updated child file should be written");
+
+        let _ = old_session
+            .teardown()
+            .expect("old session should tear down");
+        let old_metrics = old_session.debug_metrics();
+        assert_eq!(old_metrics.teardown_count, 1);
+        assert_eq!(old_metrics.runtime.active_timer_count, 0);
+        assert!(!old_metrics.runtime.pending_host_wake);
+
+        let failure = match JsxRuntimeSession::load_with_hot_reload_state_outcome(&entry_path, None)
+        {
+            JsxRuntimeLoadOutcome::Failed(failure) => failure,
+            JsxRuntimeLoadOutcome::Loaded { .. } => {
+                panic!("reload should fail while the dependency is missing")
+            }
+        };
+        assert!(
+            failure
+                .dependency_paths
+                .iter()
+                .any(|path| path == &missing_path),
+            "missing dependency should be tracked for recovery"
+        );
+
+        std::fs::write(
+            &missing_path,
+            r#"
+export function Missing() {
+  return <label id="copy" text="Recovered copy" />;
+}
+"#,
+        )
+        .expect("missing dependency should be written");
+
+        let (recovered_session, rendered) =
+            JsxRuntimeSession::load(&entry_path).expect("reload should recover");
+        let tree = rendered
+            .tree
+            .expect("recovered render should return a tree");
+        assert_eq!(
+            label_text(find_node(&tree.root, "copy").expect("copy label should exist")),
+            Some("Recovered copy")
+        );
+        let metrics = recovered_session.debug_metrics();
+        assert_eq!(metrics.render_call_count, 1);
+        assert_eq!(metrics.contract_tree_materialization_count, 1);
     }
 
     fn repository_example_path() -> PathBuf {

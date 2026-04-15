@@ -3,14 +3,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clay_jsx_egui_bridge::{HotReloadState, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame};
+use clay_jsx_egui_bridge::{
+    HotReloadState, JsxRuntimeDebugMetrics, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame,
+};
 use egui::{CentralPanel, Context, RichText, TopBottomPanel};
 use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree},
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
 
-use super::{default_entry_path, ReloadWatcher};
+use super::{
+    default_entry_path, request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker,
+    ReloadWatcher,
+};
 
 #[derive(Debug)]
 pub struct RuntimeJsxApp {
@@ -23,6 +28,8 @@ pub struct RuntimeJsxApp {
     motion: MotionFrame,
     watched_files: BTreeSet<PathBuf>,
     error: Option<String>,
+    metrics: ExampleHostMetricsTracker,
+    last_torn_down_session: Option<JsxRuntimeDebugMetrics>,
 }
 
 impl Default for RuntimeJsxApp {
@@ -44,6 +51,8 @@ impl RuntimeJsxApp {
             motion: MotionFrame::default(),
             watched_files: BTreeSet::new(),
             error: None,
+            metrics: ExampleHostMetricsTracker::default(),
+            last_torn_down_session: None,
         }
     }
 
@@ -114,6 +123,7 @@ impl RuntimeJsxApp {
     }
 
     fn reload_from_disk(&mut self, ctx: &Context) {
+        self.metrics.note_reload_attempt();
         self.capture_hot_reload_state();
         self.teardown_session();
 
@@ -131,13 +141,14 @@ impl RuntimeJsxApp {
                         .into_iter()
                         .chain([self.entry_path.clone()]),
                 );
-                install_session_wake_callback(&mut session, ctx);
+                install_session_wake_callback(&mut session, ctx, self.metrics.clone());
                 self.session = Some(session);
                 self.rendered = rendered.tree;
                 self.motion = rendered.motion;
                 self.error = None;
+                self.metrics.note_reload_success();
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
                 self.drain_pending_runtime_updates(ctx);
             }
@@ -154,6 +165,7 @@ impl RuntimeJsxApp {
                     failure.dependency_paths,
                     &self.entry_path,
                 ));
+                self.metrics.note_reload_failure();
             }
         }
     }
@@ -171,7 +183,7 @@ impl RuntimeJsxApp {
                 self.motion = rendered.motion;
                 self.error = None;
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
             }
             Err(error) => {
@@ -187,16 +199,17 @@ impl RuntimeJsxApp {
 
         match session.drain_pending_runtime_updates() {
             Ok(Some(rendered)) => {
+                self.metrics.note_runtime_update_drain();
                 if let Some(tree) = rendered.tree {
                     self.rendered = Some(tree);
                 }
                 self.motion = rendered.motion;
                 self.error = None;
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
             }
-            Ok(None) => {}
+            Ok(None) => self.metrics.note_runtime_update_drain_empty(),
             Err(error) => {
                 self.error = Some(error.to_string());
             }
@@ -216,7 +229,7 @@ impl RuntimeJsxApp {
             Ok(rendered) => {
                 self.motion = rendered.motion;
                 if self.motion.active {
-                    ctx.request_repaint();
+                    request_host_repaint(ctx, &self.metrics);
                 }
                 self.error = None;
             }
@@ -242,7 +255,9 @@ impl RuntimeJsxApp {
         if self.reload_watcher.is_some() {
             return;
         }
-        match ReloadWatcher::new(ctx) {
+        let repaint_ctx = ctx.clone();
+        let repaint_metrics = self.metrics.clone();
+        match ReloadWatcher::new(move || request_host_repaint(&repaint_ctx, &repaint_metrics)) {
             Ok(mut watcher) => {
                 if let Err(error) = watcher.set_tracked_files(self.watched_files.iter().cloned()) {
                     self.error = Some(format!("Failed to start JSX reload watcher: {error}"));
@@ -268,6 +283,15 @@ impl RuntimeJsxApp {
     fn teardown_session(&mut self) {
         if let Some(mut session) = self.session.take() {
             let _ = session.teardown();
+            self.last_torn_down_session = Some(session.debug_metrics());
+        }
+    }
+
+    pub(crate) fn debug_snapshot(&self) -> ExampleHostDebugSnapshot {
+        ExampleHostDebugSnapshot {
+            host: self.metrics.snapshot(),
+            live_session: self.session.as_ref().map(JsxRuntimeSession::debug_metrics),
+            last_torn_down_session: self.last_torn_down_session.clone(),
         }
     }
 }
@@ -292,13 +316,19 @@ fn collect_failure_tracked_files(
     paths.into_iter().collect()
 }
 
-fn install_session_wake_callback(session: &mut JsxRuntimeSession, ctx: &Context) {
+fn install_session_wake_callback(
+    session: &mut JsxRuntimeSession,
+    ctx: &Context,
+    metrics: ExampleHostMetricsTracker,
+) {
     let ctx = ctx.clone();
-    session.set_wake_callback(move || ctx.request_repaint());
+    session.set_wake_callback(move || request_host_repaint(&ctx, &metrics));
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use egui_component::contract::{ContractEvent, ContractNode, EventKind, EventValue};
     use tempfile::tempdir;
 
@@ -487,6 +517,120 @@ export function Extra() {
             label_text(find_node(&tree.root, "extra").expect("extra label should exist")),
             Some("Extra copy")
         );
+
+        let snapshot = app.debug_snapshot();
+        assert_eq!(snapshot.host.reload_attempt_count, 3);
+        assert_eq!(snapshot.host.reload_success_count, 2);
+        assert_eq!(snapshot.host.reload_failure_count, 1);
+        assert_eq!(snapshot.host.reload_recovery_count, 1);
+        let torn_down = snapshot
+            .last_torn_down_session
+            .expect("failed reload should capture the dead session metrics");
+        assert_eq!(torn_down.teardown_count, 1);
+        assert_eq!(torn_down.runtime.active_timer_count, 0);
+        assert!(!torn_down.runtime.pending_host_wake);
+        let live = snapshot
+            .live_session
+            .expect("recovered reload should have a live session");
+        assert_eq!(live.render_call_count, 1);
+    }
+
+    #[test]
+    fn timer_driven_runtime_update_requests_repaint_and_drains_one_visible_update() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("async.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render, useEffect, useState } from "egui";
+
+function App() {
+  const [status, setStatus] = useState("idle");
+  useEffect(() => {
+    const handle = setTimeout(() => setStatus("ready"), 15);
+    return () => clearTimeout(handle);
+  }, []);
+  return <label id="status" text={status} />;
+}
+
+render(<App />);
+"#,
+        )
+        .expect("entry file should be written");
+
+        let mut app = RuntimeJsxApp::new(&entry_path);
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
+        app.initialized = true;
+        let before = app.debug_snapshot();
+
+        wait_for(Duration::from_millis(100), || {
+            app.drain_pending_runtime_updates(&ctx);
+            label_text(
+                find_node(&rendered_tree(&app).root, "status")
+                    .expect("status label should exist while draining"),
+            ) == Some("ready")
+        });
+
+        let snapshot = app.debug_snapshot();
+        assert_eq!(
+            snapshot.host.runtime_update_drain_count,
+            before.host.runtime_update_drain_count + 1
+        );
+        assert!(
+            snapshot.host.repaint_request_count >= 1,
+            "timer wake should request at least one repaint"
+        );
+        let live = snapshot
+            .live_session
+            .expect("timer-driven update should leave a live session");
+        assert!(live.runtime.host_wake_count >= 1);
+        assert!(live.runtime.host_wake_callback_count >= 1);
+        assert!(live.runtime.host_callback_drain_cycles >= 1);
+        assert!(live.runtime.host_callbacks_invoked >= 1);
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("ready")
+        );
+    }
+
+    #[test]
+    fn idle_host_path_does_not_synthesize_reload_attempts_or_visible_runtime_updates() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("static.tsx");
+        std::fs::write(
+            &entry_path,
+            r#"
+import { render } from "egui";
+
+render(<label id="status" text="steady" />);
+"#,
+        )
+        .expect("entry file should be written");
+
+        let mut app = RuntimeJsxApp::new(&entry_path);
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
+        app.initialized = true;
+        let before = app.debug_snapshot();
+
+        app.reload_initial_or_external_changes(&ctx);
+        app.drain_pending_runtime_updates(&ctx);
+
+        let after = app.debug_snapshot();
+        assert_eq!(
+            after.host.reload_attempt_count,
+            before.host.reload_attempt_count
+        );
+        assert_eq!(
+            after.host.runtime_update_drain_count,
+            before.host.runtime_update_drain_count
+        );
+        assert_eq!(
+            after.host.runtime_update_drain_empty_count,
+            before.host.runtime_update_drain_empty_count + 1
+        );
     }
 
     fn rendered_tree(app: &RuntimeJsxApp) -> &ContractTree {
@@ -551,6 +695,19 @@ export function Extra() {
         match node {
             ContractNode::Label(props) => Some(props.text.as_str()),
             _ => None,
+        }
+    }
+
+    fn wait_for(timeout: Duration, mut predicate: impl FnMut() -> bool) {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if predicate() {
+                return;
+            }
+            if Instant::now() >= deadline {
+                panic!("timed out waiting for the condition");
+            }
+            std::thread::sleep(Duration::from_millis(5));
         }
     }
 }

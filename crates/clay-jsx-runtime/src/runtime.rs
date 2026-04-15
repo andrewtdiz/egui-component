@@ -1,11 +1,11 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         mpsc::{self, RecvTimeoutError, Sender},
         Arc, Mutex,
     },
@@ -86,6 +86,30 @@ impl VirtualModule {
 pub struct RuntimeUpdate {
     pub commit_batches_json: Vec<String>,
     pub logs: RuntimeLogBuffer,
+    pub host_debug_counters: RuntimeHostDebugCounters,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeHostDebugCounters {
+    pub render_call_count: u64,
+    pub unmount_count: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeDebugMetrics {
+    pub host_wake_count: u64,
+    pub host_wake_callback_count: u64,
+    pub host_callback_drain_cycles: u64,
+    pub host_callbacks_invoked: u64,
+    pub host_callback_drain_noop_count: u64,
+    pub timer_schedule_count: u64,
+    pub timer_cancel_count: u64,
+    pub timer_fire_count: u64,
+    pub timer_repeat_fire_count: u64,
+    pub active_timer_count: u64,
+    pub active_timer_high_water: u64,
+    pub shutdown_count: u64,
+    pub pending_host_wake: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,9 +118,12 @@ struct HostRuntimeBridge {
 }
 
 struct HostRuntimeBridgeInner {
+    is_shutdown: AtomicBool,
     wake: RuntimeWakeState,
     next_timer_handle: AtomicU32,
     pending_due_timers: Mutex<Vec<u32>>,
+    active_timers: Mutex<HashSet<u32>>,
+    metrics: RuntimeDebugCounterState,
     timer_command_tx: Mutex<Option<Sender<TimerCommand>>>,
     timer_worker: Mutex<Option<JoinHandle<()>>>,
 }
@@ -124,9 +151,12 @@ enum TimerCommand {
 impl Default for HostRuntimeBridgeInner {
     fn default() -> Self {
         Self {
+            is_shutdown: AtomicBool::new(false),
             wake: RuntimeWakeState::default(),
             next_timer_handle: AtomicU32::new(1),
             pending_due_timers: Mutex::new(Vec::new()),
+            active_timers: Mutex::new(HashSet::new()),
+            metrics: RuntimeDebugCounterState::default(),
             timer_command_tx: Mutex::new(None),
             timer_worker: Mutex::new(None),
         }
@@ -165,13 +195,20 @@ impl HostRuntimeBridge {
 
     fn schedule_timer(&self, delay_ms: u64, interval_ms: Option<u64>) -> u32 {
         let handle = self.inner.next_timer_handle.fetch_add(1, Ordering::Relaxed);
+        self.inner
+            .metrics
+            .timer_schedule_count
+            .fetch_add(1, Ordering::Relaxed);
+        self.inner.register_active_timer(handle);
         if delay_ms == 0 && interval_ms.is_none() {
+            self.inner.note_timer_fire(false);
+            self.inner.unregister_active_timer(handle);
             self.inner
                 .pending_due_timers
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .push(handle);
-            self.inner.wake.trigger();
+            self.inner.wake.trigger(&self.inner.metrics);
             return handle;
         }
         let entry = TimerEntry {
@@ -193,6 +230,11 @@ impl HostRuntimeBridge {
     }
 
     fn cancel_timer(&self, handle: u32) {
+        self.inner
+            .metrics
+            .timer_cancel_count
+            .fetch_add(1, Ordering::Relaxed);
+        self.inner.unregister_active_timer(handle);
         self.inner
             .pending_due_timers
             .lock()
@@ -221,7 +263,7 @@ impl HostRuntimeBridge {
     }
 
     fn request_wake(&self) {
-        self.inner.wake.trigger();
+        self.inner.wake.trigger(&self.inner.metrics);
     }
 
     fn set_wake_callback<F>(&self, callback: F)
@@ -250,6 +292,13 @@ impl HostRuntimeBridge {
     }
 
     fn shutdown(&self) {
+        if self.inner.is_shutdown.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        self.inner
+            .metrics
+            .shutdown_count
+            .fetch_add(1, Ordering::Relaxed);
         let timer_command_tx = self
             .inner
             .timer_command_tx
@@ -275,11 +324,41 @@ impl HostRuntimeBridge {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
+        self.inner.clear_active_timers();
+    }
+
+    fn note_callback_drain_cycle(&self) {
+        self.inner
+            .metrics
+            .host_callback_drain_cycles
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn note_callback_drain_noop(&self) {
+        self.inner
+            .metrics
+            .host_callback_drain_noop_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn note_callbacks_invoked(&self, count: u64) {
+        self.inner
+            .metrics
+            .host_callbacks_invoked
+            .fetch_add(count, Ordering::Relaxed);
+    }
+
+    fn debug_metrics(&self) -> RuntimeDebugMetrics {
+        self.inner.metrics.snapshot(
+            self.inner.wake.pending.load(Ordering::SeqCst),
+            self.inner.active_timer_count(),
+        )
     }
 }
 
 impl RuntimeWakeState {
-    fn trigger(&self) {
+    fn trigger(&self, metrics: &RuntimeDebugCounterState) {
+        metrics.host_wake_count.fetch_add(1, Ordering::Relaxed);
         self.pending.store(true, Ordering::SeqCst);
         let callback = self
             .callback
@@ -287,6 +366,9 @@ impl RuntimeWakeState {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
         if let Some(callback) = callback {
+            metrics
+                .host_wake_callback_count
+                .fetch_add(1, Ordering::Relaxed);
             callback();
         }
     }
@@ -339,8 +421,11 @@ fn run_timer_worker(
             while timer.next_fire_at <= now {
                 due_handles.push(timer.handle);
                 if let Some(interval) = timer.interval {
+                    inner.note_timer_fire(true);
                     timer.next_fire_at += interval;
                 } else {
+                    inner.note_timer_fire(false);
+                    inner.unregister_active_timer(timer.handle);
                     completed_one_shots.push(timer.handle);
                     break;
                 }
@@ -358,7 +443,93 @@ fn run_timer_worker(
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .extend(due_handles);
-        inner.wake.trigger();
+        inner.wake.trigger(&inner.metrics);
+    }
+}
+
+#[derive(Debug, Default)]
+struct RuntimeDebugCounterState {
+    host_wake_count: AtomicU64,
+    host_wake_callback_count: AtomicU64,
+    host_callback_drain_cycles: AtomicU64,
+    host_callbacks_invoked: AtomicU64,
+    host_callback_drain_noop_count: AtomicU64,
+    timer_schedule_count: AtomicU64,
+    timer_cancel_count: AtomicU64,
+    timer_fire_count: AtomicU64,
+    timer_repeat_fire_count: AtomicU64,
+    active_timer_high_water: AtomicU64,
+    shutdown_count: AtomicU64,
+}
+
+impl RuntimeDebugCounterState {
+    fn snapshot(&self, pending_host_wake: bool, active_timer_count: u64) -> RuntimeDebugMetrics {
+        RuntimeDebugMetrics {
+            host_wake_count: self.host_wake_count.load(Ordering::Relaxed),
+            host_wake_callback_count: self.host_wake_callback_count.load(Ordering::Relaxed),
+            host_callback_drain_cycles: self.host_callback_drain_cycles.load(Ordering::Relaxed),
+            host_callbacks_invoked: self.host_callbacks_invoked.load(Ordering::Relaxed),
+            host_callback_drain_noop_count: self
+                .host_callback_drain_noop_count
+                .load(Ordering::Relaxed),
+            timer_schedule_count: self.timer_schedule_count.load(Ordering::Relaxed),
+            timer_cancel_count: self.timer_cancel_count.load(Ordering::Relaxed),
+            timer_fire_count: self.timer_fire_count.load(Ordering::Relaxed),
+            timer_repeat_fire_count: self.timer_repeat_fire_count.load(Ordering::Relaxed),
+            active_timer_count,
+            active_timer_high_water: self.active_timer_high_water.load(Ordering::Relaxed),
+            shutdown_count: self.shutdown_count.load(Ordering::Relaxed),
+            pending_host_wake,
+        }
+    }
+}
+
+impl HostRuntimeBridgeInner {
+    fn active_timer_count(&self) -> u64 {
+        self.active_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len() as u64
+    }
+
+    fn register_active_timer(&self, handle: u32) {
+        let active_count = {
+            let mut active_timers = self
+                .active_timers
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            active_timers.insert(handle);
+            active_timers.len() as u64
+        };
+        self.metrics
+            .active_timer_high_water
+            .fetch_max(active_count, Ordering::Relaxed);
+    }
+
+    fn unregister_active_timer(&self, handle: u32) {
+        let _ = self
+            .active_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&handle);
+    }
+
+    fn clear_active_timers(&self) {
+        self.active_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
+
+    fn note_timer_fire(&self, repeat: bool) {
+        self.metrics
+            .timer_fire_count
+            .fetch_add(1, Ordering::Relaxed);
+        if repeat {
+            self.metrics
+                .timer_repeat_fire_count
+                .fetch_add(1, Ordering::Relaxed);
+        }
     }
 }
 
@@ -367,6 +538,7 @@ struct RuntimeState {
     commit_batches_json: Vec<String>,
     logs: RuntimeLogBuffer,
     host_runtime: HostRuntimeBridge,
+    host_debug_counters: RuntimeHostDebugCounters,
 }
 
 #[op2(fast)]
@@ -389,6 +561,18 @@ fn op_host_log(
 ) -> Result<(), JsErrorBox> {
     let runtime_state = state.borrow_mut::<RuntimeState>();
     push_log(&mut runtime_state.logs, format!("{level}: {message}"));
+    Ok(())
+}
+
+#[op2(fast)]
+fn op_host_note_render(state: &mut OpState) -> Result<(), JsErrorBox> {
+    state.borrow_mut::<RuntimeState>().host_debug_counters.render_call_count += 1;
+    Ok(())
+}
+
+#[op2(fast)]
+fn op_host_note_unmount(state: &mut OpState) -> Result<(), JsErrorBox> {
+    state.borrow_mut::<RuntimeState>().host_debug_counters.unmount_count += 1;
     Ok(())
 }
 
@@ -433,6 +617,8 @@ extension!(
     ops = [
         op_commit_mutations,
         op_host_log,
+        op_host_note_render,
+        op_host_note_unmount,
         op_host_schedule_timer,
         op_host_cancel_timer,
         op_host_request_wake,
@@ -650,6 +836,7 @@ impl RuntimeSession {
         RuntimeUpdate {
             commit_batches_json: std::mem::take(&mut state.commit_batches_json),
             logs: std::mem::take(&mut state.logs),
+            host_debug_counters: state.host_debug_counters,
         }
     }
 
@@ -677,24 +864,37 @@ impl RuntimeSession {
     }
 
     pub fn drain_host_callbacks(&mut self) -> anyhow::Result<bool> {
-        let mut drained_any = false;
+        if !self.host_runtime.take_pending_wake() {
+            self.host_runtime.note_callback_drain_noop();
+            return Ok(false);
+        }
+
+        self.host_runtime.note_callback_drain_cycle();
         let mut iterations = 0usize;
-        while self.host_runtime.take_pending_wake() {
+        let mut invoked_callbacks = 0u64;
+        loop {
             iterations += 1;
             if iterations > 256 {
                 return Err(anyhow!("host callback drain exceeded 256 iterations"));
             }
-            drained_any = true;
-            self.execute_script(
+            invoked_callbacks += self.execute_script_as::<u64>(
                 "[clay:drain-host-callbacks]",
-                "globalThis.__clayDrainHostCallbacks == null ? undefined : globalThis.__clayDrainHostCallbacks();",
+                "globalThis.__clayDrainHostCallbacks == null ? 0 : globalThis.__clayDrainHostCallbacks()",
             )?;
+            if !self.host_runtime.take_pending_wake() {
+                break;
+            }
         }
-        Ok(drained_any)
+        self.host_runtime.note_callbacks_invoked(invoked_callbacks);
+        Ok(true)
     }
 
     pub fn shutdown_host_runtime(&mut self) {
         self.host_runtime.shutdown();
+    }
+
+    pub fn debug_metrics(&self) -> RuntimeDebugMetrics {
+        self.host_runtime.debug_metrics()
     }
 
     fn evaluate_main_module(&mut self, main_module: &ModuleSpecifier) -> anyhow::Result<()> {
@@ -852,6 +1052,8 @@ fn normalize_file_path(path: &Path) -> anyhow::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use tempfile::tempdir;
 
     use super::{JsxRuntimeOptions, RuntimeSession};
@@ -957,6 +1159,161 @@ export const answer = answerValue;
         );
     }
 
+    #[test]
+    fn zero_delay_timeout_schedules_a_wake_and_drains_exactly_one_callback() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session.set_host_wake_callback(|| {});
+        session
+            .execute_script(
+                "[test:zero-timeout]",
+                r#"
+globalThis.timeoutCount = 0;
+setTimeout(() => {
+  globalThis.timeoutCount += 1;
+}, 0);
+"#,
+            )
+            .expect("zero-delay timeout should schedule");
+
+        wait_for_pending_wake(&session, Duration::from_millis(100));
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.host_wake_count, 1);
+        assert_eq!(metrics.host_wake_callback_count, 1);
+        assert_eq!(metrics.timer_schedule_count, 1);
+        assert_eq!(metrics.timer_fire_count, 1);
+        assert!(metrics.pending_host_wake);
+        assert_eq!(metrics.active_timer_count, 0);
+
+        assert!(session
+            .drain_host_callbacks()
+            .expect("draining callbacks should succeed"));
+        assert_eq!(
+            session
+                .execute_json_expression_as::<u32>(
+                    "[test:zero-timeout-count]",
+                    "globalThis.timeoutCount",
+                )
+                .expect("timeout count should deserialize"),
+            1
+        );
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.host_callback_drain_cycles, 1);
+        assert_eq!(metrics.host_callbacks_invoked, 1);
+        assert_eq!(metrics.host_callback_drain_noop_count, 0);
+        assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
+    fn interval_repeats_until_cancelled_and_active_timer_count_returns_to_zero() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:interval]",
+                r#"
+globalThis.intervalCount = 0;
+globalThis.intervalHandle = setInterval(() => {
+  globalThis.intervalCount += 1;
+}, 5);
+"#,
+            )
+            .expect("interval should schedule");
+
+        wait_for_expression(
+            &mut session,
+            Duration::from_millis(200),
+            "globalThis.intervalCount",
+            |count: u32| count >= 2,
+        );
+
+        let metrics = session.debug_metrics();
+        assert!(metrics.timer_fire_count >= 2);
+        assert!(metrics.timer_repeat_fire_count >= 2);
+        assert_eq!(metrics.active_timer_count, 1);
+        assert!(metrics.active_timer_high_water >= 1);
+
+        session
+            .execute_script(
+                "[test:interval-cancel]",
+                "clearInterval(globalThis.intervalHandle);",
+            )
+            .expect("interval should cancel");
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.timer_cancel_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+    }
+
+    #[test]
+    fn request_animation_frame_is_a_one_shot_callback() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:raf]",
+                r#"
+globalThis.rafTimestamp = -1;
+requestAnimationFrame((timestamp) => {
+  globalThis.rafTimestamp = timestamp;
+});
+"#,
+            )
+            .expect("requestAnimationFrame should schedule");
+
+        wait_for_pending_wake(&session, Duration::from_millis(200));
+        assert!(session
+            .drain_host_callbacks()
+            .expect("raf callbacks should drain"));
+
+        let timestamp = session
+            .execute_json_expression_as::<f64>("[test:raf-ts]", "globalThis.rafTimestamp")
+            .expect("raf timestamp should deserialize");
+        assert!(timestamp >= 0.0);
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.timer_schedule_count, 1);
+        assert_eq!(metrics.timer_fire_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+        assert_eq!(metrics.host_callbacks_invoked, 1);
+    }
+
+    #[test]
+    fn shutdown_clears_timers_and_pending_wake_state() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:shutdown]",
+                r#"
+globalThis.shutdownInterval = setInterval(() => {}, 1000);
+setTimeout(() => {}, 0);
+"#,
+            )
+            .expect("timers should schedule");
+
+        wait_for_pending_wake(&session, Duration::from_millis(100));
+        session.shutdown_host_runtime();
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.shutdown_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+        assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
+    fn draining_host_callbacks_without_work_is_counted_as_a_noop() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        assert!(!session
+            .drain_host_callbacks()
+            .expect("noop drain should succeed"));
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.host_callback_drain_noop_count, 1);
+        assert_eq!(metrics.host_callback_drain_cycles, 0);
+        assert_eq!(metrics.host_callbacks_invoked, 0);
+    }
+
     fn test_options() -> JsxRuntimeOptions {
         JsxRuntimeOptions::new("clay")
             .with_virtual_module(
@@ -978,5 +1335,46 @@ export const jsxs = jsx;
 export const jsxDEV = jsx;
 "#,
             )
+    }
+
+    fn wait_for_pending_wake(session: &RuntimeSession, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if session.debug_metrics().pending_host_wake {
+                return;
+            }
+            if Instant::now() >= deadline {
+                panic!("timed out waiting for a pending host wake");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    fn wait_for_expression<T>(
+        session: &mut RuntimeSession,
+        timeout: Duration,
+        expression: &str,
+        predicate: impl Fn(T) -> bool,
+    ) where
+        T: serde::de::DeserializeOwned,
+    {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if session.debug_metrics().pending_host_wake {
+                let _ = session
+                    .drain_host_callbacks()
+                    .expect("draining callbacks while waiting should succeed");
+            }
+            let value = session
+                .execute_json_expression_as::<T>("[test:wait-expression]", expression)
+                .expect("expression should deserialize");
+            if predicate(value) {
+                return;
+            }
+            if Instant::now() >= deadline {
+                panic!("timed out waiting for expression {expression}");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 }

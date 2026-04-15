@@ -28,6 +28,13 @@ if let Some(async_render) = session.drain_pending_runtime_updates()? {
 let motion_frame = session.tick_motion(now_secs)?.motion;
 ```
 
+`JsxRuntimeSession::debug_metrics()` surfaces the retained-runtime readiness counters for ship gates and harnesses:
+
+- React root/render and event-dispatch counts
+- retained mutation batch and per-mutation-kind counts
+- contract-tree materialization, no-op, motion-only, teardown, and unmount counts
+- nested shared-runtime wake/timer/shutdown counters from `clay-jsx-runtime`
+
 The eframe authoring shell remains in the repository example at `examples/runtime-jsx`.
 
 Supported authoring exports now include `useState`, `useEffect`, `useReducer`, `useRef`, `useContext`, `useSyncExternalStore`, `startTransition`, `useDeferredValue`, `createContext`, `render`, `eventValue`, `log`, and `requestRepaint`.

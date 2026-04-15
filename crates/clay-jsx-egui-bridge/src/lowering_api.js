@@ -300,21 +300,26 @@ export function normalizedFamilyForType(type, props, metadataView) {
   return normalizeFamilyName(type, props ?? {}, metadataView, []);
 }
 
+export function pathForCommittedChild(path, node, index) {
+  return childPathFor(path, node, index);
+}
+
 export function lowerCommittedRoot(children, metadataView) {
-  const state = {
-    handlers: new Map(),
-    metadataView,
-    seenNodeIds: new Set(),
-    warnings: [],
-  };
+  const state = createLoweringState(metadataView);
   const loweredChildren = lowerChildren(children, "root", state);
   if (loweredChildren.length === 0) {
-    return { root: null, handlers: state.handlers, warnings: state.warnings };
+    return {
+      root: null,
+      handlers: state.handlers,
+      handler_index: state.handlerIndex,
+      warnings: state.warnings,
+    };
   }
   if (loweredChildren.length === 1) {
     return {
       root: loweredChildren[0],
       handlers: state.handlers,
+      handler_index: state.handlerIndex,
       warnings: state.warnings,
     };
   }
@@ -328,7 +333,28 @@ export function lowerCommittedRoot(children, metadataView) {
       state,
     ),
     handlers: state.handlers,
+    handler_index: state.handlerIndex,
     warnings: state.warnings,
+  };
+}
+
+export function lowerCommittedSubtree(node, path, metadataView) {
+  const state = createLoweringState(metadataView);
+  return {
+    root: lowerChild(node, path, state),
+    handlers: state.handlers,
+    handler_index: state.handlerIndex,
+    warnings: state.warnings,
+  };
+}
+
+function createLoweringState(metadataView) {
+  return {
+    handlerIndex: new Map(),
+    handlers: new Map(),
+    metadataView,
+    seenNodeIds: new Set(),
+    warnings: [],
   };
 }
 
@@ -440,6 +466,7 @@ function lowerChild(node, path, state) {
     normalizedNode.action_id == null ? null : String(normalizedNode.action_id),
     handlerEntries,
     state.handlers,
+    state.handlerIndex,
   );
 
   return hostDescriptor(
@@ -500,16 +527,24 @@ function resolveNodeId(family, explicitNodeId, path, metadataView) {
   );
 }
 
-function registerHandlers(nodeId, actionId, handlers, table) {
+function registerHandlers(nodeId, actionId, handlers, table, handlerIndex) {
+  const entries = [];
   for (const [propName, handler] of handlers) {
     const kind = handlerEventKinds[propName];
     if (kind == null) {
       throw new Error(`Unsupported function prop "${propName}".`);
     }
-    pushHandler(table, `${nodeId}:${kind}`, handler);
+    const nodeKey = `${nodeId}:${kind}`;
+    pushHandler(table, nodeKey, handler);
+    entries.push({ key: nodeKey, handler });
     if (actionId != null && actionId !== "") {
-      pushHandler(table, `action:${actionId}:${kind}`, handler);
+      const actionKey = `action:${actionId}:${kind}`;
+      pushHandler(table, actionKey, handler);
+      entries.push({ key: actionKey, handler });
     }
+  }
+  if (entries.length > 0) {
+    handlerIndex.set(nodeId, entries);
   }
 }
 

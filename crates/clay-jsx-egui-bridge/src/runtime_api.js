@@ -5,7 +5,9 @@ import {
   createContractMetadataView,
   familyUsesTextContent,
   lowerCommittedRoot,
+  lowerCommittedSubtree,
   normalizedFamilyForType,
+  pathForCommittedChild,
 } from "clay-internal:/egui-lowering";
 
 const contractMetadata = globalThis.__eguiContract ?? {};
@@ -50,9 +52,16 @@ export function requestRepaint() {
 
 function createHostNode(type, props) {
   return {
+    allowsChildren: false,
     children: [],
+    contractProps: null,
+    family: null,
+    handlerRegistrations: [],
     hidden: false,
     kind: "host",
+    materialized: false,
+    motion: null,
+    nodeId: null,
     parent: null,
     props: props ?? {},
     type: String(type),
@@ -61,11 +70,64 @@ function createHostNode(type, props) {
 
 function createTextNode(text) {
   return {
+    allowsChildren: false,
+    children: [],
+    contractProps: null,
+    family: null,
+    handlerRegistrations: [],
     hidden: false,
     kind: "text",
+    materialized: false,
+    motion: null,
+    nodeId: null,
     parent: null,
     text: String(text),
   };
+}
+
+function isHostNode(value) {
+  return value?.kind === "host";
+}
+
+function isTextNode(value) {
+  return value?.kind === "text";
+}
+
+function childProducesDescriptor(node) {
+  if (node == null || node.hidden === true) {
+    return false;
+  }
+  if (isTextNode(node)) {
+    return String(node.text).trim() !== "";
+  }
+  if (isHostNode(node)) {
+    return true;
+  }
+  throw new Error(`Cannot lower committed node kind ${String(node?.kind)}.`);
+}
+
+function collectLowerableChildren(children) {
+  const result = [];
+  for (const child of children ?? []) {
+    if (childProducesDescriptor(child)) {
+      result.push(child);
+    }
+  }
+  return result;
+}
+
+function loweredChildIndex(parent, child) {
+  const siblings = parent.children ?? [];
+  let index = 0;
+  for (const sibling of siblings) {
+    if (sibling === child) {
+      return index;
+    }
+    if (childProducesDescriptor(sibling)) {
+      index += 1;
+    }
+  }
+  throw new Error("Committed child is not linked under its parent.");
 }
 
 function detachLinkedChild(parent, child) {
@@ -80,13 +142,15 @@ function detachLinkedChild(parent, child) {
 }
 
 function detachFromCurrentParent(child) {
-  if (child.parent != null) {
-    detachLinkedChild(child.parent, child);
+  const previousParent = child.parent;
+  if (previousParent != null) {
+    detachLinkedChild(previousParent, child);
   }
+  return previousParent;
 }
 
 function linkChild(parent, child, beforeChild = null) {
-  detachFromCurrentParent(child);
+  const previousParent = detachFromCurrentParent(child);
   child.parent = parent;
   const children = parent.children ?? [];
   const index = beforeChild == null ? -1 : children.indexOf(beforeChild);
@@ -95,217 +159,445 @@ function linkChild(parent, child, beforeChild = null) {
   } else {
     children.push(child);
   }
+  return previousParent;
 }
 
-function commitContainer(container) {
+function logLoweringWarnings(warnings) {
+  for (const warning of warnings ?? []) {
+    if (loggedWarnings.has(warning)) {
+      continue;
+    }
+    loggedWarnings.add(warning);
+    log("warn", warning);
+  }
+}
+
+function withRuntimeErrorCapture(callback) {
+  if (pendingRuntimeError != null) {
+    return;
+  }
   try {
-    const lowered = lowerCommittedRoot(container.children, metadataView);
-    for (const warning of lowered.warnings) {
-      if (loggedWarnings.has(warning)) {
-        continue;
-      }
-      loggedWarnings.add(warning);
-      log("warn", warning);
-    }
-
-    if (lowered.root == null) {
-      if (rootRendered && !allowEmptyCommit) {
-        throw new Error("render() expected a JSX element.");
-      }
-      container.rootInstance = null;
-      container.handlers = new Map();
-      return;
-    }
-
-    const mutations = [];
-    const previousIndex = indexInstanceTree(container.rootInstance);
-    container.rootInstance = reconcileRoot(
-      container.rootInstance,
-      lowered.root,
-      mutations,
-      previousIndex,
-    );
-    container.handlers = lowered.handlers;
-
-    if (mutations.length > 0) {
-      Deno.core.ops.op_commit_mutations(
-        JSON.stringify({ version: metadataView.version, mutations }),
-      );
-    }
+    callback();
   } catch (error) {
     pendingRuntimeError = error;
   }
 }
 
-function reconcileRoot(previous, descriptor, mutations, previousIndex) {
-  if (
-    previous == null ||
-    previous.nodeId !== descriptor.nodeId ||
-    previous.family !== descriptor.family
-  ) {
-    // Root identity is the normalized family + nodeId pair. Either side changing
-    // remounts the subtree so renderer-local egui state cannot drift across identities.
-    const next = mountInstance(descriptor, null);
-    mutations.push({ kind: "replace_root", subtree: materializeInstance(next) });
-    appendMountedMotionMutations(next, mutations);
-    return next;
-  }
-
-  reconcileInstance(previous, descriptor, mutations, previousIndex);
-  return previous;
-}
-
-function reconcileInstance(instance, descriptor, mutations, previousIndex) {
-  if (!sameValue(instance.props, descriptor.props)) {
-    instance.props = descriptor.props;
-    mutations.push({ kind: "update_node", node: { ...descriptor.props } });
-  }
-
-  if (!sameValue(instance.motion, descriptor.motion)) {
-    instance.motion = descriptor.motion;
-    appendMotionMutation(instance, mutations);
-  }
-
-  reconcileChildren(instance, descriptor.children, mutations, previousIndex);
-}
-
-function reconcileChildren(parent, descriptors, mutations, previousIndex) {
-  const previousChildren = parent.children;
-  const previousOrder = previousChildren.map((child) => child.nodeId);
-  const previousById = new Map(previousChildren.map((child) => [child.nodeId, child]));
-
-  const nextChildren = [];
-  const handledPrevious = new Set();
-
-  descriptors.forEach((descriptor, index) => {
-    const existing = previousById.get(descriptor.nodeId);
-    if (existing != null && existing.family === descriptor.family) {
-      existing.parent = parent;
-      reconcileInstance(existing, descriptor, mutations, previousIndex);
-      nextChildren.push(existing);
-      handledPrevious.add(existing);
-      return;
-    }
-
-    const globalExisting = previousIndex.get(descriptor.nodeId);
-    const positionalChild = previousChildren[index];
-    if (
-      positionalChild != null &&
-      !handledPrevious.has(positionalChild) &&
-      positionalChild.family === descriptor.family &&
-      positionalChild.nodeId !== descriptor.nodeId &&
-      globalExisting == null
-    ) {
-      // Same-family, same-slot replacements with a fresh nodeId are deliberate remounts.
-      // This keeps identity-sensitive widgets from inheriting egui-local state when the
-      // authored identity changes in place.
-      const next = mountInstance(descriptor, parent);
-      nextChildren.push(next);
-      mutations.push({
-        kind: "replace_subtree",
-        node_id: positionalChild.nodeId,
-        subtree: materializeInstance(next),
-      });
-      appendMountedMotionMutations(next, mutations);
-      handledPrevious.add(positionalChild);
-      return;
-    }
-
-    const next = mountInstance(descriptor, parent);
-    nextChildren.push(next);
-    if (existing != null) {
-      // A reused nodeId with a different normalized family is also a remount boundary.
-      mutations.push({
-        kind: "replace_subtree",
-        node_id: existing.nodeId,
-        subtree: materializeInstance(next),
-      });
-      appendMountedMotionMutations(next, mutations);
-      handledPrevious.add(existing);
-    } else {
-      mutations.push({
-        kind: "insert_subtree",
-        index,
-        parent_id: parent.nodeId,
-        subtree: materializeInstance(next),
-      });
-      appendMountedMotionMutations(next, mutations);
-    }
-  });
-
-  for (const child of previousChildren) {
-    if (!handledPrevious.has(child)) {
-      mutations.push({ kind: "remove_subtree", node_id: child.nodeId });
-    }
-  }
-
-  parent.children = nextChildren;
-  const nextOrder = nextChildren.map((child) => child.nodeId);
-  if (!sameStringArray(previousOrder, nextOrder)) {
-    mutations.push({
-      kind: "set_children",
-      node_id: parent.nodeId,
-      child_ids: nextOrder,
-    });
-  }
-}
-
-function indexInstanceTree(root) {
-  const index = new Map();
-  visitInstance(root, index);
-  return index;
-}
-
-function visitInstance(instance, index) {
-  if (instance == null) {
+function throwPendingRuntimeError() {
+  if (pendingRuntimeError == null) {
     return;
   }
-  index.set(instance.nodeId, instance);
-  for (const child of instance.children) {
-    visitInstance(child, index);
+  const error = pendingRuntimeError;
+  pendingRuntimeError = null;
+  throw error;
+}
+
+function removeHandlerRegistrations(container, instance) {
+  for (const registration of instance.handlerRegistrations ?? []) {
+    const handlers = container.handlers.get(registration.key);
+    if (handlers == null) {
+      continue;
+    }
+    const index = handlers.indexOf(registration.handler);
+    if (index >= 0) {
+      handlers.splice(index, 1);
+    }
+    if (handlers.length === 0) {
+      container.handlers.delete(registration.key);
+    }
+  }
+  instance.handlerRegistrations = [];
+}
+
+function clearMaterializedMetadata(container, instance) {
+  removeHandlerRegistrations(container, instance);
+  for (const child of instance.children ?? []) {
+    clearMaterializedMetadata(container, child);
+  }
+  instance.allowsChildren = false;
+  instance.contractProps = null;
+  instance.family = null;
+  instance.materialized = false;
+  instance.motion = null;
+  instance.nodeId = null;
+}
+
+function syncSubtreeFromDescriptor(container, instance, descriptor, handlerIndex) {
+  removeHandlerRegistrations(container, instance);
+  instance.allowsChildren = metadataView.familiesWithChildren.has(descriptor.family);
+  instance.contractProps = descriptor.props;
+  instance.family = descriptor.family;
+  instance.materialized = true;
+  instance.motion = descriptor.motion;
+  instance.nodeId = descriptor.nodeId;
+
+  const registrations = handlerIndex.get(descriptor.nodeId) ?? [];
+  instance.handlerRegistrations = registrations;
+  for (const registration of registrations) {
+    const handlers = container.handlers.get(registration.key) ?? [];
+    handlers.push(registration.handler);
+    container.handlers.set(registration.key, handlers);
+  }
+
+  const descriptorChildren = descriptor.children ?? [];
+  let descriptorIndex = 0;
+  for (const child of instance.children ?? []) {
+    if (!instance.allowsChildren || !childProducesDescriptor(child)) {
+      clearMaterializedMetadata(container, child);
+      continue;
+    }
+    const childDescriptor = descriptorChildren[descriptorIndex];
+    if (childDescriptor == null) {
+      clearMaterializedMetadata(container, child);
+      continue;
+    }
+    syncSubtreeFromDescriptor(container, child, childDescriptor, handlerIndex);
+    descriptorIndex += 1;
+  }
+
+  if (descriptorIndex !== descriptorChildren.length) {
+    throw new Error(
+      `Lowered descriptor for node "${descriptor.nodeId}" could not be mapped to committed children.`,
+    );
   }
 }
 
-function mountInstance(descriptor, parent) {
-  const instance = {
-    children: [],
-    family: descriptor.family,
-    motion: descriptor.motion,
-    nodeId: descriptor.nodeId,
-    parent,
-    props: descriptor.props,
-  };
-  instance.children = descriptor.children.map((child) => mountInstance(child, instance));
-  return instance;
-}
-
-function materializeInstance(instance) {
-  const node = { ...instance.props };
-  if (instance.children.length > 0) {
-    node.children = instance.children.map(materializeInstance);
+function materializeDescriptor(descriptor) {
+  const node = { ...descriptor.props };
+  if ((descriptor.children ?? []).length > 0) {
+    node.children = descriptor.children.map((child) => materializeDescriptor(child));
   }
   return node;
 }
 
-function appendMountedMotionMutations(instance, mutations) {
-  if (instance.motion != null) {
-    appendMotionMutation(instance, mutations);
-  }
-  for (const child of instance.children) {
-    appendMountedMotionMutations(child, mutations);
+function appendDescriptorMotionMutations(descriptor, mutations) {
+  appendMotionMutation(descriptor.nodeId, descriptor.motion, mutations);
+  for (const child of descriptor.children ?? []) {
+    appendDescriptorMotionMutations(child, mutations);
   }
 }
 
-function appendMotionMutation(instance, mutations) {
-  if (instance.motion == null) {
-    mutations.push({ kind: "clear_motion", node_id: instance.nodeId });
+function appendMotionMutation(nodeId, motion, mutations) {
+  if (motion == null) {
+    mutations.push({ kind: "clear_motion", node_id: nodeId });
     return;
   }
   mutations.push({
     kind: "set_motion",
-    node_id: instance.nodeId,
-    motion: instance.motion,
+    node_id: nodeId,
+    motion,
   });
+}
+
+function pathForInstance(instance) {
+  const parent = instance.parent;
+  if (parent == null) {
+    throw new Error("Committed node is missing a parent.");
+  }
+  const index = loweredChildIndex(parent, instance);
+  if (parent.kind === "container") {
+    return pathForCommittedChild("root", instance, index);
+  }
+  if (parent.nodeId == null || parent.nodeId === "") {
+    throw new Error("Committed node parent is missing a materialized node_id.");
+  }
+  return pathForCommittedChild(`${parent.nodeId}.child`, instance, index);
+}
+
+function lowerInstanceSubtree(instance) {
+  const lowered = lowerCommittedSubtree(instance, pathForInstance(instance), metadataView);
+  logLoweringWarnings(lowered.warnings);
+  return lowered;
+}
+
+function queueMutation(container, mutation) {
+  container.pendingMutations.push(mutation);
+}
+
+function queueDirtyParentOrder(container, parent) {
+  if (parent == null) {
+    return;
+  }
+  if (parent.kind === "container") {
+    container.rootSyncRequired = true;
+    return;
+  }
+  if (!parent.materialized || !parent.allowsChildren || parent.nodeId == null) {
+    return;
+  }
+  container.dirtyParents.add(parent);
+}
+
+function removeMaterializedSubtree(container, parent, child) {
+  if (!child.materialized || child.nodeId == null) {
+    clearMaterializedMetadata(container, child);
+    return;
+  }
+  if (parent?.kind === "container") {
+    container.rootSyncRequired = true;
+    clearMaterializedMetadata(container, child);
+    return;
+  }
+  queueMutation(container, { kind: "remove_subtree", node_id: child.nodeId });
+  clearMaterializedMetadata(container, child);
+}
+
+function insertMaterializedSubtree(container, parent, child) {
+  if (parent == null) {
+    return;
+  }
+  if (parent.kind === "container") {
+    container.rootSyncRequired = true;
+    return;
+  }
+  if (!parent.materialized || !parent.allowsChildren || parent.nodeId == null) {
+    clearMaterializedMetadata(container, child);
+    return;
+  }
+  if (!childProducesDescriptor(child)) {
+    clearMaterializedMetadata(container, child);
+    return;
+  }
+
+  const lowered = lowerInstanceSubtree(child);
+  if (lowered.root == null) {
+    clearMaterializedMetadata(container, child);
+    return;
+  }
+
+  const index = loweredChildIndex(parent, child);
+  queueMutation(container, {
+    kind: "insert_subtree",
+    index,
+    parent_id: parent.nodeId,
+    subtree: materializeDescriptor(lowered.root),
+  });
+  appendDescriptorMotionMutations(lowered.root, container.pendingMutations);
+  syncSubtreeFromDescriptor(container, child, lowered.root, lowered.handler_index);
+}
+
+function replaceMaterializedSubtree(container, instance, nextDescriptor, nextHandlerIndex) {
+  const parent = instance.parent;
+  if (parent?.kind === "container" && !container.syntheticRoot && container.rootNodeId === instance.nodeId) {
+    queueMutation(container, {
+      kind: "replace_root",
+      subtree: materializeDescriptor(nextDescriptor),
+    });
+    appendDescriptorMotionMutations(nextDescriptor, container.pendingMutations);
+    syncSubtreeFromDescriptor(container, instance, nextDescriptor, nextHandlerIndex);
+    container.rootNodeId = nextDescriptor.nodeId;
+    return;
+  }
+
+  queueMutation(container, {
+    kind: "replace_subtree",
+    node_id: instance.nodeId,
+    subtree: materializeDescriptor(nextDescriptor),
+  });
+  appendDescriptorMotionMutations(nextDescriptor, container.pendingMutations);
+  syncSubtreeFromDescriptor(container, instance, nextDescriptor, nextHandlerIndex);
+}
+
+function reconcileMaterializedNode(container, instance) {
+  const parent = instance.parent;
+  if (parent == null) {
+    return;
+  }
+
+  if (parent.kind !== "container" && (!parent.materialized || !parent.allowsChildren)) {
+    clearMaterializedMetadata(container, instance);
+    return;
+  }
+
+  const lowerable = childProducesDescriptor(instance);
+  if (!lowerable) {
+    removeMaterializedSubtree(container, parent, instance);
+    return;
+  }
+
+  const lowered = lowerInstanceSubtree(instance);
+  if (lowered.root == null) {
+    removeMaterializedSubtree(container, parent, instance);
+    return;
+  }
+
+  if (!instance.materialized || instance.nodeId == null || instance.family == null) {
+    insertMaterializedSubtree(container, parent, instance);
+    return;
+  }
+
+  if (instance.nodeId !== lowered.root.nodeId || instance.family !== lowered.root.family) {
+    if (parent.kind === "container" && container.syntheticRoot) {
+      container.rootSyncRequired = true;
+      return;
+    }
+    replaceMaterializedSubtree(container, instance, lowered.root, lowered.handler_index);
+    return;
+  }
+
+  const previousProps = instance.contractProps;
+  const previousMotion = instance.motion;
+  syncSubtreeFromDescriptor(container, instance, lowered.root, lowered.handler_index);
+
+  if (!sameValue(previousProps, lowered.root.props)) {
+    queueMutation(container, {
+      kind: "update_node",
+      node: { ...lowered.root.props },
+    });
+  }
+
+  if (!sameValue(previousMotion, lowered.root.motion)) {
+    appendMotionMutation(lowered.root.nodeId, lowered.root.motion, container.pendingMutations);
+  }
+}
+
+function flushRootSync(container) {
+  const lowered = lowerCommittedRoot(container.children, metadataView);
+  logLoweringWarnings(lowered.warnings);
+
+  for (const child of container.children) {
+    clearMaterializedMetadata(container, child);
+  }
+  container.handlers = new Map();
+
+  if (lowered.root == null) {
+    if (rootRendered && !allowEmptyCommit) {
+      throw new Error("render() expected a JSX element.");
+    }
+    container.rootNodeId = null;
+    container.syntheticRoot = false;
+    return;
+  }
+
+  const topLevel = collectLowerableChildren(container.children);
+  if (topLevel.length === 1) {
+    syncSubtreeFromDescriptor(container, topLevel[0], lowered.root, lowered.handler_index);
+  } else {
+    if (topLevel.length !== lowered.root.children.length) {
+      throw new Error("Root lowering could not be mapped back to committed top-level nodes.");
+    }
+    for (let index = 0; index < topLevel.length; index += 1) {
+      syncSubtreeFromDescriptor(
+        container,
+        topLevel[index],
+        lowered.root.children[index],
+        lowered.handler_index,
+      );
+    }
+  }
+
+  const mutations = [
+    {
+      kind: "replace_root",
+      subtree: materializeDescriptor(lowered.root),
+    },
+  ];
+  appendDescriptorMotionMutations(lowered.root, mutations);
+
+  Deno.core.ops.op_commit_mutations(
+    JSON.stringify({ version: metadataView.version, mutations }),
+  );
+
+  container.rootNodeId = lowered.root.nodeId;
+  container.syntheticRoot = topLevel.length > 1;
+}
+
+function flushDirtyParentOrders(container) {
+  for (const parent of container.dirtyParents) {
+    if (!parent.materialized || !parent.allowsChildren || parent.nodeId == null) {
+      continue;
+    }
+    const childIds = [];
+    for (const child of parent.children ?? []) {
+      if (!child.materialized || child.nodeId == null) {
+        continue;
+      }
+      childIds.push(child.nodeId);
+    }
+    queueMutation(container, {
+      kind: "set_children",
+      node_id: parent.nodeId,
+      child_ids: childIds,
+    });
+  }
+}
+
+function beginCommit(container) {
+  container.pendingMutations = [];
+  container.dirtyParents = new Set();
+  container.rootSyncRequired = false;
+}
+
+function flushCommit(container) {
+  if (pendingRuntimeError != null) {
+    return;
+  }
+  if (container.rootSyncRequired) {
+    flushRootSync(container);
+    return;
+  }
+  flushDirtyParentOrders(container);
+  if (container.pendingMutations.length === 0) {
+    return;
+  }
+  Deno.core.ops.op_commit_mutations(
+    JSON.stringify({ version: metadataView.version, mutations: container.pendingMutations }),
+  );
+}
+
+function linkChildWithMutations(container, parent, child, beforeChild = null) {
+  const previousParent = linkChild(parent, child, beforeChild);
+
+  if (previousParent === parent) {
+    if (child.materialized) {
+      queueDirtyParentOrder(container, parent);
+    }
+    return;
+  }
+
+  if (child.materialized && previousParent != null) {
+    if (previousParent.kind === "container" || parent.kind === "container") {
+      container.rootSyncRequired = true;
+      return;
+    }
+    queueMutation(container, { kind: "remove_subtree", node_id: child.nodeId });
+    clearMaterializedMetadata(container, child);
+    insertMaterializedSubtree(container, parent, child);
+    return;
+  }
+
+  insertMaterializedSubtree(container, parent, child);
+}
+
+function detachChildWithMutations(container, parent, child) {
+  detachLinkedChild(parent, child);
+  removeMaterializedSubtree(container, parent, child);
+}
+
+function resetTextContentWithMutations(container, instance) {
+  for (const child of [...instance.children]) {
+    detachLinkedChild(instance, child);
+    removeMaterializedSubtree(container, instance, child);
+  }
+  instance.children = [];
+}
+
+function dispatchEvent(container, event) {
+  const nodeId = String(event?.node_id ?? "");
+  const kind = String(event?.kind ?? "");
+  const actionId = event?.action_id == null ? null : String(event.action_id);
+  const candidates = [
+    `${nodeId}:${kind}`,
+    `${nodeId}:*`,
+    actionId == null ? null : `action:${actionId}:${kind}`,
+    actionId == null ? null : `action:${actionId}:*`,
+  ].filter(Boolean);
+
+  for (const key of candidates) {
+    for (const handler of container.handlers.get(key) ?? []) {
+      handler(event, eventValue(event));
+    }
+  }
 }
 
 function sameStringArray(a, b) {
@@ -341,35 +633,8 @@ function sameValue(a, b) {
   return false;
 }
 
-function dispatchEvent(container, event) {
-  const nodeId = String(event?.node_id ?? "");
-  const kind = String(event?.kind ?? "");
-  const actionId = event?.action_id == null ? null : String(event.action_id);
-  const candidates = [
-    `${nodeId}:${kind}`,
-    `${nodeId}:*`,
-    actionId == null ? null : `action:${actionId}:${kind}`,
-    actionId == null ? null : `action:${actionId}:*`,
-  ].filter(Boolean);
-
-  for (const key of candidates) {
-    for (const handler of container.handlers.get(key) ?? []) {
-      handler(event, eventValue(event));
-    }
-  }
-}
-
 function isPlainObject(value) {
   return typeof value === "object" && value != null && !Array.isArray(value);
-}
-
-function throwPendingRuntimeError() {
-  if (pendingRuntimeError == null) {
-    return;
-  }
-  const error = pendingRuntimeError;
-  pendingRuntimeError = null;
-  throw error;
 }
 
 const hostConfig = {
@@ -377,10 +642,15 @@ const hostConfig = {
   NotPendingTransition: null,
   afterActiveInstanceBlur() {},
   appendChild(parent, child) {
-    linkChild(parent, child, null);
+    withRuntimeErrorCapture(() => {
+      linkChildWithMutations(container, parent, child, null);
+    });
   },
-  appendChildToContainer(container, child) {
-    linkChild(container, child, null);
+  appendChildToContainer(parentContainer, child) {
+    withRuntimeErrorCapture(() => {
+      linkChild(parentContainer, child, null);
+      parentContainer.rootSyncRequired = true;
+    });
   },
   appendInitialChild(parent, child) {
     linkChild(parent, child, null);
@@ -391,17 +661,27 @@ const hostConfig = {
       clearTimeout(id);
     }
   },
-  clearContainer(container) {
-    for (const child of [...container.children]) {
-      detachLinkedChild(container, child);
-    }
-    container.children = [];
+  clearContainer(parentContainer) {
+    withRuntimeErrorCapture(() => {
+      for (const child of [...parentContainer.children]) {
+        detachLinkedChild(parentContainer, child);
+        clearMaterializedMetadata(parentContainer, child);
+      }
+      parentContainer.children = [];
+      parentContainer.rootSyncRequired = true;
+    });
   },
   commitTextUpdate(textInstance, _oldText, newText) {
-    textInstance.text = String(newText);
+    withRuntimeErrorCapture(() => {
+      textInstance.text = String(newText);
+      reconcileMaterializedNode(container, textInstance);
+    });
   },
   commitUpdate(instance, _type, _prevProps, nextProps) {
-    instance.props = nextProps ?? {};
+    withRuntimeErrorCapture(() => {
+      instance.props = nextProps ?? {};
+      reconcileMaterializedNode(container, instance);
+    });
   },
   createInstance(type, props) {
     return createHostNode(type, props);
@@ -432,42 +712,61 @@ const hostConfig = {
     return {};
   },
   hideInstance(instance) {
-    instance.hidden = true;
+    withRuntimeErrorCapture(() => {
+      instance.hidden = true;
+      removeMaterializedSubtree(container, instance.parent, instance);
+    });
   },
   hideTextInstance(textInstance) {
-    textInstance.hidden = true;
+    withRuntimeErrorCapture(() => {
+      textInstance.hidden = true;
+      removeMaterializedSubtree(container, textInstance.parent, textInstance);
+    });
   },
   insertBefore(parent, child, beforeChild) {
-    linkChild(parent, child, beforeChild);
+    withRuntimeErrorCapture(() => {
+      linkChildWithMutations(container, parent, child, beforeChild);
+    });
   },
-  insertInContainerBefore(container, child, beforeChild) {
-    linkChild(container, child, beforeChild);
+  insertInContainerBefore(parentContainer, child, beforeChild) {
+    withRuntimeErrorCapture(() => {
+      linkChild(parentContainer, child, beforeChild);
+      parentContainer.rootSyncRequired = true;
+    });
   },
   isPrimaryRenderer: true,
   noTimeout: -1,
   prepareForCommit() {
+    beginCommit(container);
     return null;
   },
   preparePortalMount() {},
   prepareScopeUpdate() {},
   removeChild(parent, child) {
-    detachLinkedChild(parent, child);
+    withRuntimeErrorCapture(() => {
+      detachChildWithMutations(container, parent, child);
+    });
   },
-  removeChildFromContainer(container, child) {
-    detachLinkedChild(container, child);
+  removeChildFromContainer(parentContainer, child) {
+    withRuntimeErrorCapture(() => {
+      detachLinkedChild(parentContainer, child);
+      clearMaterializedMetadata(parentContainer, child);
+      parentContainer.rootSyncRequired = true;
+    });
   },
   requestPostPaintCallback(callback) {
     queueMicrotask(() => callback(performance.now()));
   },
-  resetAfterCommit(container) {
-    commitContainer(container);
+  resetAfterCommit(parentContainer) {
+    withRuntimeErrorCapture(() => {
+      flushCommit(parentContainer);
+    });
   },
   resetFormInstance() {},
   resetTextContent(instance) {
-    for (const child of [...instance.children]) {
-      detachLinkedChild(instance, child);
-    }
-    instance.children = [];
+    withRuntimeErrorCapture(() => {
+      resetTextContentWithMutations(container, instance);
+    });
   },
   resolveEventTimeStamp() {
     return performance.now();
@@ -509,19 +808,29 @@ const hostConfig = {
   supportsPersistence: false,
   trackSchedulerEvent() {},
   unhideInstance(instance) {
-    instance.hidden = false;
+    withRuntimeErrorCapture(() => {
+      instance.hidden = false;
+      reconcileMaterializedNode(container, instance);
+    });
   },
   unhideTextInstance(textInstance) {
-    textInstance.hidden = false;
+    withRuntimeErrorCapture(() => {
+      textInstance.hidden = false;
+      reconcileMaterializedNode(container, textInstance);
+    });
   },
 };
 
 const reconciler = Reconciler(hostConfig);
 const container = {
   children: [],
+  dirtyParents: new Set(),
   handlers: new Map(),
   kind: "container",
-  rootInstance: null,
+  pendingMutations: [],
+  rootNodeId: null,
+  rootSyncRequired: false,
+  syntheticRoot: false,
 };
 const root = reconciler.createContainer(
   container,
@@ -538,6 +847,7 @@ const root = reconciler.createContainer(
 
 export function render(element) {
   pendingRuntimeError = null;
+  Deno.core.ops.op_host_note_render();
   reconciler.flushSyncFromReconciler(() => {
     reconciler.updateContainerSync(element, root, null, null);
   });
@@ -549,12 +859,20 @@ globalThis.__eguiUnmountRuntime = function unmountEguiRuntime() {
   pendingRuntimeError = null;
   allowEmptyCommit = true;
   try {
+    Deno.core.ops.op_host_note_unmount();
     reconciler.flushSyncFromReconciler(() => {
       reconciler.updateContainerSync(null, root, null, null);
     });
+    for (const child of container.children) {
+      clearMaterializedMetadata(container, child);
+    }
     container.children = [];
+    container.dirtyParents = new Set();
     container.handlers = new Map();
-    container.rootInstance = null;
+    container.pendingMutations = [];
+    container.rootNodeId = null;
+    container.rootSyncRequired = false;
+    container.syntheticRoot = false;
     rootRendered = false;
     throwPendingRuntimeError();
   } finally {

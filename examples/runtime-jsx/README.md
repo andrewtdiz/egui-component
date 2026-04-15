@@ -81,3 +81,22 @@ Supported values are `opacity`, `x`, `y`, `scale`, `scaleX`, `scaleY`, `rotate`,
 The authored entrypoint is `examples/runtime-jsx/app.jsx`. Edit it or any imported `.js`, `.jsx`, `.ts`, `.tsx`, or `.json` module on disk and the rendered egui surface reloads automatically. The default app now includes effect-driven demos for timers, async reducer transitions, deferred values, context, refs, and `useSyncExternalStore` subscriptions. The host uses a watcher-driven wake-up path instead of per-frame file polling, and it also drains runtime-driven wake-ups from timers/effects before each frame render. Reloads rebuild a fresh JS session and remount cold in this cutover bundle; hook-state restoration is deferred until a later pass. Failed rebuilds still keep watching the attempted dependency set so fixing the broken file or newly introduced import wakes the next reload automatically.
 
 The focused motion entrypoint is `examples/runtime-jsx/motion-sync.tsx`. It authors opacity, translation, scale, and rotation values in TSX, then `runtime-jsx-motion` ticks those retained values from egui time and draws them with the egui painter.
+
+Ship-readiness harnesses now live in the example test binary:
+
+```bash
+cargo test --example runtime-jsx-host jsx_runtime_stress_harness -- --ignored
+cargo test --example runtime-jsx-host jsx_runtime_soak_harness -- --ignored
+```
+
+Both harnesses expose env overrides so release verification can run the full requested profile while local smoke runs stay shorter:
+
+- `CLAY_JSX_STRESS_EVENT_BATCHES`
+- `CLAY_JSX_STRESS_RELOAD_CYCLES`
+- `CLAY_JSX_STRESS_MOUNT_CYCLES`
+- `CLAY_JSX_SOAK_SAMPLE_SECS`
+- `CLAY_JSX_SOAK_IDLE_SECS`
+- `CLAY_JSX_SOAK_ACTIVE_SECS`
+- `CLAY_JSX_SOAK_RELOAD_SECS`
+- `CLAY_JSX_SOAK_IDLE_CPU_THRESHOLD`
+- `CLAY_JSX_SOAK_RSS_BAND_KB`

@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use egui::Context;
 use notify_debouncer_mini::notify::{
     event::ModifyKind, Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode,
     Result as NotifyResult, Watcher,
@@ -30,10 +29,14 @@ impl std::fmt::Debug for ReloadWatcher {
 }
 
 impl ReloadWatcher {
-    pub fn new(ctx: &Context) -> NotifyResult<Self> {
-        let ctx = ctx.clone();
+    pub fn new<F>(request_repaint: F) -> NotifyResult<Self>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        let request_repaint = Arc::new(request_repaint);
         let tracked_files = Arc::new(Mutex::new(BTreeSet::new()));
         let tracked_files_for_events = Arc::clone(&tracked_files);
+        let request_repaint_for_events = Arc::clone(&request_repaint);
         let (pending_reload_tx, pending_reload_rx) = mpsc::sync_channel(1);
         let watcher = RecommendedWatcher::new(
             move |result| match result {
@@ -47,10 +50,10 @@ impl ReloadWatcher {
                     if !event_matches_tracked_files(&event, &tracked_files) {
                         return;
                     }
-                    queue_reload(&pending_reload_tx, &ctx);
+                    queue_reload(&pending_reload_tx, request_repaint_for_events.as_ref());
                 }
                 Err(_error) => {
-                    queue_reload(&pending_reload_tx, &ctx);
+                    queue_reload(&pending_reload_tx, request_repaint_for_events.as_ref());
                 }
             },
             NotifyConfig::default(),
@@ -171,9 +174,10 @@ pub fn event_matches_tracked_files(event: &Event, tracked_files: &BTreeSet<PathB
         .any(|path| tracked_files.contains(&path))
 }
 
-fn queue_reload(pending_reload_tx: &SyncSender<()>, ctx: &Context) {
-    let _ = pending_reload_tx.try_send(());
-    ctx.request_repaint();
+fn queue_reload(pending_reload_tx: &SyncSender<()>, request_repaint: &dyn Fn()) {
+    if pending_reload_tx.try_send(()).is_ok() {
+        request_repaint();
+    }
 }
 
 #[cfg(test)]
@@ -259,5 +263,27 @@ mod tests {
             !watched.contains_key(&normalize_watch_path(missing)),
             "missing files are watched via the parent directory"
         );
+    }
+
+    #[test]
+    fn reload_bursts_collapse_into_one_pending_signal_and_one_repaint_edge() {
+        let (pending_reload_tx, pending_reload_rx) = mpsc::sync_channel(1);
+        let repaint_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let repaint_count_for_callback = Arc::clone(&repaint_count);
+        let request_repaint = move || {
+            repaint_count_for_callback.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        };
+
+        queue_reload(&pending_reload_tx, &request_repaint);
+        queue_reload(&pending_reload_tx, &request_repaint);
+        queue_reload(&pending_reload_tx, &request_repaint);
+
+        let mut pending = 0usize;
+        while pending_reload_rx.try_recv().is_ok() {
+            pending += 1;
+        }
+
+        assert_eq!(pending, 1);
+        assert_eq!(repaint_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }
