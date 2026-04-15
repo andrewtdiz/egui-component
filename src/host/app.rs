@@ -12,10 +12,9 @@ use egui_component::{
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
 
-use super::{
-    default_entry_path, request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker,
-    ReloadWatcher,
-};
+use super::{default_entry_path, request_host_repaint, ExampleHostMetricsTracker, ReloadWatcher};
+#[cfg(test)]
+use super::ExampleHostDebugSnapshot;
 
 #[derive(Debug)]
 pub struct RuntimeJsxApp {
@@ -287,6 +286,7 @@ impl RuntimeJsxApp {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn debug_snapshot(&self) -> ExampleHostDebugSnapshot {
         ExampleHostDebugSnapshot {
             host: self.metrics.snapshot(),
@@ -329,7 +329,7 @@ fn install_session_wake_callback(
 mod tests {
     use std::time::{Duration, Instant};
 
-    use egui_component::contract::{ContractEvent, ContractNode, EventKind, EventValue};
+    use clay_jsx_runtime::contract::{ContractEvent, ContractNode, EventKind, EventValue};
     use tempfile::tempdir;
 
     use super::*;

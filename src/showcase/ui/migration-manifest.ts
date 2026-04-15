@@ -77,7 +77,7 @@ const primaryComponentIds = new Set([
 ]);
 
 export const migrationManifest: MigrationEntry[] = [
-  support("api", "Component API support", "api", "examples/runtime-jsx/ui/component-support.ts", "Shared JSX NodeProps, events, className/classList, and slot class helpers mirror the Rust component API support layer."),
+  support("api", "Component API support", "api", "src/showcase/ui/component-support.ts", "Shared JSX NodeProps, events, className/classList, and slot class helpers mirror the Rust component API support layer."),
   behavior("audio-playback", "Audio Playback", "audio_playback", ["audio-playback"], "Retains internal Rust runtime behavior for waveform/progress painting, playback state, and trailing action children."),
   entry("button", "Button", "button", ["button"]),
   tsxOwned("button-group", "Button Group", "button_group", ["button-group"], "TSX owns the button group recipe composed from row and button primitives. The Rust component module was deleted from src/components; the contract renderer keeps a compatibility family."),
@@ -97,7 +97,7 @@ export const migrationManifest: MigrationEntry[] = [
   behavior("drag-board", "Drag Board", "drag_board", ["drag-board"], "Retains internal Rust runtime behavior for drag/drop mutation semantics."),
   behavior("dropdown-menu", "Dropdown Menu", "dropdown_menu", ["dropdown-menu"], "Retains internal Rust runtime behavior for popup menu opening and command dispatch."),
   tsxOwned("emoji-selector", "Emoji Selector", "emoji_selector", ["emoji-selector"], "TSX owns the emoji selector recipe composed from button, card, row, column, and twemoji primitives. The Rust component module was deleted from src/components; the contract renderer keeps a compatibility family."),
-  support("emoji-selector-data", "Emoji Selector Data", "emoji_selector_data", "examples/runtime-jsx/ui/components/emoji-selector.tsx", "The JSX emoji selector reuses the egui contract family; data remains owned by the Rust renderer."),
+  support("emoji-selector-data", "Emoji Selector Data", "emoji_selector_data", "src/showcase/ui/components/emoji-selector.tsx", "The JSX emoji selector reuses the egui contract family; data remains owned by the Rust renderer."),
   tsxOwned("field", "Field", "field", ["field"], "TSX owns the field recipe composed from label, input, and helper text primitives. The Rust component module was deleted from src/components; the contract renderer keeps a compatibility family."),
   behavior("file-tree", "File Tree", "file_tree", ["file-tree"], "Retains internal Rust runtime behavior for tree expansion and selection events."),
   behavior("hierarchy", "Hierarchy", "hierarchy", ["hierarchy"], "Retains internal Rust runtime behavior for hierarchy selection, expansion, and drag/drop movement."),
@@ -149,11 +149,11 @@ export const runtimeBehaviorCount = migrationManifest.filter(
 
 function componentTargetPath(id: string) {
   if (rootComponentIds.has(id)) {
-    return `examples/runtime-jsx/ui/components/${id}.tsx`;
+    return `src/showcase/ui/components/${id}.tsx`;
   }
 
   const layer = primaryComponentIds.has(id) ? "primary" : "secondary";
-  return `examples/runtime-jsx/ui/components/${layer}/${id}.tsx`;
+  return `src/showcase/ui/components/${layer}/${id}.tsx`;
 }
 
 function entry(
@@ -262,7 +262,7 @@ function support(
   id: string,
   label: string,
   sourceModule: string,
-  target = "examples/runtime-jsx/ui/components/primary/common.tsx",
+  target = "src/showcase/ui/components/primary/common.tsx",
   notes = "Shared Rust support types inform JSX layout wrappers and style presets rather than a standalone preview.",
 ): MigrationEntry {
   return {

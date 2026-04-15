@@ -5,28 +5,28 @@ This example keeps the window, input, and egui frame loop in Rust while the UI s
 Run it from the repo root:
 
 ```bash
-cargo run --example runtime-jsx-host
+cargo run --bin runtime-jsx-host
 ```
 
 Run the focused motion sync demo:
 
 ```bash
-cargo run --example runtime-jsx-motion
+cargo run --bin runtime-jsx-motion
 ```
 
 Pass a different JSX entry file as the first argument:
 
 ```bash
-cargo run --example runtime-jsx-host -- ./examples/runtime-jsx/app.jsx
+cargo run --bin runtime-jsx-host -- ./src/showcase/app.jsx
 ```
 
 Run the JSX component catalog:
 
 ```bash
-cargo run --example runtime-jsx-host -- ./examples/runtime-jsx/catalog.tsx
+cargo run --bin runtime-jsx-host -- ./src/showcase/catalog.tsx
 ```
 
-Shadcn-style component modules live under `examples/runtime-jsx/ui/components`. The full component barrel remains `examples/runtime-jsx/ui/components/index.tsx`. Standalone components with whole behavior and state live directly in `examples/runtime-jsx/ui/components`, such as `examples/runtime-jsx/ui/components/button.tsx`, `examples/runtime-jsx/ui/components/select.tsx`, and `examples/runtime-jsx/ui/components/dropdown-menu.tsx`. Primary element modules live under `examples/runtime-jsx/ui/components/primary` for visual or single-tag building blocks such as `examples/runtime-jsx/ui/components/primary/color.tsx`. Secondary modules live under `examples/runtime-jsx/ui/components/secondary` for composed recipes and catalog helpers such as `examples/runtime-jsx/ui/components/secondary/canva.tsx` and `examples/runtime-jsx/ui/components/secondary/palette-preview.tsx`. Shared behavior such as `className`, `classNames`, `classList`, `slotClasses`, `disabled`, generated ids, and child text extraction lives in `ui/component-support.ts`; shadcn-style variant composition lives in `ui/lib/variants.ts` and `ui/lib/styles.ts`. The default `app.jsx`, `motion-sync.tsx`, and `catalog.tsx` entrypoints import the component barrel instead of authoring raw contract tags directly.
+Shadcn-style component modules live under `src/showcase/ui/components`. The full component barrel remains `src/showcase/ui/components/index.tsx`. Standalone components with whole behavior and state live directly in `src/showcase/ui/components`, such as `src/showcase/ui/components/button.tsx`, `src/showcase/ui/components/select.tsx`, and `src/showcase/ui/components/dropdown-menu.tsx`. Primary element modules live under `src/showcase/ui/components/primary` for visual or single-tag building blocks such as `src/showcase/ui/components/primary/color.tsx`. Secondary modules live under `src/showcase/ui/components/secondary` for composed recipes and catalog helpers such as `src/showcase/ui/components/secondary/canva.tsx` and `src/showcase/ui/components/secondary/palette-preview.tsx`. Shared behavior such as `className`, `classNames`, `classList`, `slotClasses`, `disabled`, generated ids, and child text extraction lives in `src/showcase/ui/component-support.ts`; shadcn-style variant composition lives in `src/showcase/ui/lib/variants.ts` and `src/showcase/ui/lib/styles.ts`. The default `app.jsx`, `motion-sync.tsx`, and `catalog.tsx` entrypoints import the component barrel instead of authoring raw contract tags directly.
 
 ```tsx
 import { Button, Card, Checkbox } from "./ui/components/index.tsx";
@@ -49,14 +49,14 @@ Rust remains the internal JSX runtime layer for egui-owned primitives and behavi
 
 The runtime path is:
 
-1. `examples/runtime-jsx/mod.rs` wires the eframe shell and `examples/runtime-jsx/app.rs` owns the editor/preview UI.
+1. `src/host/mod.rs` wires the eframe shell and `src/host/app.rs` owns the editor/preview UI.
 2. `crates/clay-jsx-runtime` owns the host-neutral `deno_core::JsRuntime` session, `.jsx`/`.tsx` transpilation through `deno_ast`, and the shared React/reconciler/scheduler virtual modules.
 3. `crates/clay-jsx-egui-bridge/src/mod.js`, `jsx_runtime_api.js`, `runtime_api.js`, `lowering_api.js`, and `motion_api.js` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules plus the egui-specific lowering and event runtime.
 4. `render(<App />)` updates one persistent React root for the session.
 5. The stable `egui` / `clay` surface now exposes the supported React hooks and helpers: `useState`, `useEffect`, `useReducer`, `useRef`, `useContext`, `useSyncExternalStore`, `startTransition`, `useDeferredValue`, `createContext`, `render`, `eventValue`, `log`, and `requestRepaint`.
 6. The host-neutral runtime installs `setTimeout`, `setInterval`, `requestAnimationFrame`, and explicit wake plumbing so timer-driven or effect-driven state updates can request the next egui frame without relying on incidental input.
 7. After each React commit, the bridge lowers the committed host tree into normalized egui contract descriptors and diffs those normalized descriptors into semantic host mutation batches.
-8. Rust applies those mutations to a retained host tree, materializes a `ContractTree`, checks the contract model version and registered families, and renders it with `egui_component::contract::render_tree`.
+8. Rust applies those mutations to a retained host tree, materializes a `ContractTree`, checks the contract model version and registered families, and renders it with `clay_jsx_runtime::contract::render_tree`.
 9. Motion props such as `initial`, `animate`, and `transition` are stored beside the host tree and ticked by Rust as retained numeric values. The current egui renderer does not consume those values yet.
 10. egui events are sent back into the retained V8 session so React handlers and state can update the next host-tree commit without reloading the file. Async and timer callbacks follow the same retained-tree path once the host drains pending runtime work on wake.
 
@@ -78,15 +78,15 @@ import { motion } from "motion/react";
 
 Supported values are `opacity`, `x`, `y`, `scale`, `scaleX`, `scaleY`, `rotate`, `width`, `height`, `gap`, `paddingX`, `paddingY`, and `cornerRadius`.
 
-The authored entrypoint is `examples/runtime-jsx/app.jsx`. Edit it or any imported `.js`, `.jsx`, `.ts`, `.tsx`, or `.json` module on disk and the rendered egui surface reloads automatically. The default app now includes effect-driven demos for timers, async reducer transitions, deferred values, context, refs, and `useSyncExternalStore` subscriptions. The host uses a watcher-driven wake-up path instead of per-frame file polling, and it also drains runtime-driven wake-ups from timers/effects before each frame render. Reloads rebuild a fresh JS session and remount cold in this cutover bundle; hook-state restoration is deferred until a later pass. Failed rebuilds still keep watching the attempted dependency set so fixing the broken file or newly introduced import wakes the next reload automatically.
+The authored entrypoint is `src/showcase/app.jsx`. Edit it or any imported `.js`, `.jsx`, `.ts`, `.tsx`, or `.json` module on disk and the rendered egui surface reloads automatically. The default app now includes effect-driven demos for timers, async reducer transitions, deferred values, context, refs, and `useSyncExternalStore` subscriptions. The host uses a watcher-driven wake-up path instead of per-frame file polling, and it also drains runtime-driven wake-ups from timers/effects before each frame render. Reloads rebuild a fresh JS session and remount cold in this cutover bundle; hook-state restoration is deferred until a later pass. Failed rebuilds still keep watching the attempted dependency set so fixing the broken file or newly introduced import wakes the next reload automatically.
 
-The focused motion entrypoint is `examples/runtime-jsx/motion-sync.tsx`. It authors opacity, translation, scale, and rotation values in TSX, then `runtime-jsx-motion` ticks those retained values from egui time and draws them with the egui painter.
+The focused motion entrypoint is `src/showcase/motion-sync.tsx`. It authors opacity, translation, scale, and rotation values in TSX, then `runtime-jsx-motion` ticks those retained values from egui time and draws them with the egui painter.
 
 Ship-readiness harnesses now live in the example test binary:
 
 ```bash
-cargo test --example runtime-jsx-host jsx_runtime_stress_harness -- --ignored
-cargo test --example runtime-jsx-host jsx_runtime_soak_harness -- --ignored
+cargo test --bin runtime-jsx-host jsx_runtime_stress_harness -- --ignored
+cargo test --bin runtime-jsx-host jsx_runtime_soak_harness -- --ignored
 ```
 
 Both harnesses expose env overrides so release verification can run the full requested profile while local smoke runs stay shorter:

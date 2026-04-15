@@ -841,5 +841,5 @@ function App() {
   );
 }
 
-log("info", "examples/runtime-jsx/app.jsx rendered with component parity catalog");
+log("info", "src/showcase/app.jsx rendered with component parity catalog");
 render(<App />);

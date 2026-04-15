@@ -194,6 +194,7 @@ impl HostRuntimeBridge {
     }
 
     fn schedule_timer(&self, delay_ms: u64, interval_ms: Option<u64>) -> u32 {
+        let interval_ms = interval_ms.map(|interval_ms| interval_ms.max(1));
         let handle = self.inner.next_timer_handle.fetch_add(1, Ordering::Relaxed);
         self.inner
             .metrics
@@ -566,13 +567,19 @@ fn op_host_log(
 
 #[op2(fast)]
 fn op_host_note_render(state: &mut OpState) -> Result<(), JsErrorBox> {
-    state.borrow_mut::<RuntimeState>().host_debug_counters.render_call_count += 1;
+    state
+        .borrow_mut::<RuntimeState>()
+        .host_debug_counters
+        .render_call_count += 1;
     Ok(())
 }
 
 #[op2(fast)]
 fn op_host_note_unmount(state: &mut OpState) -> Result<(), JsErrorBox> {
-    state.borrow_mut::<RuntimeState>().host_debug_counters.unmount_count += 1;
+    state
+        .borrow_mut::<RuntimeState>()
+        .host_debug_counters
+        .unmount_count += 1;
     Ok(())
 }
 
@@ -1203,6 +1210,95 @@ setTimeout(() => {
         assert_eq!(metrics.host_callbacks_invoked, 1);
         assert_eq!(metrics.host_callback_drain_noop_count, 0);
         assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
+    fn set_interval_zero_is_clamped_before_scheduling() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:set-interval-zero-clamped]",
+                r#"
+globalThis.capturedSchedules = [];
+const originalScheduleTimer = Deno.core.ops.op_host_schedule_timer;
+Deno.core.ops.op_host_schedule_timer = (delayMs, intervalMs) => {
+  globalThis.capturedSchedules.push([delayMs, intervalMs]);
+  return originalScheduleTimer(delayMs, intervalMs);
+};
+
+const handle = setInterval(() => {}, 0);
+clearInterval(handle);
+
+Deno.core.ops.op_host_schedule_timer = originalScheduleTimer;
+"#,
+            )
+            .expect("setInterval(0) should schedule");
+
+        let captured = session
+            .execute_json_expression_as::<Vec<Vec<i32>>>(
+                "[test:set-interval-zero-clamped-captured]",
+                "globalThis.capturedSchedules",
+            )
+            .expect("captured timer schedules should deserialize");
+
+        assert_eq!(captured, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn set_interval_zero_keeps_worker_and_callback_draining_responsive() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:set-interval-zero-responsiveness]",
+                r#"
+globalThis.zeroIntervalCount = 0;
+globalThis.shortTimeoutFired = false;
+
+globalThis.zeroIntervalHandle = setInterval(() => {
+  globalThis.zeroIntervalCount += 1;
+  if (globalThis.shortTimeoutFired && globalThis.zeroIntervalCount >= 3) {
+    clearInterval(globalThis.zeroIntervalHandle);
+    globalThis.zeroIntervalHandle = null;
+  }
+}, 0);
+
+setTimeout(() => {
+  globalThis.shortTimeoutFired = true;
+}, 10);
+"#,
+            )
+            .expect("setInterval(0) + timeout should schedule");
+
+        wait_for_expression(
+            &mut session,
+            Duration::from_millis(250),
+            "globalThis.shortTimeoutFired",
+            |fired: bool| fired,
+        );
+        wait_for_expression(
+            &mut session,
+            Duration::from_millis(250),
+            "globalThis.zeroIntervalHandle === null",
+            |cleared: bool| cleared,
+        );
+
+        let interval_count = session
+            .execute_json_expression_as::<u32>(
+                "[test:set-interval-zero-count]",
+                "globalThis.zeroIntervalCount",
+            )
+            .expect("interval count should deserialize");
+        assert!(interval_count >= 3);
+
+        let metrics = session.debug_metrics();
+        assert!(metrics.host_callback_drain_cycles >= 1);
+        assert!(metrics.host_callbacks_invoked >= 4);
+        assert!(metrics.timer_fire_count >= 4);
+        assert!(metrics.timer_repeat_fire_count >= 3);
+        assert_eq!(metrics.timer_cancel_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
     }
 
     #[test]

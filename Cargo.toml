@@ -1,55 +1,28 @@
 [package]
-name = "egui-component"
+name = "egui-component-host"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
-description = "A focused component library for egui."
-readme = "README.md"
-documentation = "https://docs.rs/egui-component"
-keywords = ["egui", "ui", "widgets", "components"]
-categories = ["gui"]
-include = [
-    "build.rs",
-    "Cargo.toml",
-    "README.md",
-    "THIRD_PARTY_NOTICES.md",
-    "examples/**",
-    "src/**",
-    "assets/fonts/Segoe-UI.TTF",
-    "assets/fonts/Segoe-UI-Semibold.TTF",
-    "assets/fonts/Segoe-UI-Bold.TTF",
-    "assets/fonts/Segoe-UI-Italic.TTF",
-    "assets/icons/**",
-    "assets/images/showcase-image.png",
-]
+description = "Host binaries for the egui-component JSX runtime showcase."
 
 [workspace]
 members = [
     ".",
     "crates/clay-jsx-runtime",
     "crates/clay-jsx-egui-bridge",
+    "crates/egui-component",
 ]
 resolver = "2"
 
-[lib]
-crate-type = ["rlib", "dylib"]
-
-[features]
-tracing = []
-
 [dependencies]
+clay-jsx-egui-bridge = { path = "crates/clay-jsx-egui-bridge" }
+clay-jsx-runtime = { path = "crates/clay-jsx-runtime" }
 egui = "0.33.3"
-egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
-log = { version = "0.4.28", default-features = false }
-parking_lot = { version = "0.12.5", features = ["arc_lock"] }
+egui-component = { path = "crates/egui-component" }
+eframe = "0.33.3"
+notify-debouncer-mini = "0.7.0"
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-stackbox = "0.2.2"
-taffy = { version = "0.7.7", default-features = false, features = ["block_layout", "content_size", "detailed_layout_info", "flexbox", "grid", "std", "taffy_tree"] }
-twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg"] }
 
 [dev-dependencies]
-eframe = "0.33.3"
-clay-jsx-egui-bridge = { path = "crates/clay-jsx-egui-bridge" }
-notify-debouncer-mini = "0.7.0"
+serde_json = "1.0.145"
 tempfile = "3.16.0"

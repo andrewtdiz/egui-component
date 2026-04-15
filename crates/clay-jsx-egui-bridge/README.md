@@ -6,7 +6,7 @@ The crate owns the egui-specific pieces on top of `clay-jsx-runtime`:
 
 1. It configures the virtual `egui`, `egui/jsx-runtime`, `clay`, `clay/jsx-runtime`, `motion/react`, and `react/motion` modules on top of the shared React substrate from `clay-jsx-runtime`.
 2. It lowers committed React host nodes into normalized egui contract descriptors and diffs those normalized descriptors into semantic `HostMutation` batches.
-3. It installs `egui_component::contract` metadata into the JS runtime.
+3. It installs `clay_jsx_runtime::contract` metadata into the JS runtime.
 4. Rust applies those retained host mutations into a Rust-owned `HostTree`.
 5. Rust exposes changed `ContractTree` values plus retained `MotionFrame` values for egui renderers to consume.
 6. The bridge keeps one persistent React root per session, exports the supported React authoring hooks on the stable `egui` / `clay` surface, drains timer/effect callbacks on explicit host wake, and unmounts React cleanly on reload or teardown.
@@ -35,7 +35,7 @@ let motion_frame = session.tick_motion(now_secs)?.motion;
 - contract-tree materialization, no-op, motion-only, teardown, and unmount counts
 - nested shared-runtime wake/timer/shutdown counters from `clay-jsx-runtime`
 
-The eframe authoring shell remains in the repository example at `examples/runtime-jsx`.
+The eframe authoring shell remains in the repository host at `src/host` with TSX/JSX entrypoints in `src/showcase`.
 
 Supported authoring exports now include `useState`, `useEffect`, `useReducer`, `useRef`, `useContext`, `useSyncExternalStore`, `startTransition`, `useDeferredValue`, `createContext`, `render`, `eventValue`, `log`, and `requestRepaint`.
 

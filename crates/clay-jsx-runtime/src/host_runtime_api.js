@@ -1,9 +1,9 @@
-function normalizeDelay(value) {
+function normalizeDelay(value, minimum = 0) {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return 0;
+  if (!Number.isFinite(numeric)) {
+    return minimum;
   }
-  return Math.max(0, Math.trunc(numeric));
+  return Math.max(minimum, Math.trunc(numeric));
 }
 
 const hostTimerCallbacks = new Map();
@@ -14,7 +14,9 @@ function scheduleHostTimer(callback, delay, interval, args, animationFrame = fal
   }
 
   const waitMs = normalizeDelay(delay);
-  const repeatMs = interval == null ? -1 : normalizeDelay(interval);
+  // Repeating timers must always make forward progress. Clamp to at least 1ms
+  // so setInterval(..., 0) cannot busy-loop the timer worker.
+  const repeatMs = interval == null ? -1 : normalizeDelay(interval, 1);
   const handle = Deno.core.ops.op_host_schedule_timer(waitMs, repeatMs);
   hostTimerCallbacks.set(handle, {
     animationFrame,

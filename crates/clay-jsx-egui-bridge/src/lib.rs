@@ -1,6 +1,7 @@
 #![doc = "egui-component contract bridge for clay-jsx-runtime TS/TSX hosts."]
 
 pub mod host_tree;
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub mod motion;
 mod runtime;
 
@@ -30,7 +31,7 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use egui_component::contract::{
+    use clay_jsx_runtime::contract::{
         ContractEvent, ContractLength, ContractNode, EventKind, EventValue, NodeId,
     };
     use tempfile::tempdir;

@@ -3,10 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[path = "runtime-jsx/metrics.rs"]
-mod runtime_jsx_metrics;
-#[path = "runtime-jsx/watch.rs"]
-mod runtime_jsx_watch;
+#[path = "../host/mod.rs"]
+mod host;
 
 use clay_jsx_egui_bridge::{
     extend_logs, HotReloadState, JsxRuntimeDebugMetrics, JsxRuntimeLoadOutcome, JsxRuntimeSession,
@@ -20,10 +18,9 @@ use egui_component::{
     contract::{render_tree, ContractEvent, ContractTree, NodeId},
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
-use runtime_jsx_metrics::{
-    request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker,
-};
-use runtime_jsx_watch::ReloadWatcher;
+use host::{request_host_repaint, ExampleHostMetricsTracker, ReloadWatcher};
+#[cfg(test)]
+use host::ExampleHostDebugSnapshot;
 
 const WINDOW_TITLE: &str = "egui-component JSX Motion Sync";
 const WINDOW_INNER_SIZE: [f32; 2] = [1120.0, 780.0];
@@ -537,10 +534,7 @@ fn motion_value(values: Option<&MotionValues>, property: MotionProperty, fallbac
 }
 
 fn default_entry_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("runtime-jsx")
-        .join("motion-sync.tsx")
+    host::default_entry_path().with_file_name("motion-sync.tsx")
 }
 
 fn collect_failure_tracked_files(
@@ -568,7 +562,7 @@ fn install_session_wake_callback(
 mod tests {
     use super::{default_entry_path, MotionSyncApp};
     use clay_jsx_egui_bridge::{JsxRuntimeSession, MotionProperty};
-    use egui_component::contract::{ContractEvent, EventKind, NodeId};
+    use clay_jsx_runtime::contract::{ContractEvent, EventKind, NodeId};
 
     #[test]
     fn motion_sync_tsx_loads_and_retargets_all_demo_values() {

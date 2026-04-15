@@ -2,13 +2,13 @@ use super::*;
 use crate::layout::{taffy, tui, TuiBuilderLogic};
 use crate::primitives::{draw_swatch, surface_frame, ScrollAreaExt, SurfaceFrame, Swatch};
 use crate::runtime_components::{
-    AudioPlayback, AudioPlaybackState, Button, ButtonLabelWeight, ButtonVariant, Checkbox,
+    AudioPlayback, Button, ButtonLabelWeight, ButtonVariant, Checkbox,
     CollabCursor, ComponentUi, ComponentUiExt, ContextMenu, ControlSize, DialogueHeader,
-    DialogueModal, DragBoard, DragBoardItem, DragBoardRegion, DropdownMenu, DropdownMenuAction,
+    DialogueModal, DragBoard, DragBoardItem, DropdownMenu, DropdownMenuAction,
     DropdownMenuEntry, FileTree, FileTreeNode, Hierarchy as HierarchyWidget,
     HierarchyNode as HierarchyWidgetNode, Icon, Image, Label, LabelTone, LabelWeight, NumberInput,
     Popover, Radio, RadioGroup, RadioOption, Select, Sidebar, Slider, Switch, TextInput,
-    ToastIntent, ToastPlacement, Tooltip,
+    Tooltip,
 };
 use crate::theme::ColorRole;
 use crate::ui::{tailwind, tokens, twemoji};
@@ -460,7 +460,7 @@ impl FrameRenderer {
     fn render_sidebar(&mut self, ui: &mut ComponentUi<'_>, props: &ContractSidebar) {
         let mut open = props.open;
         let mut sidebar = Sidebar::new(make_id(&props.common.node_id, "sidebar"))
-            .side(props.side)
+            .side(compat_sidebar_side(props.side))
             .width(props.width);
         if let Some(title) = props.title.as_deref() {
             sidebar = sidebar.title(title);
@@ -659,10 +659,10 @@ impl FrameRenderer {
             }
         }
         if let Some(tone) = props.tone {
-            label = label.tone(tone);
+            label = label.tone(compat_label_tone(tone));
         }
         if let Some(weight) = props.weight {
-            label = label.weight(weight);
+            label = label.weight(compat_label_weight(weight));
         }
         if let Some(size) = props.size {
             label = label.size(size);
@@ -698,10 +698,10 @@ impl FrameRenderer {
         }
 
         if let Some(variant) = props.variant {
-            button = button.variant(variant);
+            button = button.variant(compat_button_variant(variant));
         }
         if let Some(size) = props.size {
-            button = button.size(size);
+            button = button.size(compat_control_size(size));
         }
         if let Some(icon) = props.leading_icon.as_deref() {
             if !props.icon_only {
@@ -805,7 +805,7 @@ impl FrameRenderer {
             number = number.suffix(suffix);
         }
         if let Some(axis) = props.axis {
-            number = number.axis(axis);
+            number = number.axis(compat_number_input_axis(axis));
         }
 
         let _ = ui.number_input(&mut value, number);
@@ -847,7 +847,7 @@ impl FrameRenderer {
             switch = switch.label(label);
         }
         if let Some(size) = props.size {
-            switch = switch.size(size);
+            switch = switch.size(compat_control_size(size));
         }
         let _ = ui.switch(&mut value, switch);
         if value != props.value {
@@ -885,7 +885,7 @@ impl FrameRenderer {
             select = select.placeholder(placeholder);
         }
         if let Some(variant) = props.variant {
-            select = select.variant(variant);
+            select = select.variant(compat_select_variant(variant));
         }
         if let Some(icon) = props.leading_icon.as_deref() {
             select = select.leading_icon(icon);
@@ -1003,9 +1003,9 @@ impl FrameRenderer {
                     DialogueHeader::new(props.title.as_str())
                         .description(props.description.as_deref().unwrap_or_default())
                         .intent(
-                            props
-                                .intent
-                                .unwrap_or(crate::runtime_components::DialogueIntent::Default),
+                            compat_dialogue_intent(
+                                props.intent.unwrap_or(super::DialogueIntent::Default),
+                            ),
                         ),
                     close_requested,
                 );
@@ -1222,10 +1222,10 @@ impl FrameRenderer {
         .row_height(props.row_height)
         .indent_width(props.indent_width);
         if let Some(icon_style) = props.icon_style {
-            hierarchy = hierarchy.icon_style(icon_style);
+            hierarchy = hierarchy.icon_style(compat_hierarchy_icon_style(icon_style));
         }
         if let Some(style) = props.style {
-            hierarchy = hierarchy.style(style);
+            hierarchy = hierarchy.style(compat_hierarchy_style(style));
         }
 
         let _ = ui.hierarchy(&mut selected_runtime, hierarchy);
@@ -1609,15 +1609,15 @@ impl FrameRenderer {
             Tooltip::new(props.trigger_label.as_str(), props.text.as_str())
                 .width(props.width)
                 .delay_ms(props.delay_ms)
-                .placement(props.placement),
+                .placement(compat_tooltip_placement(props.placement)),
         );
     }
 
     fn render_popover(&mut self, ui: &mut ComponentUi<'_>, props: &ContractPopover) {
         let mut open = props.open;
         let mut popover = Popover::new(make_id(&props.common.node_id, "popover"))
-            .side(props.side)
-            .align(props.align)
+            .side(compat_popover_side(props.side))
+            .align(compat_popover_align(props.align))
             .side_offset(props.side_offset)
             .padding(props.padding_x as i8, props.padding_y as i8);
         if let Some(width) = props.width {
@@ -1656,7 +1656,7 @@ impl FrameRenderer {
             .entries(runtime_entries.as_slice())
             .width(props.width);
         if let Some(variant) = props.trigger_variant {
-            dropdown = dropdown.trigger_variant(variant);
+            dropdown = dropdown.trigger_variant(compat_button_variant(variant));
         }
         let (_, state) = ui
             .ui_mut()
@@ -1706,7 +1706,7 @@ impl FrameRenderer {
             .entries(runtime_entries.as_slice())
             .width(props.width);
         if let Some(variant) = props.trigger_variant {
-            dropdown = dropdown.trigger_variant(variant);
+            dropdown = dropdown.trigger_variant(compat_button_variant(variant));
         }
         let (_, state) = ui
             .ui_mut()
@@ -1830,7 +1830,7 @@ impl FrameRenderer {
         let mut regions = props
             .items
             .iter()
-            .map(|item| item.region)
+            .map(|item| compat_drag_board_region(item.region))
             .collect::<Vec<_>>();
         let previous_regions = regions.clone();
         let _ = ui.drag_board(
@@ -1856,7 +1856,7 @@ impl FrameRenderer {
                     Some(EventValue::ItemMove(ContractItemMove {
                         item_id: item.item_id.clone(),
                         from: drag_region_id(item.region).to_owned(),
-                        to: drag_region_id(*next_region).to_owned(),
+                        to: drag_region_id(contract_drag_board_region(*next_region)).to_owned(),
                     })),
                     Some(EventMetadata::item(
                         item.item_id.as_str(),
@@ -1870,7 +1870,7 @@ impl FrameRenderer {
     fn render_audio_playback(&mut self, ui: &mut ComponentUi<'_>, props: &ContractAudioPlayback) {
         let mut playback = AudioPlayback::new(
             make_id(&props.common.node_id, "audio_playback"),
-            props.playback_state,
+            compat_audio_playback_state(props.playback_state),
         );
         if let Some(duration_seconds) = props.duration_seconds {
             playback = playback.duration_seconds(duration_seconds);
@@ -1889,7 +1889,7 @@ impl FrameRenderer {
                 props.action_id.as_ref(),
                 Some(EventValue::Boolean(matches!(
                     props.playback_state,
-                    AudioPlaybackState::Paused
+                    super::AudioPlaybackState::Paused
                 ))),
                 None,
             );
@@ -3037,7 +3037,11 @@ fn build_runtime_hierarchy<'a>(
                     open: item.open,
                 },
             );
-            HierarchyWidgetNode::new(runtime_id, item.label.as_str(), item.kind)
+            HierarchyWidgetNode::new(
+                runtime_id,
+                item.label.as_str(),
+                compat_hierarchy_item_kind(item.kind),
+            )
                 .expanded(item.open)
                 .locked(item.locked)
                 .children(build_runtime_hierarchy(
@@ -3069,7 +3073,11 @@ fn build_runtime_file_tree<'a>(
                     open: item.open,
                 },
             );
-            FileTreeNode::new(runtime_id, item.label.as_str(), item.kind)
+            FileTreeNode::new(
+                runtime_id,
+                item.label.as_str(),
+                compat_file_tree_item_kind(item.kind),
+            )
                 .expanded(item.open)
                 .children(build_runtime_file_tree(
                     item.children.as_slice(),
@@ -3519,10 +3527,176 @@ fn draw_compat_skeleton(
     response
 }
 
-fn drag_region_id(region: DragBoardRegion) -> &'static str {
+fn compat_sidebar_side(side: super::SidebarSide) -> crate::runtime_components::SidebarSide {
+    match side {
+        super::SidebarSide::Left => crate::runtime_components::SidebarSide::Left,
+        super::SidebarSide::Right => crate::runtime_components::SidebarSide::Right,
+    }
+}
+
+fn compat_label_tone(tone: super::LabelTone) -> crate::runtime_components::LabelTone {
+    match tone {
+        super::LabelTone::Primary => crate::runtime_components::LabelTone::Primary,
+        super::LabelTone::Secondary => crate::runtime_components::LabelTone::Secondary,
+        super::LabelTone::Muted => crate::runtime_components::LabelTone::Muted,
+        super::LabelTone::Destructive => crate::runtime_components::LabelTone::Destructive,
+    }
+}
+
+fn compat_label_weight(weight: super::LabelWeight) -> crate::runtime_components::LabelWeight {
+    match weight {
+        super::LabelWeight::Regular => crate::runtime_components::LabelWeight::Regular,
+        super::LabelWeight::Semibold => crate::runtime_components::LabelWeight::Semibold,
+        super::LabelWeight::Bold => crate::runtime_components::LabelWeight::Bold,
+    }
+}
+
+fn compat_button_variant(variant: super::ButtonVariant) -> crate::runtime_components::ButtonVariant {
+    match variant {
+        super::ButtonVariant::Primary => crate::runtime_components::ButtonVariant::Primary,
+        super::ButtonVariant::Secondary => crate::runtime_components::ButtonVariant::Secondary,
+        super::ButtonVariant::Ghost => crate::runtime_components::ButtonVariant::Ghost,
+        super::ButtonVariant::Link => crate::runtime_components::ButtonVariant::Link,
+    }
+}
+
+fn compat_control_size(size: super::ControlSize) -> crate::runtime_components::ControlSize {
+    match size {
+        super::ControlSize::Sm => crate::runtime_components::ControlSize::Sm,
+        super::ControlSize::Md => crate::runtime_components::ControlSize::Md,
+    }
+}
+
+fn compat_number_input_axis(axis: super::NumberInputAxis) -> crate::runtime_components::NumberInputAxis {
+    match axis {
+        super::NumberInputAxis::Horizontal => crate::runtime_components::NumberInputAxis::Horizontal,
+        super::NumberInputAxis::Vertical => crate::runtime_components::NumberInputAxis::Vertical,
+    }
+}
+
+fn compat_select_variant(variant: super::SelectVariant) -> crate::runtime_components::SelectVariant {
+    match variant {
+        super::SelectVariant::Default => crate::runtime_components::SelectVariant::Default,
+        super::SelectVariant::Secondary => crate::runtime_components::SelectVariant::Secondary,
+    }
+}
+
+fn compat_dialogue_intent(intent: super::DialogueIntent) -> crate::runtime_components::DialogueIntent {
+    match intent {
+        super::DialogueIntent::Default => crate::runtime_components::DialogueIntent::Default,
+        super::DialogueIntent::Alert => crate::runtime_components::DialogueIntent::Alert,
+    }
+}
+
+fn compat_hierarchy_icon_style(
+    icon_style: super::HierarchyIconStyle,
+) -> crate::runtime_components::HierarchyIconStyle {
+    match icon_style {
+        super::HierarchyIconStyle::Emoji => crate::runtime_components::HierarchyIconStyle::Emoji,
+        super::HierarchyIconStyle::Icons => crate::runtime_components::HierarchyIconStyle::Icons,
+    }
+}
+
+fn compat_hierarchy_style(style: super::HierarchyStyle) -> crate::runtime_components::HierarchyStyle {
+    match style {
+        super::HierarchyStyle::Normal => crate::runtime_components::HierarchyStyle::Normal,
+        super::HierarchyStyle::Component => crate::runtime_components::HierarchyStyle::Component,
+    }
+}
+
+fn compat_tooltip_placement(
+    placement: super::TooltipPlacement,
+) -> crate::runtime_components::TooltipPlacement {
+    match placement {
+        super::TooltipPlacement::Auto => crate::runtime_components::TooltipPlacement::Auto,
+        super::TooltipPlacement::Top => crate::runtime_components::TooltipPlacement::Top,
+        super::TooltipPlacement::Right => crate::runtime_components::TooltipPlacement::Right,
+        super::TooltipPlacement::Bottom => crate::runtime_components::TooltipPlacement::Bottom,
+        super::TooltipPlacement::Left => crate::runtime_components::TooltipPlacement::Left,
+    }
+}
+
+fn compat_popover_side(side: super::PopoverSide) -> crate::runtime_components::PopoverSide {
+    match side {
+        super::PopoverSide::Top => crate::runtime_components::PopoverSide::Top,
+        super::PopoverSide::Right => crate::runtime_components::PopoverSide::Right,
+        super::PopoverSide::Bottom => crate::runtime_components::PopoverSide::Bottom,
+        super::PopoverSide::Left => crate::runtime_components::PopoverSide::Left,
+    }
+}
+
+fn compat_popover_align(align: super::PopoverAlign) -> crate::runtime_components::PopoverAlign {
+    match align {
+        super::PopoverAlign::Start => crate::runtime_components::PopoverAlign::Start,
+        super::PopoverAlign::Center => crate::runtime_components::PopoverAlign::Center,
+        super::PopoverAlign::End => crate::runtime_components::PopoverAlign::End,
+    }
+}
+
+fn compat_drag_board_region(region: super::DragBoardRegion) -> crate::runtime_components::DragBoardRegion {
     match region {
-        DragBoardRegion::Left => "left",
-        DragBoardRegion::Right => "right",
+        super::DragBoardRegion::Left => crate::runtime_components::DragBoardRegion::Left,
+        super::DragBoardRegion::Right => crate::runtime_components::DragBoardRegion::Right,
+    }
+}
+
+fn contract_drag_board_region(
+    region: crate::runtime_components::DragBoardRegion,
+) -> super::DragBoardRegion {
+    match region {
+        crate::runtime_components::DragBoardRegion::Left => super::DragBoardRegion::Left,
+        crate::runtime_components::DragBoardRegion::Right => super::DragBoardRegion::Right,
+    }
+}
+
+fn compat_audio_playback_state(
+    state: super::AudioPlaybackState,
+) -> crate::runtime_components::AudioPlaybackState {
+    match state {
+        super::AudioPlaybackState::Paused => crate::runtime_components::AudioPlaybackState::Paused,
+        super::AudioPlaybackState::Playing => {
+            crate::runtime_components::AudioPlaybackState::Playing
+        }
+    }
+}
+
+fn compat_hierarchy_item_kind(kind: super::HierarchyItemKind) -> crate::runtime_components::HierarchyItemKind {
+    match kind {
+        super::HierarchyItemKind::Folder => crate::runtime_components::HierarchyItemKind::Folder,
+        super::HierarchyItemKind::GameObject => {
+            crate::runtime_components::HierarchyItemKind::GameObject
+        }
+        super::HierarchyItemKind::Frame => crate::runtime_components::HierarchyItemKind::Frame,
+        super::HierarchyItemKind::Group => crate::runtime_components::HierarchyItemKind::Group,
+        super::HierarchyItemKind::Player => crate::runtime_components::HierarchyItemKind::Player,
+        super::HierarchyItemKind::Weapon => crate::runtime_components::HierarchyItemKind::Weapon,
+        super::HierarchyItemKind::Clothing => {
+            crate::runtime_components::HierarchyItemKind::Clothing
+        }
+        super::HierarchyItemKind::Hitbox => crate::runtime_components::HierarchyItemKind::Hitbox,
+        super::HierarchyItemKind::Vector => crate::runtime_components::HierarchyItemKind::Vector,
+    }
+}
+
+fn compat_file_tree_item_kind(kind: super::FileTreeItemKind) -> crate::runtime_components::FileTreeItemKind {
+    match kind {
+        super::FileTreeItemKind::Folder => crate::runtime_components::FileTreeItemKind::Folder,
+        super::FileTreeItemKind::Collection => {
+            crate::runtime_components::FileTreeItemKind::Collection
+        }
+        super::FileTreeItemKind::Script => crate::runtime_components::FileTreeItemKind::Script,
+        super::FileTreeItemKind::Project => crate::runtime_components::FileTreeItemKind::Project,
+        super::FileTreeItemKind::Markdown => {
+            crate::runtime_components::FileTreeItemKind::Markdown
+        }
+        super::FileTreeItemKind::File => crate::runtime_components::FileTreeItemKind::File,
+    }
+}
+
+fn drag_region_id(region: super::DragBoardRegion) -> &'static str {
+    match region {
+        super::DragBoardRegion::Left => "left",
+        super::DragBoardRegion::Right => "right",
     }
 }
 
@@ -3560,45 +3734,45 @@ fn store_toast_viewport_state(
     });
 }
 
-fn toast_anchor(placement: ToastPlacement) -> Align2 {
+fn toast_anchor(placement: super::ToastPlacement) -> Align2 {
     match placement {
-        ToastPlacement::TopLeft => Align2::LEFT_TOP,
-        ToastPlacement::TopCenter => Align2::CENTER_TOP,
-        ToastPlacement::TopRight => Align2::RIGHT_TOP,
-        ToastPlacement::CenterLeft => Align2::LEFT_CENTER,
-        ToastPlacement::Center => Align2::CENTER_CENTER,
-        ToastPlacement::CenterRight => Align2::RIGHT_CENTER,
-        ToastPlacement::BottomLeft => Align2::LEFT_BOTTOM,
-        ToastPlacement::BottomCenter => Align2::CENTER_BOTTOM,
-        ToastPlacement::BottomRight => Align2::RIGHT_BOTTOM,
+        super::ToastPlacement::TopLeft => Align2::LEFT_TOP,
+        super::ToastPlacement::TopCenter => Align2::CENTER_TOP,
+        super::ToastPlacement::TopRight => Align2::RIGHT_TOP,
+        super::ToastPlacement::CenterLeft => Align2::LEFT_CENTER,
+        super::ToastPlacement::Center => Align2::CENTER_CENTER,
+        super::ToastPlacement::CenterRight => Align2::RIGHT_CENTER,
+        super::ToastPlacement::BottomLeft => Align2::LEFT_BOTTOM,
+        super::ToastPlacement::BottomCenter => Align2::CENTER_BOTTOM,
+        super::ToastPlacement::BottomRight => Align2::RIGHT_BOTTOM,
     }
 }
 
-fn toast_layout(placement: ToastPlacement) -> Layout {
+fn toast_layout(placement: super::ToastPlacement) -> Layout {
     match placement {
-        ToastPlacement::TopLeft => Layout::top_down(Align::Min),
-        ToastPlacement::TopCenter => Layout::top_down(Align::Center),
-        ToastPlacement::TopRight => Layout::top_down(Align::Max),
-        ToastPlacement::CenterLeft => Layout::top_down(Align::Min),
-        ToastPlacement::Center => Layout::top_down(Align::Center),
-        ToastPlacement::CenterRight => Layout::top_down(Align::Max),
-        ToastPlacement::BottomLeft => Layout::bottom_up(Align::Min),
-        ToastPlacement::BottomCenter => Layout::bottom_up(Align::Center),
-        ToastPlacement::BottomRight => Layout::bottom_up(Align::Max),
+        super::ToastPlacement::TopLeft => Layout::top_down(Align::Min),
+        super::ToastPlacement::TopCenter => Layout::top_down(Align::Center),
+        super::ToastPlacement::TopRight => Layout::top_down(Align::Max),
+        super::ToastPlacement::CenterLeft => Layout::top_down(Align::Min),
+        super::ToastPlacement::Center => Layout::top_down(Align::Center),
+        super::ToastPlacement::CenterRight => Layout::top_down(Align::Max),
+        super::ToastPlacement::BottomLeft => Layout::bottom_up(Align::Min),
+        super::ToastPlacement::BottomCenter => Layout::bottom_up(Align::Center),
+        super::ToastPlacement::BottomRight => Layout::bottom_up(Align::Max),
     }
 }
 
-fn toast_anchor_offset(placement: ToastPlacement, margin: Vec2) -> Vec2 {
+fn toast_anchor_offset(placement: super::ToastPlacement, margin: Vec2) -> Vec2 {
     match placement {
-        ToastPlacement::TopLeft => margin,
-        ToastPlacement::TopCenter => egui::vec2(0.0, margin.y),
-        ToastPlacement::TopRight => egui::vec2(-margin.x, margin.y),
-        ToastPlacement::CenterLeft => egui::vec2(margin.x, 0.0),
-        ToastPlacement::Center => Vec2::ZERO,
-        ToastPlacement::CenterRight => egui::vec2(-margin.x, 0.0),
-        ToastPlacement::BottomLeft => egui::vec2(margin.x, -margin.y),
-        ToastPlacement::BottomCenter => egui::vec2(0.0, -margin.y),
-        ToastPlacement::BottomRight => egui::vec2(-margin.x, -margin.y),
+        super::ToastPlacement::TopLeft => margin,
+        super::ToastPlacement::TopCenter => egui::vec2(0.0, margin.y),
+        super::ToastPlacement::TopRight => egui::vec2(-margin.x, margin.y),
+        super::ToastPlacement::CenterLeft => egui::vec2(margin.x, 0.0),
+        super::ToastPlacement::Center => Vec2::ZERO,
+        super::ToastPlacement::CenterRight => egui::vec2(-margin.x, 0.0),
+        super::ToastPlacement::BottomLeft => egui::vec2(margin.x, -margin.y),
+        super::ToastPlacement::BottomCenter => egui::vec2(0.0, -margin.y),
+        super::ToastPlacement::BottomRight => egui::vec2(-margin.x, -margin.y),
     }
 }
 
@@ -3687,17 +3861,17 @@ fn draw_contract_toast(
 
 fn contract_toast_palette(
     runtime: crate::theme::ThemeRuntime,
-    intent: ToastIntent,
+    intent: super::ToastIntent,
     depth: usize,
 ) -> ToastPalette {
     let card_fill = tokens::card_background(runtime);
     let border = tokens::separator(runtime);
     let mut palette = match intent {
-        ToastIntent::Neutral => ToastPalette {
+        super::ToastIntent::Neutral => ToastPalette {
             fill: card_fill,
             stroke: Stroke::new(1.0, border),
         },
-        ToastIntent::Success => {
+        super::ToastIntent::Success => {
             let accent = Color32::from_rgb(34, 197, 94);
             ToastPalette {
                 fill: card_fill
@@ -3705,7 +3879,7 @@ fn contract_toast_palette(
                 stroke: Stroke::new(1.0, border.lerp_to_gamma(accent, 0.55)),
             }
         }
-        ToastIntent::Destructive => {
+        super::ToastIntent::Destructive => {
             let accent = crate::theme::resolved_color(runtime, ColorRole::Destructive);
             ToastPalette {
                 fill: card_fill

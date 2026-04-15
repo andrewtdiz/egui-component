@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{anyhow, bail};
-use egui_component::contract::{ContractNode, ContractTree, NodeId};
+use clay_jsx_runtime::contract::{ContractNode, ContractTree, NodeId};
 
-use super::motion::{MotionAnimation, MotionFrame, MotionSpec, MotionTickResult};
+use super::motion::{MotionFrame, MotionSpec, MotionTickResult, MotionValues};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct HostMutationBatch {
@@ -56,7 +56,7 @@ impl HostMutation {
 pub struct HostTree {
     root_id: Option<NodeId>,
     nodes: BTreeMap<NodeId, HostNode>,
-    motion: BTreeMap<NodeId, MotionAnimation>,
+    motion: BTreeMap<NodeId, MotionValues>,
 }
 
 #[derive(Debug, Clone)]
@@ -165,25 +165,14 @@ impl HostTree {
 
     pub fn motion_frame(&self) -> MotionFrame {
         MotionFrame {
-            values: self
-                .motion
-                .iter()
-                .map(|(node_id, animation)| (node_id.clone(), animation.values().clone()))
-                .collect(),
-            active: self
-                .motion
-                .values()
-                .any(|animation| !animation.is_finished()),
+            values: self.motion.clone(),
+            active: false,
         }
     }
 
-    pub fn tick_motion(&mut self, now_secs: f64) -> MotionTickResult {
-        let mut changed = false;
-        for animation in self.motion.values_mut() {
-            changed |= animation.tick(now_secs);
-        }
+    pub fn tick_motion(&mut self, _now_secs: f64) -> MotionTickResult {
         MotionTickResult {
-            changed,
+            changed: false,
             frame: self.motion_frame(),
         }
     }
@@ -353,8 +342,7 @@ impl HostTree {
         if !self.nodes.contains_key(&node_id) {
             bail!("cannot set motion for missing node {node_id}");
         }
-        let animation = MotionAnimation::from_spec(motion, self.motion.get(&node_id));
-        self.motion.insert(node_id, animation);
+        self.motion.insert(node_id, motion.animate);
         Ok(())
     }
 
@@ -647,7 +635,7 @@ fn supports_contract_children(node: &ContractNode) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{HostMutation, HostTree};
-    use egui_component::contract::{ContractNode, NodeId};
+    use clay_jsx_runtime::contract::{ContractNode, NodeId};
     use serde_json::json;
 
     #[test]

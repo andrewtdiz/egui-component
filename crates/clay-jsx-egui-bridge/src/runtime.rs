@@ -7,10 +7,10 @@ use anyhow::{anyhow, bail, Context as AnyhowContext};
 use clay_jsx_runtime::{
     JsxRuntimeOptions, RuntimeDebugMetrics, RuntimeHostDebugCounters, RuntimeSession,
 };
-use egui_component::contract::{
-    audit_tailwind_support, registry, ContractChildPolicy, ContractEvent, ContractNode,
-    ContractTree, CONTRACT_MODEL_VERSION,
+use clay_jsx_runtime::contract::{
+    registry, ContractChildPolicy, ContractEvent, ContractNode, ContractTree, CONTRACT_MODEL_VERSION,
 };
+use egui_component::contract::audit_tailwind_support;
 
 use super::host_tree::{HostMutationBatch, HostTree};
 use super::motion::MotionFrame;

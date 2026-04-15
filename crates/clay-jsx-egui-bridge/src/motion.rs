@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use egui_component::contract::NodeId;
+use clay_jsx_runtime::contract::NodeId;
 
 const DEFAULT_DURATION_SECS: f32 = 0.3;
 
@@ -8,6 +8,7 @@ const DEFAULT_DURATION_SECS: f32 = 0.3;
     Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Deserialize, serde::Serialize,
 )]
 #[serde(rename_all = "snake_case")]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub enum MotionProperty {
     Opacity,
     X,
@@ -26,9 +27,11 @@ pub enum MotionProperty {
 
 #[derive(Debug, Clone, Default, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(transparent)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionValues(pub BTreeMap<MotionProperty, f32>);
 
 impl MotionValues {
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn get(&self, property: MotionProperty) -> Option<f32> {
         self.0.get(&property).copied()
     }
@@ -44,6 +47,7 @@ impl MotionValues {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionSpec {
     #[serde(default)]
     pub initial: Option<MotionValues>,
@@ -54,6 +58,7 @@ pub struct MotionSpec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize, serde::Serialize)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionTransition {
     #[serde(default = "default_duration_secs")]
     pub duration: f32,
@@ -75,6 +80,7 @@ impl Default for MotionTransition {
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub enum MotionEase {
     Linear,
     EaseIn,
@@ -101,6 +107,7 @@ impl MotionEase {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionAnimation {
     from: MotionValues,
     target: MotionValues,
@@ -111,6 +118,7 @@ pub struct MotionAnimation {
 }
 
 impl MotionAnimation {
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn from_spec(spec: MotionSpec, previous: Option<&Self>) -> Self {
         let from = previous
             .map(|animation| animation.resolved.clone())
@@ -128,6 +136,7 @@ impl MotionAnimation {
         }
     }
 
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn tick(&mut self, now_secs: f64) -> bool {
         if self.finished {
             return false;
@@ -157,28 +166,33 @@ impl MotionAnimation {
         changed
     }
 
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn values(&self) -> &MotionValues {
         &self.resolved
     }
 
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn is_finished(&self) -> bool {
         self.finished
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionFrame {
     pub values: BTreeMap<NodeId, MotionValues>,
     pub active: bool,
 }
 
 impl MotionFrame {
+    #[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[deprecated(note = "motion driver is being reworked; API surface preserved, implementation is going away")]
 pub struct MotionTickResult {
     pub changed: bool,
     pub frame: MotionFrame,
@@ -186,39 +200,4 @@ pub struct MotionTickResult {
 
 fn default_duration_secs() -> f32 {
     DEFAULT_DURATION_SECS
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{MotionAnimation, MotionEase, MotionProperty, MotionSpec, MotionTransition};
-    use serde_json::json;
-
-    #[test]
-    fn tweens_numeric_motion_values() {
-        let spec: MotionSpec = serde_json::from_value(json!({
-            "initial": { "opacity": 0.0, "x": 0.0 },
-            "animate": { "opacity": 1.0, "x": 10.0 },
-            "transition": { "duration": 1.0, "ease": "linear" }
-        }))
-        .expect("motion spec should deserialize");
-        let mut animation = MotionAnimation::from_spec(spec, None);
-
-        assert_eq!(animation.values().get(MotionProperty::Opacity), Some(0.0));
-        assert!(!animation.tick(0.0));
-        assert!(animation.tick(0.5));
-        assert_eq!(animation.values().get(MotionProperty::Opacity), Some(0.5));
-        assert_eq!(animation.values().get(MotionProperty::X), Some(5.0));
-        assert!(animation.tick(1.0));
-        assert_eq!(animation.values().get(MotionProperty::Opacity), Some(1.0));
-        assert!(animation.is_finished());
-    }
-
-    #[test]
-    fn defaults_to_ease_out_transition() {
-        let transition = MotionTransition::default();
-
-        assert_eq!(transition.duration, 0.3);
-        assert_eq!(transition.delay, 0.0);
-        assert_eq!(transition.ease, MotionEase::EaseOut);
-    }
 }

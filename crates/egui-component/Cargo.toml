@@ -1,0 +1,21 @@
+[package]
+name = "egui-component"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "A focused component library for egui."
+
+[features]
+tracing = []
+
+[dependencies]
+clay-jsx-runtime = { path = "../clay-jsx-runtime" }
+egui = "0.33.3"
+egui_extras = { version = "0.33.3", default-features = false, features = ["file", "image", "svg"] }
+log = { version = "0.4.28", default-features = false }
+parking_lot = { version = "0.12.5", features = ["arc_lock"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+stackbox = "0.2.2"
+taffy = { version = "0.7.7", default-features = false, features = ["block_layout", "content_size", "detailed_layout_info", "flexbox", "grid", "std", "taffy_tree"] }
+twemoji-assets = { version = "1.5.1", default-features = false, features = ["svg"] }

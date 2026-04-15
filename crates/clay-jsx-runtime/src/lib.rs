@@ -1,7 +1,9 @@
 #![doc = "Configurable deno_core-backed TS/TSX JSX runtime primitives for Clay host bridges."]
 
+pub mod contract;
 pub mod diagnostics;
 mod runtime;
+mod runtime_components;
 
 pub const CLAY_JSX_RUNTIME_SPECIFIER: &str = "clay-internal:/jsx-runtime";
 pub const CLAY_JSX_RUNTIME_SOURCE_PATH: &str = "crates/clay-jsx-runtime/src/clay_jsx_runtime.ts";
@@ -19,6 +21,6 @@ pub use diagnostics::{
     extend_logs, push_log, RuntimeLogBuffer, LOG_HISTORY_LIMIT, LOG_MESSAGE_LIMIT_BYTES,
 };
 pub use runtime::{
-    JsxRuntimeOptions, RuntimeDebugMetrics, RuntimeHostDebugCounters, RuntimeSession, RuntimeUpdate,
-    VirtualModule,
+    JsxRuntimeOptions, RuntimeDebugMetrics, RuntimeHostDebugCounters, RuntimeSession,
+    RuntimeUpdate, VirtualModule,
 };

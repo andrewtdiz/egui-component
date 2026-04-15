@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 mod app;
 mod metrics;
 mod watch;
@@ -24,8 +26,8 @@ pub fn install_context(ctx: &Context) {
 
 pub fn default_entry_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("runtime-jsx")
+        .join("src")
+        .join("showcase")
         .join("app.jsx")
 }
 
@@ -71,7 +73,7 @@ mod tests {
     use clay_jsx_egui_bridge::{
         JsxRuntimeDebugMetrics, JsxRuntimeSession, MotionFrame, MotionProperty,
     };
-    use egui_component::contract::{
+    use clay_jsx_runtime::contract::{
         ContractEvent, ContractLength, ContractNode, ContractOverflow, EventKind, EventValue,
         NodeId,
     };

@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         mpsc::{self, Receiver, SyncSender},
         Arc, Mutex,
@@ -182,6 +182,8 @@ fn queue_reload(pending_reload_tx: &SyncSender<()>, request_repaint: &dyn Fn()) 
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use notify_debouncer_mini::notify::event::{
         AccessKind, AccessMode, CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind,
         RenameMode,
@@ -191,7 +193,7 @@ mod tests {
 
     #[test]
     fn real_change_predicate_matches_example_runner_behavior() {
-        let path = Path::new("/tmp/example.tsx").to_path_buf();
+        let path = std::path::Path::new("/tmp/example.tsx").to_path_buf();
 
         assert!(event_requires_reload(
             &Event::new(EventKind::Any).add_path(path.clone())
