@@ -1,4 +1,5 @@
 import { eventValue, useState } from "egui";
+import type { Children } from "../../component-support.ts";
 import { AudioPlayback } from "../audio-playback.tsx";
 import { Button } from "../button.tsx";
 import { ButtonGroup } from "../button-group.tsx";
@@ -58,15 +59,15 @@ const hierarchyItems = [{ itemId: "scene", label: "Scene", kind: "folder", open:
 const boardItems = [{ itemId: "tokens", title: "Token sweep", description: "Class presets", region: "left" }, { itemId: "states", title: "State audit", description: "Explicit egui props", region: "right" }];
 const commandItems = [{ itemId: "open", group: "workspace", label: "Open command menu", shortcut: "Ctrl+P" }, { itemId: "theme", group: "workspace", label: "Toggle theme" }];
 
-type ComponentPreview = { id: string; label: string; section: string; summary: string; render: () => unknown };
-function frame(id: string, children: unknown) {
+type ComponentPreview = { id: string; label: string; section: string; summary: string; render: () => Children };
+function frame(id: string, children: Children) {
   return (
     <div id={`jsx-${id}-preview`} className="flex flex-col items-stretch gap-2 py-[4px]">
       {children}
     </div>
   );
 }
-function preview(id: string, label: string, section: string, render: () => unknown): ComponentPreview { return { id, label, section, summary: `${label} shadcn-style JSX component.`, render }; }
+function preview(id: string, label: string, section: string, render: () => Children): ComponentPreview { return { id, label, section, summary: `${label} shadcn-style JSX component.`, render }; }
 
 export const componentPreviews: ComponentPreview[] = [
   preview("audio-playback", "Audio Playback", "media", () => frame("audio-playback", <AudioPlayback id="jsx-audio-playback" playbackState="playing"><Button id="jsx-audio-action" variant="ghost" size="sm" leadingIcon="download" iconOnly /></AudioPlayback>)),

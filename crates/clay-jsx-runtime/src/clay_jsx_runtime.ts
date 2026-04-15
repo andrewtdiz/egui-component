@@ -1,38 +1,369 @@
 import React from "react";
 import Reconciler from "clay-internal:/react-reconciler";
 
-type SignalLike = {
-  value: unknown;
-  subscribe: (notify: () => void) => () => void;
+type ReconcilerErrorCategory = "uncaught" | "caught" | "recoverable";
+
+type RuntimeAction = {
+  code: string | null;
+  ok: boolean;
 };
+
+type CommitBatch = {
+  commands: RuntimeCommand[];
+  version: number;
+};
+
+type RuntimeCommand =
+  | {
+      id: number;
+      op: "remove";
+    }
+  | {
+      beforeId: number | null;
+      id: number;
+      op: "createText";
+      parentId: number;
+      text: string;
+    }
+  | {
+      beforeId: number | null;
+      node: RuntimeNodeSpec;
+      op: "create";
+      parentId: number;
+    }
+  | {
+      beforeId: number | null;
+      id: number;
+      op: "insert";
+      parentId: number;
+    }
+  | {
+      node: RuntimeNodeSpec;
+      op: "update";
+    }
+  | {
+      id: number;
+      op: "setText";
+      text: string;
+    }
+  | {
+      op: "reset";
+    };
+
+type RuntimeNodeSpec = {
+  class?: string;
+  control?: RuntimeControl;
+  element: string;
+  listen?: string[];
+  runtimeId: number;
+  [key: string]: unknown;
+};
+
+type RuntimeControl = {
+  disabled?: boolean;
+  [key: string]: unknown;
+};
+
+type RuntimeDispatchEvent = {
+  id: number;
+  kind: number;
+  payload: unknown;
+  target: { id: number };
+};
+
+type RuntimeDispatchHandler = (event: RuntimeDispatchEvent) => void;
+
+type RuntimeTextNode = {
+  children?: RuntimeNode[];
+  hidden: boolean;
+  id: number;
+  kind: "text";
+  mounted: boolean;
+  parent: RuntimeParent | null;
+  siblingIndex: number;
+  text: string;
+};
+
+type RuntimeHostNode = {
+  children: RuntimeNode[];
+  element: string;
+  hidden: boolean;
+  id: number;
+  kind: "host";
+  mounted: boolean;
+  parent: RuntimeParent | null;
+  props: PrimitiveProps;
+  siblingIndex: number;
+  type: string;
+};
+
+type RuntimeNode = RuntimeHostNode | RuntimeTextNode;
+
+type RuntimeParent = RuntimeContainer | RuntimeHostNode;
+
+type RuntimePendingReconcilerError = {
+  category: ReconcilerErrorCategory;
+  message: string;
+};
+
+type RuntimeRecoveryCategory =
+  | "recoverable"
+  | "boundary_contained"
+  | "fatal"
+  | "protocol_failed";
+
+type RuntimeRecoveryDisposition =
+  | "continue"
+  | "bounded_failure"
+  | "reload_required"
+  | "teardown";
+
+type RuntimeRecoveryState = {
+  category: RuntimeRecoveryCategory | null;
+  component_stack: string;
+  disposition: RuntimeRecoveryDisposition;
+  error_boundary: string | null;
+  message: string | null;
+  rejected_commit_batch_id: number | null;
+};
+
+type RuntimeContainer = {
+  children: RuntimeNode[];
+  commitPatch: (batch: CommitBatch) => unknown;
+  eventProps: Map<string, [string, number]>;
+  handlers: Map<number, Map<number, RuntimeDispatchHandler>>;
+  kind: "container";
+  lastAction: RuntimeAction;
+  pending: RuntimeCommand[];
+  pendingReconcilerError: RuntimePendingReconcilerError | null;
+  recoveryState: RuntimeRecoveryState;
+};
+
+type ReconcilerErrorBoundary =
+  | string
+  | {
+      constructor?: {
+        displayName?: string | null;
+        name?: string | null;
+      } | null;
+      displayName?: string | null;
+      name?: string | null;
+    };
+
+type ReconcilerErrorInfo = {
+  componentStack?: unknown;
+  errorBoundary?: ReconcilerErrorBoundary | null;
+};
+
+type SignalLike<T = unknown> = {
+  subscribe: (notify: () => void) => () => void;
+  value: T;
+};
+
+type PrimitiveProps = {
+  children?: React.ReactNode;
+} & Record<string, unknown>;
 
 type ClayJsxRuntimeOptions = {
-  hostTags: Map<string, string>;
+  commitPatch: (batch: CommitBatch) => unknown;
   eventProps: Map<string, [string, number]>;
-  commitPatch: (batch: { version: number; commands: unknown[] }) => unknown;
+  hostTags: Map<string, string>;
 };
 
-export function action(code = null) {
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function toComponentStack(errorInfo: ReconcilerErrorInfo): string {
+  return typeof errorInfo.componentStack === "string" ? errorInfo.componentStack : "";
+}
+
+function toErrorBoundaryLabel(errorInfo: ReconcilerErrorInfo): string {
+  const boundary = errorInfo.errorBoundary;
+  if (boundary == null) {
+    return "";
+  }
+  if (typeof boundary === "string") {
+    return boundary;
+  }
+  if (typeof boundary.displayName === "string" && boundary.displayName.length > 0) {
+    return boundary.displayName;
+  }
+  if (typeof boundary.name === "string" && boundary.name.length > 0) {
+    return boundary.name;
+  }
+  const ctor = boundary.constructor;
+  if (ctor != null) {
+    if (typeof ctor.displayName === "string" && ctor.displayName.length > 0) {
+      return ctor.displayName;
+    }
+    if (typeof ctor.name === "string" && ctor.name.length > 0) {
+      return ctor.name;
+    }
+  }
+  return String(boundary);
+}
+
+function isReconcilerErrorCategory(category: unknown): category is ReconcilerErrorCategory {
+  return category === "uncaught" || category === "caught" || category === "recoverable";
+}
+
+function normalizeReconcilerErrorCategory(category: unknown): ReconcilerErrorCategory {
+  if (isReconcilerErrorCategory(category)) {
+    return category;
+  }
+  throw new Error(`Unknown reconciler error category ${String(category)}.`);
+}
+
+function createRecoveryState(): RuntimeRecoveryState {
+  return {
+    category: null,
+    component_stack: "",
+    disposition: "continue",
+    error_boundary: null,
+    message: null,
+    rejected_commit_batch_id: null,
+  };
+}
+
+function recoveryDispositionPriority(disposition: RuntimeRecoveryDisposition): number {
+  switch (disposition) {
+    case "continue":
+      return 0;
+    case "bounded_failure":
+      return 1;
+    case "teardown":
+      return 2;
+    case "reload_required":
+      return 3;
+  }
+}
+
+function observeRecoveryState(
+  container: RuntimeContainer,
+  nextState: Partial<RuntimeRecoveryState> & Pick<RuntimeRecoveryState, "disposition">,
+) {
+  const candidate: RuntimeRecoveryState = {
+    category: nextState.category ?? null,
+    component_stack: typeof nextState.component_stack === "string" ? nextState.component_stack : "",
+    disposition: nextState.disposition,
+    error_boundary: nextState.error_boundary == null || String(nextState.error_boundary).length === 0
+      ? null
+      : String(nextState.error_boundary),
+    message: nextState.message == null ? null : String(nextState.message),
+    rejected_commit_batch_id: nextState.rejected_commit_batch_id == null
+      ? null
+      : Number(nextState.rejected_commit_batch_id),
+  };
+
+  if (
+    recoveryDispositionPriority(candidate.disposition) <
+      recoveryDispositionPriority(container.recoveryState.disposition)
+  ) {
+    return;
+  }
+
+  container.recoveryState = candidate;
+}
+
+function isRuntimeAction(value: unknown): value is RuntimeAction {
+  const action = value as { code?: unknown; ok?: unknown };
+  return typeof value === "object"
+    && value !== null
+    && !Array.isArray(value)
+    && typeof action.ok === "boolean"
+    && (
+      action.code === null ||
+      typeof action.code === "string"
+    );
+}
+
+function backendRejectedAction(error: unknown = null, fallbackCode = "backendRejected"): RuntimeAction {
+  if (error == null) {
+    return { ok: false, code: fallbackCode };
+  }
+  return {
+    ok: false,
+    code: `${fallbackCode}:${toErrorMessage(error)}`,
+  };
+}
+
+export function action(code: string | null = null): RuntimeAction {
   return { ok: code === null, code };
 }
 
-export function nativeAction(encoded, fallbackCode = "backendRejected") {
+export function nativeAction(encoded: string, fallbackCode = "backendRejected"): RuntimeAction {
   try {
-    const parsed = JSON.parse(encoded);
-    if (parsed && typeof parsed === "object") {
+    const parsed: unknown = JSON.parse(encoded);
+    if (isRuntimeAction(parsed)) {
       return parsed;
     }
   } catch (error) {
-    return { ok: false, code: fallbackCode + ":" + (error instanceof Error ? error.message : String(error)) };
+    return backendRejectedAction(error, fallbackCode);
   }
-  return { ok: false, code: fallbackCode };
+  return backendRejectedAction(null, fallbackCode);
+}
+
+function reportReconcilerError(
+  category: ReconcilerErrorCategory,
+  error: unknown,
+  errorInfo: ReconcilerErrorInfo,
+  container: RuntimeContainer,
+) {
+  const message = toErrorMessage(error);
+  const componentStack = toComponentStack(errorInfo);
+  const errorBoundary = category === "caught" ? toErrorBoundaryLabel(errorInfo) : "";
+
+  const reportOp = globalThis?.Deno?.core?.ops?.op_host_report_reconciler_error;
+  if (typeof reportOp === "function") {
+    reportOp(category, message, componentStack, errorBoundary);
+  }
+
+  if (category === "recoverable") {
+    observeRecoveryState(container, {
+      category: "recoverable",
+      component_stack: componentStack,
+      disposition: "continue",
+      error_boundary: errorBoundary,
+      message,
+    });
+    return;
+  }
+
+  observeRecoveryState(container, {
+    category: category === "caught" && errorBoundary.length > 0 ? "boundary_contained" : "fatal",
+    component_stack: componentStack,
+    disposition: category === "caught" && errorBoundary.length > 0 ? "bounded_failure" : "teardown",
+    error_boundary: errorBoundary,
+    message,
+  });
+
+  if (container.pendingReconcilerError == null) {
+    container.pendingReconcilerError = { category, message };
+  }
+}
+
+function consumePendingReconcilerFailure(container: RuntimeContainer): RuntimeAction | null {
+  const pendingError = container.pendingReconcilerError;
+  if (pendingError == null) {
+    return null;
+  }
+  container.pendingReconcilerError = null;
+  container.pending = [];
+  const result = action(`reconciler:${pendingError.category}:${pendingError.message}`);
+  container.lastAction = result;
+  return result;
 }
 
 function hasSignalShape(value: unknown): value is SignalLike {
   return value !== null
     && typeof value === "object"
     && "value" in value
-    && typeof value.subscribe === "function";
+    && "subscribe" in value
+    && typeof (value as { subscribe?: unknown }).subscribe === "function";
 }
 
 function SignalValue({ signal }: { signal: SignalLike }) {
@@ -47,30 +378,26 @@ function SignalValue({ signal }: { signal: SignalLike }) {
   return String(value);
 }
 
-function resolveSignalValue(value: unknown) {
+function resolveSignalValue(value: unknown): unknown {
   if (hasSignalShape(value)) {
     return value.value;
   }
   return value;
 }
 
-function wrapSignalChild(child: unknown): unknown {
+function wrapSignalChild(child: unknown): React.ReactNode {
   if (hasSignalShape(child)) {
     return React.createElement(SignalValue, { signal: child });
   }
   if (Array.isArray(child)) {
     return child.map(wrapSignalChild);
   }
-  return child;
+  return child as React.ReactNode;
 }
 
-function wrapSignalChildren(children: unknown): unknown {
-  return wrapSignalChild(children);
-}
-
-export function primitive(tag, props) {
-  const nextProps = props ?? {};
-  return React.createElement(tag, nextProps, wrapSignalChildren(nextProps.children));
+export function primitive(tag: React.ElementType, props?: PrimitiveProps | null) {
+  const nextProps: PrimitiveProps = props ?? {};
+  return React.createElement(tag, nextProps, wrapSignalChild(nextProps.children));
 }
 
 function isTextNode(node) {
@@ -331,7 +658,11 @@ function nodeSpec(node, container) {
   return spec;
 }
 
-function flushPending(container) {
+function flushPending(container: RuntimeContainer): RuntimeAction {
+  const reconcilerFailure = consumePendingReconcilerFailure(container);
+  if (reconcilerFailure != null) {
+    return reconcilerFailure;
+  }
   if (container.pending.length === 0) {
     return action();
   }
@@ -339,13 +670,13 @@ function flushPending(container) {
   container.pending = [];
   try {
     const result = container.commitPatch({ version: 1, commands });
-    if (result && typeof result === "object") {
+    if (isRuntimeAction(result)) {
       return result;
     }
   } catch (error) {
-    return action("backendRejected:" + (error instanceof Error ? error.message : String(error)));
+    return backendRejectedAction(error);
   }
-  return action("backendRejected");
+  return backendRejectedAction(null);
 }
 
 export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
@@ -566,14 +897,25 @@ export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
   };
 
   const reconciler = Reconciler(hostConfig);
-  const container = {
+  const container: RuntimeContainer = {
     kind: "container",
     children: [],
     handlers: new Map(),
     pending: [],
+    pendingReconcilerError: null,
+    recoveryState: createRecoveryState(),
     lastAction: action(),
     eventProps: options.eventProps,
     commitPatch: options.commitPatch,
+  };
+  const onUncaughtError = (error, errorInfo) => {
+    reportReconcilerError("uncaught", error, errorInfo, container);
+  };
+  const onCaughtError = (error, errorInfo) => {
+    reportReconcilerError("caught", error, errorInfo, container);
+  };
+  const onRecoverableError = (error, errorInfo) => {
+    reportReconcilerError("recoverable", error, errorInfo, container);
   };
   const root = reconciler.createContainer(
     container,
@@ -582,20 +924,28 @@ export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
     false,
     null,
     "",
-    console.log,
-    console.log,
-    console.log,
+    onUncaughtError,
+    onCaughtError,
+    onRecoverableError,
     () => {},
   );
 
   function render(element) {
+    container.pendingReconcilerError = null;
+    container.recoveryState = createRecoveryState();
     container.lastAction = action();
     reconciler.updateContainerSync(element, root, null, null);
     reconciler.flushSyncWork();
+    const reconcilerFailure = consumePendingReconcilerFailure(container);
+    if (reconcilerFailure != null) {
+      return reconcilerFailure;
+    }
     return container.lastAction ?? action();
   }
 
   function unmount() {
+    container.pendingReconcilerError = null;
+    container.recoveryState = createRecoveryState();
     container.lastAction = action();
     reconciler.updateContainerSync(null, root, null, null);
     reconciler.flushSyncWork();
@@ -603,6 +953,10 @@ export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
     container.handlers = new Map();
     container.pending.push({ op: "reset" });
     container.lastAction = flushPending(container);
+    const reconcilerFailure = consumePendingReconcilerFailure(container);
+    if (reconcilerFailure != null) {
+      return reconcilerFailure;
+    }
     return container.lastAction;
   }
 
@@ -610,6 +964,7 @@ export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
     if (!event || event.type !== "ui_dispatch") {
       return false;
     }
+    container.recoveryState = createRecoveryState();
     const nodeHandlers = container.handlers.get(Number(event.id));
     const handler = nodeHandlers?.get(Number(event.kind));
     if (typeof handler !== "function") {
@@ -621,10 +976,33 @@ export function createClayJsxRuntime(options: ClayJsxRuntimeOptions) {
       payload: event.payload ?? null,
       target: { id: Number(event.id) },
     });
+    const reconcilerFailure = consumePendingReconcilerFailure(container);
+    if (reconcilerFailure != null) {
+      return false;
+    }
     return true;
   }
 
+  function reportReconcilerErrorForTest(category, message, componentStack = "", errorBoundary = "") {
+    const normalizedCategory = normalizeReconcilerErrorCategory(category);
+    reportReconcilerError(
+      normalizedCategory,
+      new Error(String(message)),
+      {
+        componentStack: String(componentStack),
+        errorBoundary: errorBoundary == null || String(errorBoundary).length === 0
+          ? null
+          : { displayName: String(errorBoundary) },
+      },
+      container,
+    );
+  }
+
   return {
+    __describeRecoveryStateForTest() {
+      return { ...container.recoveryState };
+    },
+    __reportReconcilerErrorForTest: reportReconcilerErrorForTest,
     dispatch,
     render,
     unmount,

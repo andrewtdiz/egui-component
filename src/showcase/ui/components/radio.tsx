@@ -1,17 +1,11 @@
-import { boolValue, cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId, textFromChildren } from "../component-support.ts";
-
-function itemEvent(event: unknown, item: Item, value: string, label: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: value, item_label: label, item_index: index, item } };
-}
+import { boolValue, cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId, textFromChildren } from "../component-support.ts";
 
 export function Radio({ children, checked, value, label, description, className, ...props }: NodeProps & { checked?: boolean; value?: boolean; label?: string; description?: string } & Record<string, unknown>) {
   const resolvedValue = boolValue(value, checked);
   return <input data-slot="radio" type="radio" {...nodeProps({ ...props, id: requireNodeId(props, "Radio") }, className)} checked={resolvedValue} label={label ?? textFromChildren(children)} description={description} />;
 }
 
-export function RadioGroup({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string } & Record<string, unknown>) {
+export function RadioGroup({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler<string> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "RadioGroup");
   return (
     <div {...nodeProps(props, cn("flex flex-col items-stretch gap-2", className))}>
@@ -27,7 +21,7 @@ export function RadioGroup({ items = [], selectedItemId, className, onSelect, ..
             label={label}
             description={description}
             className="px-1"
-            onToggle={(event) => onSelect?.(itemEvent(event, item, id, label, index), id)}
+            onToggle={(event) => onSelect?.(eventWithValue(event, id, { item_id: id, item_label: label, item_index: index, item }), id)}
           />
         );
       })}

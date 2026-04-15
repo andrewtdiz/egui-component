@@ -13,5 +13,8 @@ egui-component = { path = "../egui-component" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 
+[build-dependencies]
+deno_ast = { version = "=0.53.1", features = ["transpiling"] }
+
 [dev-dependencies]
 tempfile = "3.16.0"

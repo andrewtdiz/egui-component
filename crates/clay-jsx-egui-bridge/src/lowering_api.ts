@@ -266,8 +266,15 @@ const textBearingFamilies = new Set(["button", "kbd", "label", "tooltip"]);
 
 export function createContractMetadataView(contractMetadata = {}) {
   const knownFamilies = new Set(contractMetadata.families ?? []);
+  const schemaFingerprint =
+    typeof contractMetadata.schema_fingerprint === "string"
+      ? contractMetadata.schema_fingerprint
+      : typeof contractMetadata.schemaFingerprint === "string"
+        ? contractMetadata.schemaFingerprint
+        : "";
   return {
     version: Number(contractMetadata.version ?? 1),
+    schemaFingerprint,
     knownFamilies,
     familiesWithChildren: new Set(contractMetadata.familiesWithChildren ?? []),
     identitySensitiveFamilies: new Set(contractMetadata.identitySensitiveFamilies ?? []),
@@ -534,13 +541,20 @@ function registerHandlers(nodeId, actionId, handlers, table, handlerIndex) {
     if (kind == null) {
       throw new Error(`Unsupported function prop "${propName}".`);
     }
+
+    // A single logical handler can be reachable via both node_id and action_id
+    // routes. Keep a shared registration object so dispatch can de-duplicate
+    // route collisions per event while still preserving one registration per
+    // authored handler prop.
+    const registration = { handler };
+
     const nodeKey = `${nodeId}:${kind}`;
-    pushHandler(table, nodeKey, handler);
-    entries.push({ key: nodeKey, handler });
+    pushHandler(table, nodeKey, registration);
+    entries.push({ key: nodeKey, registration });
     if (actionId != null && actionId !== "") {
       const actionKey = `action:${actionId}:${kind}`;
-      pushHandler(table, actionKey, handler);
-      entries.push({ key: actionKey, handler });
+      pushHandler(table, actionKey, registration);
+      entries.push({ key: actionKey, registration });
     }
   }
   if (entries.length > 0) {

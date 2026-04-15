@@ -1,10 +1,10 @@
 import { useState } from "egui";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { DropdownMenuContent, type MenuEntry } from "./dropdown-menu.tsx";
 
-export type MenuBarProps = NodeProps & { menus?: Item[]; activeMenuId?: string; activeMenuIndex?: number } & Record<string, unknown>;
+export type MenuBarProps = NodeProps & { menus?: Item[]; activeMenuId?: string; activeMenuIndex?: number; onCommand?: Handler<string>; onOpen?: Handler<string>; onClose?: Handler<string> } & Record<string, unknown>;
 
 export function MenuBarRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
   return <div {...nodeProps(props, cn("flex flex-col gap-1", className))}>{children}</div>;
@@ -52,8 +52,8 @@ export function MenuBar({ menus = [], activeMenuId, activeMenuIndex, className, 
     if (activeMenuId == null && activeMenuIndex == null) {
       setInternalActive(next);
     }
-    if (next == null) onClose?.(event, id);
-    else onOpen?.(event, id);
+    if (next == null) onClose?.(eventWithValue(event, id, { menu_id: id, open: false }), id);
+    else onOpen?.(eventWithValue(event, id, { menu_id: id, open: true }), id);
   };
 
   const closeMenu = () => {

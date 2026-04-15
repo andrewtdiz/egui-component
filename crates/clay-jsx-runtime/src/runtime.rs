@@ -7,7 +7,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         mpsc::{self, RecvTimeoutError, Sender},
-        Arc, Mutex,
+        Arc, LazyLock, Mutex,
     },
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -33,6 +33,8 @@ use crate::{
 };
 
 type SourceMapStore = Rc<RefCell<HashMap<String, Vec<u8>>>>;
+
+static HOST_TIME_ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[derive(Debug, Clone)]
 pub struct JsxRuntimeOptions {
@@ -84,15 +86,205 @@ impl VirtualModule {
 
 #[derive(Debug, Default)]
 pub struct RuntimeUpdate {
-    pub commit_batches_json: Vec<String>,
+    pub commit_batches: Vec<RuntimeCommitBatch>,
+    pub reconciler_errors: Vec<RuntimeReconcilerError>,
     pub logs: RuntimeLogBuffer,
     pub host_debug_counters: RuntimeHostDebugCounters,
+}
+
+impl RuntimeUpdate {
+    pub fn commit_batch_ids(&self) -> Vec<u32> {
+        self.commit_batches
+            .iter()
+            .map(|batch| batch.commit_batch_id)
+            .collect()
+    }
+
+    pub fn commit_batches_json(&self) -> anyhow::Result<Vec<String>> {
+        self.commit_batches
+            .iter()
+            .map(RuntimeCommitBatch::payload_json)
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeCommitTransportKind {
+    /// The frozen v1 production transport. All supported embedder flows must be
+    /// able to rely on JSON as the stable commit boundary.
+    Json,
+    /// Test/benchmark-only experimental transport. Production transport
+    /// replacement is intentionally deferred in v1.
+    Typed,
+}
+
+/// Frozen v1 production transport posture: JSON is the only supported commit
+/// transport for non-experimental sessions.
+pub const V1_PRODUCTION_COMMIT_TRANSPORT: RuntimeCommitTransportKind =
+    RuntimeCommitTransportKind::Json;
+
+impl RuntimeCommitTransportKind {
+    pub fn is_deferred_for_v1_production(self) -> bool {
+        self != V1_PRODUCTION_COMMIT_TRANSPORT
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "transport", content = "payload", rename_all = "snake_case")]
+pub enum RuntimeCommitBatchPayload {
+    Json(String),
+    Typed(serde_json::Value),
+}
+
+impl RuntimeCommitBatchPayload {
+    fn transport_kind(&self) -> RuntimeCommitTransportKind {
+        match self {
+            Self::Json(_) => RuntimeCommitTransportKind::Json,
+            Self::Typed(_) => RuntimeCommitTransportKind::Typed,
+        }
+    }
+
+    fn payload_json(&self) -> anyhow::Result<String> {
+        match self {
+            Self::Json(json) => Ok(json.clone()),
+            Self::Typed(value) => serde_json::to_string(value)
+                .map_err(|error| anyhow!("failed to encode typed commit batch as JSON: {error}")),
+        }
+    }
+
+    fn payload_bytes(&self) -> anyhow::Result<usize> {
+        Ok(self.payload_json()?.len())
+    }
+
+    fn decode_as<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
+        match self {
+            Self::Json(json) => serde_json::from_str(json)
+                .map_err(|error| anyhow!("failed to decode JSON commit batch: {error}")),
+            Self::Typed(value) => serde_json::from_value(value.clone())
+                .map_err(|error| anyhow!("failed to decode typed commit batch: {error}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeCommitBatch {
+    pub commit_batch_id: u32,
+    pub payload: RuntimeCommitBatchPayload,
+}
+
+impl RuntimeCommitBatch {
+    pub fn transport_kind(&self) -> RuntimeCommitTransportKind {
+        self.payload.transport_kind()
+    }
+
+    pub fn payload_json(&self) -> anyhow::Result<String> {
+        self.payload.payload_json()
+    }
+
+    pub fn decode_as<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
+        self.payload.decode_as()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeReconcilerErrorCategory {
+    Uncaught,
+    Caught,
+    Recoverable,
+}
+
+impl RuntimeReconcilerErrorCategory {
+    fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "uncaught" => Some(Self::Uncaught),
+            "caught" => Some(Self::Caught),
+            "recoverable" => Some(Self::Recoverable),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Uncaught => "uncaught",
+            Self::Caught => "caught",
+            Self::Recoverable => "recoverable",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeReconcilerError {
+    pub category: RuntimeReconcilerErrorCategory,
+    pub message: String,
+    #[serde(default)]
+    pub component_stack: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_boundary: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeRecoveryCategory {
+    Recoverable,
+    BoundaryContained,
+    Fatal,
+    ProtocolFailed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeRecoveryDisposition {
+    Continue,
+    BoundedFailure,
+    ReloadRequired,
+    Teardown,
+}
+
+impl Default for RuntimeRecoveryDisposition {
+    fn default() -> Self {
+        Self::Continue
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeRecoveryState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<RuntimeRecoveryCategory>,
+    #[serde(default)]
+    pub disposition: RuntimeRecoveryDisposition,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default)]
+    pub component_stack: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_boundary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rejected_commit_batch_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeHostDebugCounters {
     pub render_call_count: u64,
     pub unmount_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeHostCallbackDrainResult {
+    pub had_pending_wake: bool,
+    pub callbacks_invoked: u64,
+    pub pending_host_wake_after_drain: bool,
+}
+
+impl RuntimeHostCallbackDrainResult {
+    pub fn drained_work(self) -> bool {
+        self.had_pending_wake
+    }
+
+    pub fn needs_another_drain(self) -> bool {
+        self.pending_host_wake_after_drain
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -110,7 +302,18 @@ pub struct RuntimeDebugMetrics {
     pub active_timer_high_water: u64,
     pub shutdown_count: u64,
     pub pending_host_wake: bool,
+    pub pending_mutation_batch_count: u64,
+    pub pending_mutation_batch_bytes: u64,
+    pub pending_mutation_batch_high_water: u64,
+    pub pending_mutation_batch_bytes_high_water: u64,
+    pub pending_mutation_batch_overflow_count: u64,
+    pub pending_mutation_batch_limit: u64,
+    pub pending_mutation_batch_byte_limit: u64,
 }
+
+const MAX_PENDING_MUTATION_BATCHES: usize = 256;
+const MAX_PENDING_MUTATION_BATCH_BYTES: usize = 4 * 1024 * 1024;
+pub const HOST_CALLBACK_DRAIN_LIMIT: usize = 128;
 
 #[derive(Debug, Clone, Default)]
 struct HostRuntimeBridge {
@@ -122,6 +325,7 @@ struct HostRuntimeBridgeInner {
     wake: RuntimeWakeState,
     next_timer_handle: AtomicU32,
     pending_due_timers: Mutex<Vec<u32>>,
+    pending_due_timer_set: Mutex<HashSet<u32>>,
     active_timers: Mutex<HashSet<u32>>,
     metrics: RuntimeDebugCounterState,
     timer_command_tx: Mutex<Option<Sender<TimerCommand>>>,
@@ -155,6 +359,7 @@ impl Default for HostRuntimeBridgeInner {
             wake: RuntimeWakeState::default(),
             next_timer_handle: AtomicU32::new(1),
             pending_due_timers: Mutex::new(Vec::new()),
+            pending_due_timer_set: Mutex::new(HashSet::new()),
             active_timers: Mutex::new(HashSet::new()),
             metrics: RuntimeDebugCounterState::default(),
             timer_command_tx: Mutex::new(None),
@@ -194,6 +399,8 @@ impl HostRuntimeBridge {
     }
 
     fn schedule_timer(&self, delay_ms: u64, interval_ms: Option<u64>) -> u32 {
+        // Repeating timers must always advance time. Clamp to 1ms so an
+        // interval of 0 cannot trap the timer worker in a non-progressing loop.
         let interval_ms = interval_ms.map(|interval_ms| interval_ms.max(1));
         let handle = self.inner.next_timer_handle.fetch_add(1, Ordering::Relaxed);
         self.inner
@@ -204,11 +411,7 @@ impl HostRuntimeBridge {
         if delay_ms == 0 && interval_ms.is_none() {
             self.inner.note_timer_fire(false);
             self.inner.unregister_active_timer(handle);
-            self.inner
-                .pending_due_timers
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .push(handle);
+            let _ = self.inner.enqueue_due_timers([handle]);
             self.inner.wake.trigger(&self.inner.metrics);
             return handle;
         }
@@ -236,11 +439,7 @@ impl HostRuntimeBridge {
             .timer_cancel_count
             .fetch_add(1, Ordering::Relaxed);
         self.inner.unregister_active_timer(handle);
-        self.inner
-            .pending_due_timers
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|pending_handle| *pending_handle != handle);
+        self.inner.remove_due_timer(handle);
         if let Some(timer_command_tx) = self
             .inner
             .timer_command_tx
@@ -253,14 +452,8 @@ impl HostRuntimeBridge {
         }
     }
 
-    fn take_due_timers_json(&self) -> String {
-        let mut pending_due_timers = self
-            .inner
-            .pending_due_timers
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        serde_json::to_string(&std::mem::take(&mut *pending_due_timers))
-            .unwrap_or_else(|_| "[]".to_owned())
+    fn take_due_timers(&self) -> Vec<u32> {
+        self.inner.take_due_timers()
     }
 
     fn request_wake(&self) {
@@ -293,13 +486,23 @@ impl HostRuntimeBridge {
     }
 
     fn shutdown(&self) {
+        self.shutdown_with_metrics(true);
+    }
+
+    fn abort(&self) {
+        self.shutdown_with_metrics(false);
+    }
+
+    fn shutdown_with_metrics(&self, count_shutdown_metric: bool) {
         if self.inner.is_shutdown.swap(true, Ordering::SeqCst) {
             return;
         }
-        self.inner
-            .metrics
-            .shutdown_count
-            .fetch_add(1, Ordering::Relaxed);
+        if count_shutdown_metric {
+            self.inner
+                .metrics
+                .shutdown_count
+                .fetch_add(1, Ordering::Relaxed);
+        }
         let timer_command_tx = self
             .inner
             .timer_command_tx
@@ -320,11 +523,7 @@ impl HostRuntimeBridge {
         }
         self.clear_wake_callback();
         let _ = self.take_pending_wake();
-        self.inner
-            .pending_due_timers
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clear();
+        self.inner.clear_due_timers();
         self.inner.clear_active_timers();
     }
 
@@ -403,7 +602,12 @@ fn run_timer_worker(
         };
 
         match command {
-            Some(TimerCommand::Schedule(entry)) => {
+            Some(TimerCommand::Schedule(mut entry)) => {
+                if let Some(interval) = entry.interval {
+                    // Defensively clamp malformed repeating intervals that may
+                    // bypass higher-level scheduling paths.
+                    entry.interval = Some(interval.max(Duration::from_millis(1)));
+                }
                 timers.insert(entry.handle, entry);
                 continue;
             }
@@ -419,17 +623,21 @@ fn run_timer_worker(
         let mut due_handles = Vec::new();
         let mut completed_one_shots = Vec::new();
         for timer in timers.values_mut() {
-            while timer.next_fire_at <= now {
-                due_handles.push(timer.handle);
-                if let Some(interval) = timer.interval {
-                    inner.note_timer_fire(true);
-                    timer.next_fire_at += interval;
-                } else {
-                    inner.note_timer_fire(false);
-                    inner.unregister_active_timer(timer.handle);
-                    completed_one_shots.push(timer.handle);
-                    break;
-                }
+            if timer.next_fire_at > now {
+                continue;
+            }
+            due_handles.push(timer.handle);
+            if let Some(interval) = timer.interval {
+                let interval = interval.max(Duration::from_millis(1));
+                // Coalesce missed repeat ticks into a single callback so long
+                // stalls don't replay an unbounded burst in one drain.
+                timer.next_fire_at = now + interval;
+                timer.interval = Some(interval);
+                inner.note_timer_fire(true);
+            } else {
+                inner.note_timer_fire(false);
+                inner.unregister_active_timer(timer.handle);
+                completed_one_shots.push(timer.handle);
             }
         }
         for handle in completed_one_shots {
@@ -439,12 +647,9 @@ fn run_timer_worker(
             continue;
         }
 
-        inner
-            .pending_due_timers
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .extend(due_handles);
-        inner.wake.trigger(&inner.metrics);
+        if inner.enqueue_due_timers(due_handles) > 0 {
+            inner.wake.trigger(&inner.metrics);
+        }
     }
 }
 
@@ -481,11 +686,82 @@ impl RuntimeDebugCounterState {
             active_timer_high_water: self.active_timer_high_water.load(Ordering::Relaxed),
             shutdown_count: self.shutdown_count.load(Ordering::Relaxed),
             pending_host_wake,
+            pending_mutation_batch_count: 0,
+            pending_mutation_batch_bytes: 0,
+            pending_mutation_batch_high_water: 0,
+            pending_mutation_batch_bytes_high_water: 0,
+            pending_mutation_batch_overflow_count: 0,
+            pending_mutation_batch_limit: MAX_PENDING_MUTATION_BATCHES as u64,
+            pending_mutation_batch_byte_limit: MAX_PENDING_MUTATION_BATCH_BYTES as u64,
         }
     }
 }
 
 impl HostRuntimeBridgeInner {
+    fn enqueue_due_timers<I>(&self, due_handles: I) -> usize
+    where
+        I: IntoIterator<Item = u32>,
+    {
+        let mut pending_due_timers = self
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut pending_due_timer_set = self
+            .pending_due_timer_set
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let mut inserted = 0;
+        for handle in due_handles {
+            if pending_due_timer_set.insert(handle) {
+                pending_due_timers.push(handle);
+                inserted += 1;
+            }
+        }
+        inserted
+    }
+
+    fn take_due_timers(&self) -> Vec<u32> {
+        let mut pending_due_timers = self
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut pending_due_timer_set = self
+            .pending_due_timer_set
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let due_timers = std::mem::take(&mut *pending_due_timers);
+        pending_due_timer_set.clear();
+        due_timers
+    }
+
+    fn remove_due_timer(&self, handle: u32) {
+        let mut pending_due_timers = self
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut pending_due_timer_set = self
+            .pending_due_timer_set
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        pending_due_timers.retain(|pending_handle| *pending_handle != handle);
+        pending_due_timer_set.remove(&handle);
+    }
+
+    fn clear_due_timers(&self) {
+        let mut pending_due_timers = self
+            .pending_due_timers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut pending_due_timer_set = self
+            .pending_due_timer_set
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        pending_due_timers.clear();
+        pending_due_timer_set.clear();
+    }
+
     fn active_timer_count(&self) -> u64 {
         self.active_timers
             .lock()
@@ -536,22 +812,119 @@ impl HostRuntimeBridgeInner {
 
 #[derive(Debug, Default)]
 struct RuntimeState {
-    commit_batches_json: Vec<String>,
+    commit_batches: Vec<RuntimeCommitBatch>,
+    pending_mutation_batch_bytes: usize,
+    pending_mutation_batch_high_water: usize,
+    pending_mutation_batch_bytes_high_water: usize,
+    pending_mutation_batch_overflow_count: u64,
+    reconciler_errors: Vec<RuntimeReconcilerError>,
+    next_commit_batch_id: u32,
     logs: RuntimeLogBuffer,
     host_runtime: HostRuntimeBridge,
     host_debug_counters: RuntimeHostDebugCounters,
+}
+
+impl RuntimeState {
+    fn can_enqueue_commit_batch(&self, payload_bytes: usize) -> bool {
+        self.commit_batches.len() < MAX_PENDING_MUTATION_BATCHES
+            && self
+                .pending_mutation_batch_bytes
+                .saturating_add(payload_bytes)
+                <= MAX_PENDING_MUTATION_BATCH_BYTES
+    }
+
+    fn note_commit_batch_enqueued(&mut self, payload_bytes: usize) {
+        self.pending_mutation_batch_bytes = self
+            .pending_mutation_batch_bytes
+            .saturating_add(payload_bytes);
+        self.pending_mutation_batch_high_water = self
+            .pending_mutation_batch_high_water
+            .max(self.commit_batches.len());
+        self.pending_mutation_batch_bytes_high_water = self
+            .pending_mutation_batch_bytes_high_water
+            .max(self.pending_mutation_batch_bytes);
+    }
+
+    fn note_commit_batch_overflow(&mut self, payload_bytes: usize) {
+        self.pending_mutation_batch_overflow_count =
+            self.pending_mutation_batch_overflow_count.saturating_add(1);
+        push_log(
+            &mut self.logs,
+            format!(
+                "error: runtime mutation queue overflow (pending batches: {}, pending bytes: {}, limit: {} batches / {} bytes, rejected payload bytes: {payload_bytes})",
+                self.commit_batches.len(),
+                self.pending_mutation_batch_bytes,
+                MAX_PENDING_MUTATION_BATCHES,
+                MAX_PENDING_MUTATION_BATCH_BYTES,
+            ),
+        );
+    }
+
+    fn take_pending_commit_update(&mut self) -> Vec<RuntimeCommitBatch> {
+        self.pending_mutation_batch_bytes = 0;
+        std::mem::take(&mut self.commit_batches)
+    }
+
+    fn apply_mutation_queue_metrics(&self, metrics: &mut RuntimeDebugMetrics) {
+        metrics.pending_mutation_batch_count = self.commit_batches.len() as u64;
+        metrics.pending_mutation_batch_bytes = self.pending_mutation_batch_bytes as u64;
+        metrics.pending_mutation_batch_high_water = self.pending_mutation_batch_high_water as u64;
+        metrics.pending_mutation_batch_bytes_high_water =
+            self.pending_mutation_batch_bytes_high_water as u64;
+        metrics.pending_mutation_batch_overflow_count = self.pending_mutation_batch_overflow_count;
+        metrics.pending_mutation_batch_limit = MAX_PENDING_MUTATION_BATCHES as u64;
+        metrics.pending_mutation_batch_byte_limit = MAX_PENDING_MUTATION_BATCH_BYTES as u64;
+    }
+
+    fn enqueue_commit_batch(
+        &mut self,
+        payload: RuntimeCommitBatchPayload,
+    ) -> Result<u32, JsErrorBox> {
+        let payload_bytes = payload.payload_bytes().map_err(|error| {
+            JsErrorBox::generic(format!(
+                "failed to measure commit batch payload bytes: {error:#}"
+            ))
+        })?;
+        if !self.can_enqueue_commit_batch(payload_bytes) {
+            self.note_commit_batch_overflow(payload_bytes);
+            return Err(JsErrorBox::generic(format!(
+                "runtime mutation queue overflow: reached {} batches / {} bytes pending",
+                MAX_PENDING_MUTATION_BATCHES, MAX_PENDING_MUTATION_BATCH_BYTES
+            )));
+        }
+
+        let commit_batch_id = self
+            .next_commit_batch_id
+            .checked_add(1)
+            .ok_or_else(|| JsErrorBox::generic("commit batch id overflow"))?;
+        self.next_commit_batch_id = commit_batch_id;
+        self.commit_batches.push(RuntimeCommitBatch {
+            commit_batch_id,
+            payload,
+        });
+        self.note_commit_batch_enqueued(payload_bytes);
+        Ok(commit_batch_id)
+    }
 }
 
 #[op2(fast)]
 fn op_commit_mutations(
     state: &mut OpState,
     #[string] mutations_json: String,
-) -> Result<(), JsErrorBox> {
+) -> Result<u32, JsErrorBox> {
     state
         .borrow_mut::<RuntimeState>()
-        .commit_batches_json
-        .push(mutations_json);
-    Ok(())
+        .enqueue_commit_batch(RuntimeCommitBatchPayload::Json(mutations_json))
+}
+
+#[op2]
+fn op_commit_mutations_typed(
+    state: &mut OpState,
+    #[serde] mutations: serde_json::Value,
+) -> Result<u32, JsErrorBox> {
+    state
+        .borrow_mut::<RuntimeState>()
+        .enqueue_commit_batch(RuntimeCommitBatchPayload::Typed(mutations))
 }
 
 #[op2(fast)]
@@ -562,6 +935,43 @@ fn op_host_log(
 ) -> Result<(), JsErrorBox> {
     let runtime_state = state.borrow_mut::<RuntimeState>();
     push_log(&mut runtime_state.logs, format!("{level}: {message}"));
+    Ok(())
+}
+
+#[op2(fast)]
+fn op_host_report_reconciler_error(
+    state: &mut OpState,
+    #[string] category: String,
+    #[string] message: String,
+    #[string] component_stack: String,
+    #[string] error_boundary: String,
+) -> Result<(), JsErrorBox> {
+    let Some(category) = RuntimeReconcilerErrorCategory::parse(category.as_str()) else {
+        return Err(JsErrorBox::generic(format!(
+            "unknown reconciler error category {}",
+            category
+        )));
+    };
+
+    let runtime_state = state.borrow_mut::<RuntimeState>();
+    runtime_state
+        .reconciler_errors
+        .push(RuntimeReconcilerError {
+            category,
+            message,
+            component_stack,
+            error_boundary: (!error_boundary.trim().is_empty()).then_some(error_boundary),
+        });
+
+    let last_message = runtime_state
+        .reconciler_errors
+        .last()
+        .map(|error| error.message.clone())
+        .unwrap_or_default();
+    push_log(
+        &mut runtime_state.logs,
+        format!("error: reconciler:{}: {}", category.as_str(), last_message),
+    );
     Ok(())
 }
 
@@ -611,25 +1021,33 @@ fn op_host_request_wake(state: &mut OpState) -> Result<(), JsErrorBox> {
 }
 
 #[op2]
-#[string]
-fn op_host_take_due_timers(state: &mut OpState) -> Result<String, JsErrorBox> {
+#[serde]
+fn op_host_take_due_timers(state: &mut OpState) -> Result<Vec<u32>, JsErrorBox> {
     Ok(state
         .borrow::<RuntimeState>()
         .host_runtime
-        .take_due_timers_json())
+        .take_due_timers())
+}
+
+#[op2(fast)]
+fn op_host_now_ms() -> Result<f64, JsErrorBox> {
+    Ok(HOST_TIME_ORIGIN.elapsed().as_secs_f64() * 1_000.0)
 }
 
 extension!(
     clay_jsx_host,
     ops = [
         op_commit_mutations,
+        op_commit_mutations_typed,
         op_host_log,
+        op_host_report_reconciler_error,
         op_host_note_render,
         op_host_note_unmount,
         op_host_schedule_timer,
         op_host_cancel_timer,
         op_host_request_wake,
-        op_host_take_due_timers
+        op_host_take_due_timers,
+        op_host_now_ms
     ],
     docs = "Ops used by clay JSX host runtimes."
 );
@@ -840,8 +1258,10 @@ impl RuntimeSession {
         let op_state = self.js_runtime.op_state();
         let mut op_state = op_state.borrow_mut();
         let state = op_state.borrow_mut::<RuntimeState>();
+        let commit_batches = state.take_pending_commit_update();
         RuntimeUpdate {
-            commit_batches_json: std::mem::take(&mut state.commit_batches_json),
+            commit_batches,
+            reconciler_errors: std::mem::take(&mut state.reconciler_errors),
             logs: std::mem::take(&mut state.logs),
             host_debug_counters: state.host_debug_counters,
         }
@@ -870,38 +1290,44 @@ impl RuntimeSession {
         self.host_runtime.take_pending_wake()
     }
 
-    pub fn drain_host_callbacks(&mut self) -> anyhow::Result<bool> {
+    pub fn drain_host_callbacks(&mut self) -> anyhow::Result<RuntimeHostCallbackDrainResult> {
         if !self.host_runtime.take_pending_wake() {
             self.host_runtime.note_callback_drain_noop();
-            return Ok(false);
+            return Ok(RuntimeHostCallbackDrainResult {
+                had_pending_wake: false,
+                callbacks_invoked: 0,
+                pending_host_wake_after_drain: false,
+            });
         }
 
         self.host_runtime.note_callback_drain_cycle();
-        let mut iterations = 0usize;
-        let mut invoked_callbacks = 0u64;
-        loop {
-            iterations += 1;
-            if iterations > 256 {
-                return Err(anyhow!("host callback drain exceeded 256 iterations"));
-            }
-            invoked_callbacks += self.execute_script_as::<u64>(
-                "[clay:drain-host-callbacks]",
-                "globalThis.__clayDrainHostCallbacks == null ? 0 : globalThis.__clayDrainHostCallbacks()",
-            )?;
-            if !self.host_runtime.take_pending_wake() {
-                break;
-            }
-        }
+        let invoked_callbacks = self.execute_script_as::<u64>(
+            "[clay:drain-host-callbacks]",
+            "globalThis.__clayDrainHostCallbacks == null ? 0 : globalThis.__clayDrainHostCallbacks()",
+        )?;
         self.host_runtime.note_callbacks_invoked(invoked_callbacks);
-        Ok(true)
+        Ok(RuntimeHostCallbackDrainResult {
+            had_pending_wake: true,
+            callbacks_invoked: invoked_callbacks,
+            pending_host_wake_after_drain: self.debug_metrics().pending_host_wake,
+        })
     }
 
     pub fn shutdown_host_runtime(&mut self) {
         self.host_runtime.shutdown();
     }
 
+    pub fn abort_host_runtime(&mut self) {
+        self.host_runtime.abort();
+    }
+
     pub fn debug_metrics(&self) -> RuntimeDebugMetrics {
-        self.host_runtime.debug_metrics()
+        let mut metrics = self.host_runtime.debug_metrics();
+        let op_state = self.js_runtime.op_state();
+        let op_state = op_state.borrow();
+        let state = op_state.borrow::<RuntimeState>();
+        state.apply_mutation_queue_metrics(&mut metrics);
+        metrics
     }
 
     fn evaluate_main_module(&mut self, main_module: &ModuleSpecifier) -> anyhow::Result<()> {
@@ -1059,11 +1485,180 @@ fn normalize_file_path(path: &Path) -> anyhow::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::{
+        alloc::{GlobalAlloc, Layout, System},
+        hint::black_box,
+        sync::mpsc,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc,
+        },
+        time::{Duration, Instant},
+    };
 
+    use deno_ast::MediaType;
+    use deno_core::ModuleSpecifier;
     use tempfile::tempdir;
 
-    use super::{JsxRuntimeOptions, RuntimeSession};
+    use super::{
+        HostRuntimeBridge, HostRuntimeBridgeInner, JsxRuntimeOptions, RuntimeCommitTransportKind,
+        RuntimeReconcilerErrorCategory, RuntimeRecoveryCategory, RuntimeRecoveryDisposition,
+        RuntimeRecoveryState, RuntimeSession, TimerCommand, TimerEntry, HOST_CALLBACK_DRAIN_LIMIT,
+        MAX_PENDING_MUTATION_BATCHES, MAX_PENDING_MUTATION_BATCH_BYTES,
+    };
+
+    struct TestCountingAllocator;
+
+    static TRACK_TEST_ALLOCATIONS: AtomicBool = AtomicBool::new(false);
+    static TEST_ALLOCATION_COUNT: AtomicU64 = AtomicU64::new(0);
+    static TEST_ALLOCATION_BYTES: AtomicU64 = AtomicU64::new(0);
+
+    #[global_allocator]
+    static TEST_ALLOCATOR: TestCountingAllocator = TestCountingAllocator;
+
+    unsafe impl GlobalAlloc for TestCountingAllocator {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let pointer = unsafe { System.alloc(layout) };
+            if TRACK_TEST_ALLOCATIONS.load(Ordering::Relaxed) && !pointer.is_null() {
+                TEST_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
+                TEST_ALLOCATION_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+            }
+            pointer
+        }
+
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            let pointer = unsafe { System.alloc_zeroed(layout) };
+            if TRACK_TEST_ALLOCATIONS.load(Ordering::Relaxed) && !pointer.is_null() {
+                TEST_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
+                TEST_ALLOCATION_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+            }
+            pointer
+        }
+
+        unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+            unsafe { System.dealloc(pointer, layout) }
+        }
+
+        unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            let new_pointer = unsafe { System.realloc(pointer, layout, new_size) };
+            if TRACK_TEST_ALLOCATIONS.load(Ordering::Relaxed) && !new_pointer.is_null() {
+                TEST_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
+                TEST_ALLOCATION_BYTES.fetch_add(new_size as u64, Ordering::Relaxed);
+            }
+            new_pointer
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, Default)]
+    struct AllocationSnapshot {
+        count: u64,
+        bytes: u64,
+    }
+
+    #[derive(Debug, Clone, Copy, Default)]
+    struct DueTimerTransferBenchmark {
+        elapsed: Duration,
+        allocations: u64,
+        allocated_bytes: u64,
+        checksum: u64,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum DueTimerTransferMode {
+        JsonRoundTripBaseline,
+        Typed,
+    }
+
+    fn allocation_snapshot() -> AllocationSnapshot {
+        AllocationSnapshot {
+            count: TEST_ALLOCATION_COUNT.load(Ordering::Relaxed),
+            bytes: TEST_ALLOCATION_BYTES.load(Ordering::Relaxed),
+        }
+    }
+
+    fn with_allocation_tracking<T>(operation: impl FnOnce() -> T) -> (T, AllocationSnapshot) {
+        struct AllocationTrackingGuard;
+        impl Drop for AllocationTrackingGuard {
+            fn drop(&mut self) {
+                TRACK_TEST_ALLOCATIONS.store(false, Ordering::SeqCst);
+            }
+        }
+
+        let before = allocation_snapshot();
+        TRACK_TEST_ALLOCATIONS.store(true, Ordering::SeqCst);
+        let tracking_guard = AllocationTrackingGuard;
+        let result = operation();
+        drop(tracking_guard);
+        let after = allocation_snapshot();
+
+        (
+            result,
+            AllocationSnapshot {
+                count: after.count.saturating_sub(before.count),
+                bytes: after.bytes.saturating_sub(before.bytes),
+            },
+        )
+    }
+
+    fn benchmark_due_timer_transfer(
+        mode: DueTimerTransferMode,
+        iterations: usize,
+        handles_per_batch: usize,
+    ) -> DueTimerTransferBenchmark {
+        let host_runtime = HostRuntimeBridge {
+            inner: Arc::new(HostRuntimeBridgeInner::default()),
+        };
+        let handles: Vec<u32> = (1..=handles_per_batch as u32).collect();
+
+        let ((checksum, elapsed), allocation_delta) = with_allocation_tracking(|| {
+            let started = Instant::now();
+            let mut checksum = 0u64;
+            for _ in 0..iterations {
+                let inserted = host_runtime
+                    .inner
+                    .enqueue_due_timers(handles.iter().copied());
+                assert_eq!(
+                    inserted, handles_per_batch,
+                    "due timer benchmark should insert one full batch per cycle"
+                );
+
+                let due_handles = host_runtime.take_due_timers();
+                let transferred = match mode {
+                    DueTimerTransferMode::JsonRoundTripBaseline => {
+                        let payload = serde_json::to_string(&due_handles)
+                            .expect("json baseline should encode");
+                        serde_json::from_str::<Vec<u32>>(&payload)
+                            .expect("json baseline should decode")
+                    }
+                    DueTimerTransferMode::Typed => due_handles,
+                };
+                checksum = checksum.wrapping_add(transferred.len() as u64);
+                checksum = checksum.wrapping_add(transferred.first().copied().unwrap_or(0) as u64);
+                checksum = checksum.wrapping_add(transferred.last().copied().unwrap_or(0) as u64);
+                black_box(transferred);
+            }
+            (checksum, started.elapsed())
+        });
+
+        DueTimerTransferBenchmark {
+            elapsed,
+            allocations: allocation_delta.count,
+            allocated_bytes: allocation_delta.bytes,
+            checksum,
+        }
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct RuntimeAction {
+        ok: bool,
+        code: Option<String>,
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct MutationQueueProbeResult {
+        accepted: u64,
+        overflow: String,
+    }
 
     #[test]
     fn tsx_entrypoint_uses_configured_virtual_modules() {
@@ -1082,12 +1677,391 @@ render(<box answer={42} />);
         let (_session, update) = RuntimeSession::load(&entry_path, test_options())
             .expect("tsx should transpile and render");
 
-        assert_eq!(update.commit_batches_json.len(), 1);
+        assert_eq!(update.commit_batches.len(), 1);
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&update.commit_batches_json[0])
-                .expect("commit should be json"),
+            update.commit_batches[0].transport_kind(),
+            RuntimeCommitTransportKind::Json
+        );
+        assert_eq!(
+            update.commit_batches[0]
+                .decode_as::<serde_json::Value>()
+                .expect("commit should decode"),
             serde_json::json!({ "type": "box", "props": { "answer": 42 } })
         );
+        assert_eq!(update.commit_batch_ids(), vec![1]);
+    }
+
+    #[test]
+    fn commit_batches_expose_monotonic_commit_batch_ids() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+
+        session
+            .execute_script(
+                "[test:commit-batch-ids]",
+                r#"
+Deno.core.ops.op_commit_mutations(JSON.stringify({ kind: "first" }));
+Deno.core.ops.op_commit_mutations(JSON.stringify({ kind: "second" }));
+"#,
+            )
+            .expect("commits should enqueue");
+
+        let update = session.take_update();
+        assert_eq!(update.commit_batch_ids(), vec![1, 2]);
+        assert_eq!(update.commit_batches.len(), 2);
+    }
+
+    #[test]
+    fn typed_commit_batches_decode_through_the_transport_abstraction() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+
+        session
+            .execute_script(
+                "[test:typed-commit-batch]",
+                r#"
+Deno.core.ops.op_commit_mutations_typed({
+  kind: "typed",
+  nested: { answer: 42 },
+});
+"#,
+            )
+            .expect("typed commit should enqueue");
+
+        let update = session.take_update();
+        assert_eq!(update.commit_batch_ids(), vec![1]);
+        assert_eq!(update.commit_batches.len(), 1);
+        assert_eq!(
+            update.commit_batches[0].transport_kind(),
+            RuntimeCommitTransportKind::Typed
+        );
+        assert_eq!(
+            update.commit_batches[0]
+                .decode_as::<serde_json::Value>()
+                .expect("typed commit should decode"),
+            serde_json::json!({
+                "kind": "typed",
+                "nested": { "answer": 42 },
+            })
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                &update.commit_batches[0]
+                    .payload_json()
+                    .expect("typed payload should remain serializable")
+            )
+            .expect("typed payload json should parse"),
+            serde_json::json!({
+                "kind": "typed",
+                "nested": { "answer": 42 },
+            })
+        );
+    }
+
+    #[test]
+    fn mutation_queue_backpressure_caps_pending_batches_and_reports_overflow() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        let attempts = MAX_PENDING_MUTATION_BATCHES + 64;
+
+        let probe = session
+            .execute_script_as::<MutationQueueProbeResult>(
+                "[test:mutation-queue-backpressure]",
+                format!(
+                    r#"
+(() => {{
+  let accepted = 0;
+  let overflow = "";
+  for (let index = 0; index < {attempts}; index += 1) {{
+    try {{
+      Deno.core.ops.op_commit_mutations(JSON.stringify({{ kind: "queue-probe", index }}));
+      accepted += 1;
+    }} catch (error) {{
+      overflow = error instanceof Error ? error.message : String(error);
+      break;
+    }}
+  }}
+  return {{ accepted, overflow }};
+}})()
+"#,
+                    attempts = attempts,
+                ),
+            )
+            .expect("queue backpressure probe should complete");
+
+        assert_eq!(probe.accepted as usize, MAX_PENDING_MUTATION_BATCHES);
+        assert!(
+            probe.overflow.contains("runtime mutation queue overflow"),
+            "expected overflow message from backpressure guard, got: {}",
+            probe.overflow
+        );
+
+        let metrics = session.debug_metrics();
+        assert_eq!(
+            metrics.pending_mutation_batch_count,
+            MAX_PENDING_MUTATION_BATCHES as u64
+        );
+        assert_eq!(
+            metrics.pending_mutation_batch_high_water,
+            MAX_PENDING_MUTATION_BATCHES as u64
+        );
+        assert!(metrics.pending_mutation_batch_bytes > 0);
+        assert_eq!(
+            metrics.pending_mutation_batch_bytes,
+            metrics.pending_mutation_batch_bytes_high_water
+        );
+        assert_eq!(metrics.pending_mutation_batch_overflow_count, 1);
+        assert_eq!(
+            metrics.pending_mutation_batch_limit,
+            MAX_PENDING_MUTATION_BATCHES as u64
+        );
+
+        let update = session.take_update();
+        let commit_batch_ids = update.commit_batch_ids();
+        assert_eq!(commit_batch_ids.len(), MAX_PENDING_MUTATION_BATCHES);
+        assert_eq!(update.commit_batches.len(), MAX_PENDING_MUTATION_BATCHES);
+        assert_eq!(commit_batch_ids.first().copied(), Some(1));
+        assert_eq!(
+            commit_batch_ids.last().copied(),
+            Some(MAX_PENDING_MUTATION_BATCHES as u32)
+        );
+        assert!(
+            update
+                .logs
+                .iter()
+                .any(|entry| entry.contains("runtime mutation queue overflow")),
+            "expected overflow logging in runtime update"
+        );
+
+        let metrics_after_drain = session.debug_metrics();
+        assert_eq!(metrics_after_drain.pending_mutation_batch_count, 0);
+        assert_eq!(metrics_after_drain.pending_mutation_batch_bytes, 0);
+        assert_eq!(metrics_after_drain.pending_mutation_batch_overflow_count, 1);
+
+        session
+            .execute_script(
+                "[test:mutation-queue-backpressure-after-drain]",
+                "Deno.core.ops.op_commit_mutations(JSON.stringify({ kind: 'after-drain' }));",
+            )
+            .expect("queue should accept commits again after draining");
+        let update = session.take_update();
+        assert_eq!(
+            update.commit_batch_ids(),
+            vec![MAX_PENDING_MUTATION_BATCHES as u32 + 1]
+        );
+        assert_eq!(update.commit_batches.len(), 1);
+    }
+
+    #[test]
+    fn mutation_queue_backpressure_enforces_pending_byte_budget() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+
+        let probe = session
+            .execute_script_as::<MutationQueueProbeResult>(
+                "[test:mutation-queue-byte-budget]",
+                format!(
+                    r#"
+(() => {{
+  const payload = "x".repeat({payload_bytes});
+  const batchJson = JSON.stringify({{ kind: "byte-budget-probe", payload }});
+  let accepted = 0;
+  let overflow = "";
+  for (let index = 0; index < 8; index += 1) {{
+    try {{
+      Deno.core.ops.op_commit_mutations(batchJson);
+      accepted += 1;
+    }} catch (error) {{
+      overflow = error instanceof Error ? error.message : String(error);
+      break;
+    }}
+  }}
+  return {{ accepted, overflow }};
+}})()
+"#,
+                    payload_bytes = MAX_PENDING_MUTATION_BATCH_BYTES / 2,
+                ),
+            )
+            .expect("byte-budget probe should complete");
+
+        assert!(probe.accepted >= 1);
+        assert!(
+            probe.accepted < MAX_PENDING_MUTATION_BATCHES as u64,
+            "byte budget should overflow before batch-count budget"
+        );
+        assert!(
+            probe.overflow.contains("runtime mutation queue overflow"),
+            "expected overflow message from byte-budget guard, got: {}",
+            probe.overflow
+        );
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.pending_mutation_batch_count, probe.accepted);
+        assert!(
+            metrics.pending_mutation_batch_bytes <= MAX_PENDING_MUTATION_BATCH_BYTES as u64,
+            "pending byte budget should never exceed hard limit"
+        );
+        assert_eq!(metrics.pending_mutation_batch_overflow_count, 1);
+        assert_eq!(
+            metrics.pending_mutation_batch_byte_limit,
+            MAX_PENDING_MUTATION_BATCH_BYTES as u64
+        );
+
+        let update = session.take_update();
+        assert_eq!(update.commit_batches.len(), probe.accepted as usize);
+        assert!(
+            update
+                .logs
+                .iter()
+                .any(|entry| entry.contains("runtime mutation queue overflow")),
+            "expected overflow logging in runtime update"
+        );
+    }
+
+    #[test]
+    fn reconciler_error_categories_are_structured_and_runtime_actions_are_deterministic() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("runtime-setup.ts");
+        std::fs::write(
+            &entry_path,
+            r#"
+import React from "react";
+import { createClayJsxRuntime } from "clay-internal:/jsx-runtime";
+
+globalThis.__clayRuntimeForTest = createClayJsxRuntime({
+  hostTags: new Map([["box", "box"]]),
+  eventProps: new Map(),
+  commitPatch: () => ({ ok: true, code: null }),
+});
+globalThis.__clayReactForTest = React;
+"#,
+        )
+        .expect("setup file should be written");
+
+        let mut session =
+            RuntimeSession::new(clay_runtime_test_options()).expect("runtime should be created");
+        session
+            .load_main_module(&entry_path)
+            .expect("setup module should load");
+
+        let cases = [
+            (
+                "uncaught",
+                "uncaught exploded",
+                RuntimeReconcilerErrorCategory::Uncaught,
+                Some(RuntimeRecoveryCategory::Fatal),
+                RuntimeRecoveryDisposition::Teardown,
+                false,
+                Some("reconciler:uncaught:uncaught exploded"),
+            ),
+            (
+                "caught",
+                "caught exploded",
+                RuntimeReconcilerErrorCategory::Caught,
+                Some(RuntimeRecoveryCategory::BoundaryContained),
+                RuntimeRecoveryDisposition::BoundedFailure,
+                false,
+                Some("reconciler:caught:caught exploded"),
+            ),
+            (
+                "recoverable",
+                "recoverable wobble",
+                RuntimeReconcilerErrorCategory::Recoverable,
+                Some(RuntimeRecoveryCategory::Recoverable),
+                RuntimeRecoveryDisposition::Continue,
+                true,
+                None,
+            ),
+        ];
+
+        for (
+            index,
+            (
+                category,
+                message,
+                expected_category,
+                expected_recovery_category,
+                expected_recovery_disposition,
+                expected_ok,
+                expected_code,
+            ),
+        ) in cases.into_iter().enumerate()
+        {
+            let render_action = session
+                .execute_script_as::<RuntimeAction>(
+                    "[test:reconciler-category-case]",
+                    format!(
+                        r#"
+(() => {{
+  const React = globalThis.__clayReactForTest;
+  const runtime = globalThis.__clayRuntimeForTest;
+  function Trigger() {{
+    runtime.__reportReconcilerErrorForTest(
+      "{category}",
+      "{message}",
+      "<Trigger />",
+      "BoundaryShell",
+    );
+    return React.createElement("box", {{ id: "root" }});
+  }}
+  return runtime.render(React.createElement(Trigger));
+}})()
+"#,
+                    ),
+                )
+                .expect("render action should deserialize");
+
+            let recovery_state = session
+                .execute_script_as::<RuntimeRecoveryState>(
+                    "[test:reconciler-recovery-state]",
+                    "globalThis.__clayRuntimeForTest.__describeRecoveryStateForTest()",
+                )
+                .expect("runtime recovery state should deserialize");
+
+            assert_eq!(
+                render_action.ok, expected_ok,
+                "unexpected runtime action result for category {category}"
+            );
+            assert_eq!(
+                recovery_state.category, expected_recovery_category,
+                "unexpected recovery category for case {index} ({category})"
+            );
+            assert_eq!(
+                recovery_state.disposition, expected_recovery_disposition,
+                "unexpected recovery disposition for case {index} ({category})"
+            );
+            assert_eq!(recovery_state.message.as_deref(), Some(message));
+            match expected_code {
+                Some(expected_code) => {
+                    let code = render_action
+                        .code
+                        .expect("fatal reconciler category should produce an action code");
+                    assert_eq!(code, expected_code);
+                }
+                None => {
+                    assert!(
+                        render_action.code.is_none(),
+                        "recoverable reconciler category should preserve successful action semantics"
+                    );
+                }
+            }
+
+            let update = session.take_update();
+            assert_eq!(
+                update.reconciler_errors.len(),
+                1,
+                "expected exactly one structured reconciler error for case {index} ({category})"
+            );
+            let error = &update.reconciler_errors[0];
+            assert_eq!(error.category, expected_category);
+            assert_eq!(error.message, message);
+            assert_eq!(error.component_stack, "<Trigger />");
+            if expected_category == RuntimeReconcilerErrorCategory::Caught {
+                assert_eq!(error.error_boundary.as_deref(), Some("BoundaryShell"));
+            } else {
+                assert!(error.error_boundary.is_none());
+            }
+        }
     }
 
     #[test]
@@ -1192,9 +2166,12 @@ setTimeout(() => {
         assert!(metrics.pending_host_wake);
         assert_eq!(metrics.active_timer_count, 0);
 
-        assert!(session
+        let drain = session
             .drain_host_callbacks()
-            .expect("draining callbacks should succeed"));
+            .expect("draining callbacks should succeed");
+        assert!(drain.drained_work());
+        assert_eq!(drain.callbacks_invoked, 1);
+        assert!(!drain.needs_another_drain());
         assert_eq!(
             session
                 .execute_json_expression_as::<u32>(
@@ -1302,6 +2279,405 @@ setTimeout(() => {
     }
 
     #[test]
+    fn runtime_defensively_clamps_zero_repeat_interval_from_host_ops() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:forced-zero-repeat-interval]",
+                r#"
+globalThis.forcedZeroIntervalCount = 0;
+globalThis.forcedZeroTimeoutFired = false;
+
+const originalScheduleTimer = Deno.core.ops.op_host_schedule_timer;
+Deno.core.ops.op_host_schedule_timer = (delayMs, intervalMs) => {
+  if (intervalMs >= 0) {
+    // Force a raw 0ms repeat interval through the host op boundary.
+    return originalScheduleTimer(delayMs, 0);
+  }
+  return originalScheduleTimer(delayMs, intervalMs);
+};
+
+globalThis.forcedZeroHandle = setInterval(() => {
+  globalThis.forcedZeroIntervalCount += 1;
+  if (globalThis.forcedZeroTimeoutFired && globalThis.forcedZeroIntervalCount >= 3) {
+    clearInterval(globalThis.forcedZeroHandle);
+    globalThis.forcedZeroHandle = null;
+  }
+}, 0);
+
+setTimeout(() => {
+  globalThis.forcedZeroTimeoutFired = true;
+}, 10);
+
+Deno.core.ops.op_host_schedule_timer = originalScheduleTimer;
+"#,
+            )
+            .expect("forced 0ms repeat interval should remain responsive");
+
+        wait_for_expression(
+            &mut session,
+            Duration::from_millis(250),
+            "globalThis.forcedZeroTimeoutFired",
+            |fired: bool| fired,
+        );
+        wait_for_expression(
+            &mut session,
+            Duration::from_millis(250),
+            "globalThis.forcedZeroHandle === null",
+            |cleared: bool| cleared,
+        );
+
+        let interval_count = session
+            .execute_json_expression_as::<u32>(
+                "[test:forced-zero-repeat-interval-count]",
+                "globalThis.forcedZeroIntervalCount",
+            )
+            .expect("forced-zero interval count should deserialize");
+        assert!(interval_count >= 3);
+
+        let metrics = session.debug_metrics();
+        assert!(metrics.host_callback_drain_cycles >= 1);
+        assert!(metrics.host_callbacks_invoked >= 4);
+        assert!(metrics.timer_fire_count >= 4);
+        assert!(metrics.timer_repeat_fire_count >= 3);
+        assert_eq!(metrics.timer_cancel_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+    }
+
+    #[test]
+    fn timer_worker_defensively_clamps_injected_invalid_repeat_intervals() {
+        let host_runtime = HostRuntimeBridge::new();
+        let timer_handle = 77;
+
+        host_runtime.inner.register_active_timer(timer_handle);
+        let timer_command_tx = host_runtime
+            .inner
+            .timer_command_tx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .cloned()
+            .expect("timer worker command channel should exist");
+
+        timer_command_tx
+            .send(TimerCommand::Schedule(TimerEntry {
+                handle: timer_handle,
+                next_fire_at: Instant::now(),
+                interval: Some(Duration::ZERO),
+            }))
+            .expect("malformed timer entry should send");
+
+        let mut total_due = 0usize;
+        let mut max_batch = 0usize;
+        let collect_deadline = Instant::now() + Duration::from_millis(80);
+        while Instant::now() < collect_deadline && total_due < 4 {
+            let due_handles = host_runtime.take_due_timers();
+            if !due_handles.is_empty() {
+                total_due += due_handles.len();
+                max_batch = max_batch.max(due_handles.len());
+            }
+            let _ = host_runtime.take_pending_wake();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+
+        assert!(
+            total_due >= 3,
+            "worker should continue firing a malformed repeating timer after defensive clamp"
+        );
+        assert!(
+            total_due <= 200,
+            "defensive clamp should prevent runaway callback accumulation (saw {total_due})"
+        );
+        assert!(
+            max_batch <= 128,
+            "timer draining batches should stay bounded after clamping malformed intervals (max batch: {max_batch})"
+        );
+
+        timer_command_tx
+            .send(TimerCommand::Cancel(timer_handle))
+            .expect("timer cancel command should send");
+        host_runtime.inner.unregister_active_timer(timer_handle);
+
+        let (shutdown_done_tx, shutdown_done_rx) = mpsc::channel();
+        let shutdown_runtime = host_runtime.clone();
+        std::thread::spawn(move || {
+            shutdown_runtime.shutdown();
+            let _ = shutdown_done_tx.send(());
+        });
+
+        shutdown_done_rx
+            .recv_timeout(Duration::from_millis(500))
+            .expect("timer worker should accept shutdown and exit");
+
+        let metrics = host_runtime.debug_metrics();
+        assert!(metrics.timer_repeat_fire_count >= 3);
+        assert_eq!(metrics.shutdown_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+        assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
+    fn typed_due_timer_transfer_reduces_allocation_and_latency_vs_json_baseline() {
+        const ITERATIONS: usize = 8_192;
+        const HANDLES_PER_BATCH: usize = 128;
+
+        let baseline = benchmark_due_timer_transfer(
+            DueTimerTransferMode::JsonRoundTripBaseline,
+            ITERATIONS,
+            HANDLES_PER_BATCH,
+        );
+        let typed = benchmark_due_timer_transfer(
+            DueTimerTransferMode::Typed,
+            ITERATIONS,
+            HANDLES_PER_BATCH,
+        );
+
+        println!(
+            "due-timer transfer benchmark: baseline elapsed={:?}, allocations={}, bytes={} | typed elapsed={:?}, allocations={}, bytes={}",
+            baseline.elapsed,
+            baseline.allocations,
+            baseline.allocated_bytes,
+            typed.elapsed,
+            typed.allocations,
+            typed.allocated_bytes,
+        );
+
+        assert_eq!(
+            baseline.checksum, typed.checksum,
+            "benchmark paths should process equivalent due timer payloads"
+        );
+        assert!(
+            typed.allocations < baseline.allocations,
+            "typed transfer should allocate less than JSON baseline (typed={}, baseline={})",
+            typed.allocations,
+            baseline.allocations
+        );
+        assert!(
+            typed.allocated_bytes < baseline.allocated_bytes,
+            "typed transfer should allocate fewer bytes than JSON baseline (typed={}, baseline={})",
+            typed.allocated_bytes,
+            baseline.allocated_bytes
+        );
+        assert!(
+            typed.elapsed < baseline.elapsed,
+            "typed transfer latency should beat JSON baseline (typed={:?}, baseline={:?})",
+            typed.elapsed,
+            baseline.elapsed
+        );
+    }
+
+    #[test]
+    fn host_callback_burst_benchmark_respects_the_per_drain_cap() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        const SCHEDULED_TIMEOUTS: u64 = 4_096;
+        const TIMEOUT_DELAY_MS: u64 = 5;
+        const STALL_AFTER_WAKE_MS: u64 = 80;
+
+        session
+            .execute_script(
+                "[test:drain-cap-schedule]",
+                format!(
+                    r#"
+globalThis.cappedDrainInvocations = 0;
+for (let i = 0; i < {scheduled}; i++) {{
+  setTimeout(() => {{
+    globalThis.cappedDrainInvocations += 1;
+  }}, {timeout_delay_ms});
+}}
+"#,
+                    scheduled = SCHEDULED_TIMEOUTS,
+                    timeout_delay_ms = TIMEOUT_DELAY_MS,
+                ),
+            )
+            .expect("zero-delay timeouts should schedule");
+
+        // Simulate a host stall: wait for timers to start waking, then avoid
+        // draining while callbacks accumulate.
+        wait_for_pending_wake(&session, Duration::from_millis(250));
+        std::thread::sleep(Duration::from_millis(STALL_AFTER_WAKE_MS));
+
+        let scheduling_snapshot = session
+            .execute_json_expression_as::<serde_json::Value>(
+                "[test:drain-cap-limit]",
+                "globalThis.__clayDescribeHostSchedulingForTest()",
+            )
+            .expect("host scheduling snapshot should deserialize");
+        let drain_limit = scheduling_snapshot["drainLimit"]
+            .as_u64()
+            .expect("drain limit should be numeric");
+        assert_eq!(drain_limit as usize, HOST_CALLBACK_DRAIN_LIMIT);
+
+        let started_at = Instant::now();
+        let mut drains = 0u64;
+        let mut total_invoked = 0u64;
+        let mut max_batch = 0u64;
+        while session.debug_metrics().pending_host_wake {
+            let drain = session
+                .drain_host_callbacks()
+                .expect("draining host callbacks should succeed");
+            if !drain.drained_work() {
+                break;
+            }
+            let batch = drain.callbacks_invoked;
+            assert!(
+                batch <= drain_limit,
+                "post-stall drain batch {batch} exceeded cap {drain_limit}"
+            );
+            drains += 1;
+            total_invoked += batch;
+            max_batch = max_batch.max(batch);
+        }
+        let elapsed = started_at.elapsed();
+
+        let callback_invocations = session
+            .execute_json_expression_as::<u64>(
+                "[test:drain-cap-invocations]",
+                "globalThis.cappedDrainInvocations",
+            )
+            .expect("callback count should deserialize");
+
+        assert_eq!(callback_invocations, SCHEDULED_TIMEOUTS);
+        assert_eq!(total_invoked, SCHEDULED_TIMEOUTS);
+        assert!(
+            drains >= 2,
+            "expected capped draining to require multiple batches"
+        );
+        assert!(
+            max_batch <= drain_limit,
+            "a single drain call should not process more than the configured cap"
+        );
+        println!(
+            "host callback burst benchmark: callbacks={SCHEDULED_TIMEOUTS}, drains={drains}, cap={drain_limit}, max_batch={max_batch}, elapsed={elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn request_repaint_is_a_callback_free_invalidation_wake() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:request-repaint]",
+                r#"
+globalThis.repaintCount = (globalThis.repaintCount ?? 0) + 1;
+requestRepaint();
+"#,
+            )
+            .expect("requestRepaint should execute");
+
+        wait_for_pending_wake(&session, Duration::from_millis(100));
+        let drain = session
+            .drain_host_callbacks()
+            .expect("requestRepaint wake should drain");
+        assert!(drain.had_pending_wake);
+        assert_eq!(drain.callbacks_invoked, 0);
+        assert!(!drain.pending_host_wake_after_drain);
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.host_wake_count, 1);
+        assert_eq!(metrics.host_callback_drain_cycles, 1);
+        assert_eq!(metrics.host_callbacks_invoked, 0);
+        assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
+    fn repeating_timer_backlog_is_coalesced_after_host_stall() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        const INTERVAL_MS: u64 = 80;
+        const STALL_MS: u64 = 320;
+        session
+            .execute_script(
+                "[test:stall-coalescing-schedule]",
+                format!(
+                    r#"
+globalThis.stallCoalescingCount = 0;
+globalThis.stallCoalescingHandle = setInterval(() => {{
+  globalThis.stallCoalescingCount += 1;
+}}, {interval_ms});
+"#,
+                    interval_ms = INTERVAL_MS,
+                ),
+            )
+            .expect("repeating timer should schedule");
+
+        wait_for_pending_wake(&session, Duration::from_millis(250));
+        std::thread::sleep(Duration::from_millis(STALL_MS));
+
+        assert!(session
+            .drain_host_callbacks()
+            .expect("first post-stall drain should process one coalesced callback")
+            .drained_work());
+
+        let count_after_first_drain = session
+            .execute_json_expression_as::<u64>(
+                "[test:stall-coalescing-count-after-first-drain]",
+                "globalThis.stallCoalescingCount",
+            )
+            .expect("coalescing count should deserialize after first drain");
+        assert_eq!(
+            count_after_first_drain, 1,
+            "expected only one coalesced repeat callback after a long stall"
+        );
+
+        assert!(!session
+            .drain_host_callbacks()
+            .expect("immediate follow-up drain should be idle")
+            .drained_work());
+        let count_after_second_drain = session
+            .execute_json_expression_as::<u64>(
+                "[test:stall-coalescing-count-after-second-drain]",
+                "globalThis.stallCoalescingCount",
+            )
+            .expect("coalescing count should deserialize after second drain");
+        assert_eq!(count_after_second_drain, count_after_first_drain);
+
+        std::thread::sleep(Duration::from_millis(INTERVAL_MS / 4));
+        assert!(!session
+            .drain_host_callbacks()
+            .expect("drain before next interval should be idle")
+            .drained_work());
+        let count_before_next_interval = session
+            .execute_json_expression_as::<u64>(
+                "[test:stall-coalescing-count-before-next-interval]",
+                "globalThis.stallCoalescingCount",
+            )
+            .expect("coalescing count should deserialize before next interval");
+        assert_eq!(count_before_next_interval, count_after_first_drain);
+
+        wait_for_pending_wake(&session, Duration::from_millis(250));
+        assert!(session
+            .drain_host_callbacks()
+            .expect("drain after real interval advancement should process work")
+            .drained_work());
+        let count_after_real_interval = session
+            .execute_json_expression_as::<u64>(
+                "[test:stall-coalescing-count-after-real-interval]",
+                "globalThis.stallCoalescingCount",
+            )
+            .expect("coalescing count should deserialize after real interval");
+        assert_eq!(
+            count_after_real_interval,
+            count_after_first_drain + 1,
+            "expected exactly one additional callback once real time advanced by another interval"
+        );
+
+        session
+            .execute_script(
+                "[test:stall-coalescing-clear]",
+                "clearInterval(globalThis.stallCoalescingHandle);",
+            )
+            .expect("interval should cancel");
+
+        let metrics = session.debug_metrics();
+        assert!(metrics.timer_repeat_fire_count >= 1);
+        assert_eq!(metrics.timer_cancel_count, 1);
+        assert_eq!(metrics.active_timer_count, 0);
+    }
+
+    #[test]
     fn interval_repeats_until_cancelled_and_active_timer_count_returns_to_zero() {
         let mut session =
             RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
@@ -1358,9 +2734,12 @@ requestAnimationFrame((timestamp) => {
             .expect("requestAnimationFrame should schedule");
 
         wait_for_pending_wake(&session, Duration::from_millis(200));
-        assert!(session
+        let drain = session
             .drain_host_callbacks()
-            .expect("raf callbacks should drain"));
+            .expect("raf callbacks should drain");
+        assert!(drain.drained_work());
+        assert_eq!(drain.callbacks_invoked, 1);
+        assert!(!drain.needs_another_drain());
 
         let timestamp = session
             .execute_json_expression_as::<f64>("[test:raf-ts]", "globalThis.rafTimestamp")
@@ -1398,16 +2777,56 @@ setTimeout(() => {}, 0);
     }
 
     #[test]
+    fn abort_clears_timers_and_pending_wake_without_incrementing_shutdown_metrics() {
+        let mut session =
+            RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
+        session
+            .execute_script(
+                "[test:abort]",
+                r#"
+globalThis.abortInterval = setInterval(() => {}, 1000);
+setTimeout(() => {}, 0);
+"#,
+            )
+            .expect("timers should schedule");
+
+        wait_for_pending_wake(&session, Duration::from_millis(100));
+        session.abort_host_runtime();
+
+        let metrics = session.debug_metrics();
+        assert_eq!(metrics.shutdown_count, 0);
+        assert_eq!(metrics.active_timer_count, 0);
+        assert!(!metrics.pending_host_wake);
+    }
+
+    #[test]
     fn draining_host_callbacks_without_work_is_counted_as_a_noop() {
         let mut session =
             RuntimeSession::new(JsxRuntimeOptions::new("clay")).expect("runtime should be created");
         assert!(!session
             .drain_host_callbacks()
-            .expect("noop drain should succeed"));
+            .expect("noop drain should succeed")
+            .drained_work());
         let metrics = session.debug_metrics();
         assert_eq!(metrics.host_callback_drain_noop_count, 1);
         assert_eq!(metrics.host_callback_drain_cycles, 0);
         assert_eq!(metrics.host_callbacks_invoked, 0);
+    }
+
+    fn clay_runtime_test_options() -> JsxRuntimeOptions {
+        let runtime_specifier =
+            ModuleSpecifier::parse("clay-internal:/jsx-runtime").expect("specifier should parse");
+        let transpiled = super::transpile_module(
+            &runtime_specifier,
+            MediaType::TypeScript,
+            crate::CLAY_JSX_RUNTIME_SOURCE.to_owned(),
+            "clay",
+        )
+        .expect("clay runtime test module should transpile");
+
+        JsxRuntimeOptions::new("clay")
+            .with_react_runtime_modules()
+            .with_virtual_module("clay-internal:/jsx-runtime", transpiled.code)
     }
 
     fn test_options() -> JsxRuntimeOptions {

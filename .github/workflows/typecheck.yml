@@ -1,0 +1,31 @@
+name: Typecheck
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - v8
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install TypeScript deps
+        run: npm install
+
+      - name: Regenerate contract types
+        run: npm run generate:contract-types
+
+      - name: Typecheck
+        run: npm run typecheck

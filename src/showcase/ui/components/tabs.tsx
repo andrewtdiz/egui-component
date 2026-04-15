@@ -1,14 +1,8 @@
-import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
-function itemEvent(event: unknown, item: Item, value: string, label: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: value, item_label: label, item_index: index, item } };
-}
-
-export function TabsList({ items = [], selectedItemId, style = "underline", className, onSelect, children, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; style?: string } & Record<string, unknown>) {
+export function TabsList({ items = [], selectedItemId, style = "underline", className, onSelect, children, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; style?: string; onSelect?: Handler<string> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "TabsList");
   const segmented = style === "segmented" || style === "blenderTopbar" || style === "blender_topbar";
   const vertical = style === "stacked" || style === "rail";
@@ -70,7 +64,7 @@ export function TabsTrigger({
   icon?: string;
   iconOnly?: boolean;
   segmented?: boolean;
-  onSelect?: (event: unknown, value: string) => void;
+  onSelect?: Handler<string>;
 } & Record<string, unknown>) {
   const id = itemId(item, String(index));
   return (
@@ -81,7 +75,7 @@ export function TabsTrigger({
       selected={selected}
       leadingIcon={icon}
       iconOnly={iconOnly}
-      onClick={(event) => onSelect?.(itemEvent(event, item, id, label, index), id)}
+      onClick={(event) => onSelect?.(eventWithValue(event, id, { item_id: id, item_label: label, item_index: index, item }), id)}
     >
       {iconOnly ? "" : label}
     </Button>
@@ -92,7 +86,7 @@ export function TabsContent({ children, className, ...props }: NodeProps & Recor
   return <div {...nodeProps(props, cn("flex flex-col gap-2", className))}>{children}</div>;
 }
 
-export function Tabs({ items = [], selectedItemId, style = "underline", className, onSelect, children, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; style?: string } & Record<string, unknown>) {
+export function Tabs({ items = [], selectedItemId, style = "underline", className, onSelect, children, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; style?: string; onSelect?: Handler<string> } & Record<string, unknown>) {
   return (
     <TabsList {...props} items={items} selectedItemId={selectedItemId} style={style} className={className} onSelect={onSelect}>
       {children}

@@ -2,13 +2,12 @@ use super::*;
 use crate::layout::{taffy, tui, TuiBuilderLogic};
 use crate::primitives::{draw_swatch, surface_frame, ScrollAreaExt, SurfaceFrame, Swatch};
 use crate::runtime_components::{
-    AudioPlayback, Button, ButtonLabelWeight, ButtonVariant, Checkbox,
-    CollabCursor, ComponentUi, ComponentUiExt, ContextMenu, ControlSize, DialogueHeader,
-    DialogueModal, DragBoard, DragBoardItem, DropdownMenu, DropdownMenuAction,
-    DropdownMenuEntry, FileTree, FileTreeNode, Hierarchy as HierarchyWidget,
-    HierarchyNode as HierarchyWidgetNode, Icon, Image, Label, LabelTone, LabelWeight, NumberInput,
-    Popover, Radio, RadioGroup, RadioOption, Select, Sidebar, Slider, Switch, TextInput,
-    Tooltip,
+    AudioPlayback, Button, ButtonLabelWeight, ButtonVariant, Checkbox, CollabCursor, ComponentUi,
+    ComponentUiExt, ContextMenu, ControlSize, DialogueHeader, DialogueModal, DragBoard,
+    DragBoardItem, DropdownMenu, DropdownMenuAction, DropdownMenuEntry, FileTree, FileTreeNode,
+    Hierarchy as HierarchyWidget, HierarchyNode as HierarchyWidgetNode, Icon, Image, Label,
+    LabelTone, LabelWeight, NumberInput, Popover, Radio, RadioGroup, RadioOption, Select, Sidebar,
+    Slider, Switch, TextInput, Tooltip,
 };
 use crate::theme::ColorRole;
 use crate::ui::{tailwind, tokens, twemoji};
@@ -16,7 +15,8 @@ use egui::{
     Align, Align2, Color32, CornerRadius, Id, Key, Layout, Margin, Order, Sense, Stroke,
     StrokeKind, Vec2,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{hash_map::DefaultHasher, BTreeMap, BTreeSet, HashMap};
+use std::hash::{Hash, Hasher};
 
 const SHOWCASE_IMAGE_BYTES: &[u8] = include_bytes!("../../assets/images/showcase-image.png");
 
@@ -26,13 +26,23 @@ pub fn render_tree(ui: &mut egui::Ui, tree: &ContractTree) -> Vec<ContractEvent>
 }
 
 pub fn render_component_tree(ui: &mut ComponentUi<'_>, tree: &ContractTree) -> Vec<ContractEvent> {
-    let mut renderer = FrameRenderer { events: Vec::new() };
+    let mut renderer = FrameRenderer::new();
     renderer.render_node(ui, &tree.root);
     renderer.events
 }
 
 struct FrameRenderer {
     events: Vec<ContractEvent>,
+    class_spec_cache: HashMap<u64, Option<tailwind::Spec>>,
+    effective_layout_cache: HashMap<u64, Option<ContractLayout>>,
+    #[cfg(test)]
+    style_cache_enabled: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ResolvedCommonStyle {
+    class_spec: Option<tailwind::Spec>,
+    layout: Option<ContractLayout>,
 }
 
 #[derive(Debug)]
@@ -93,6 +103,58 @@ struct ContainerLayoutPlan {
 }
 
 impl FrameRenderer {
+    fn new() -> Self {
+        Self {
+            events: Vec::new(),
+            class_spec_cache: HashMap::new(),
+            effective_layout_cache: HashMap::new(),
+            #[cfg(test)]
+            style_cache_enabled: true,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_style_cache_enabled(style_cache_enabled: bool) -> Self {
+        let mut renderer = Self::new();
+        renderer.style_cache_enabled = style_cache_enabled;
+        renderer
+    }
+
+    fn resolve_common_style(&mut self, common: &ContractCommon) -> ResolvedCommonStyle {
+        #[cfg(test)]
+        if !self.style_cache_enabled {
+            let class_spec = class_spec(common);
+            let layout = effective_layout(common, class_spec.as_ref());
+            return ResolvedCommonStyle { class_spec, layout };
+        }
+
+        let class_hash = class_inputs_hash(common.class.as_deref(), &common.class_list);
+        let class_spec = if let Some(cached) = self.class_spec_cache.get(&class_hash) {
+            cached.clone()
+        } else {
+            let parsed = class_spec(common);
+            self.class_spec_cache.insert(class_hash, parsed.clone());
+            parsed
+        };
+
+        let explicit_layout_hash = contract_layout_hash(common.layout.as_ref());
+        let mut layout_hasher = DefaultHasher::new();
+        layout_hasher.write_u64(class_hash);
+        layout_hasher.write_u64(explicit_layout_hash);
+        let layout_hash = layout_hasher.finish();
+
+        let layout = if let Some(cached) = self.effective_layout_cache.get(&layout_hash) {
+            cached.clone()
+        } else {
+            let derived = effective_layout(common, class_spec.as_ref());
+            self.effective_layout_cache
+                .insert(layout_hash, derived.clone());
+            derived
+        };
+
+        ResolvedCommonStyle { class_spec, layout }
+    }
+
     fn render_node(&mut self, ui: &mut ComponentUi<'_>, node: &ContractNode) {
         self.render_node_with_layout_mode(ui, node, LayoutScopeMode::Full);
     }
@@ -113,8 +175,9 @@ impl FrameRenderer {
         // - slot_classes and common.actions remain metadata-only
         ignore_metadata_only_common_fields(common);
 
-        let class_spec = class_spec(common);
-        let layout = effective_layout(common, class_spec.as_ref());
+        let style = self.resolve_common_style(common);
+        let class_spec = style.class_spec;
+        let layout = style.layout;
 
         if common.enabled {
             with_layout_scope(ui, layout.as_ref(), scope_mode, |ui| {
@@ -244,8 +307,9 @@ impl FrameRenderer {
 
     fn render_taffy_child(&mut self, tui: &mut crate::layout::Tui, child: &ContractNode) {
         let common = child.common();
-        let class_spec = class_spec(common);
-        let layout = effective_layout(common, class_spec.as_ref());
+        let style = self.resolve_common_style(common);
+        let class_spec = style.class_spec;
+        let layout = style.layout;
         let builder = tui
             .id(common.node_id.as_str())
             .style(taffy_item_style(child, layout.as_ref()));
@@ -1002,11 +1066,9 @@ impl FrameRenderer {
                 ui.dialogue_header_with_close(
                     DialogueHeader::new(props.title.as_str())
                         .description(props.description.as_deref().unwrap_or_default())
-                        .intent(
-                            compat_dialogue_intent(
-                                props.intent.unwrap_or(super::DialogueIntent::Default),
-                            ),
-                        ),
+                        .intent(compat_dialogue_intent(
+                            props.intent.unwrap_or(super::DialogueIntent::Default),
+                        )),
                     close_requested,
                 );
 
@@ -2126,11 +2188,15 @@ impl FrameRenderer {
 }
 
 fn class_spec(common: &ContractCommon) -> Option<tailwind::Spec> {
+    class_spec_from_parts(common.class.as_deref(), &common.class_list)
+}
+
+fn class_spec_from_parts(class: Option<&str>, class_list: &[String]) -> Option<tailwind::Spec> {
     let mut classes = String::new();
-    if let Some(class) = common.class.as_deref() {
+    if let Some(class) = class {
         classes.push_str(class);
     }
-    for class in &common.class_list {
+    for class in class_list {
         if !classes.is_empty() {
             classes.push(' ');
         }
@@ -2138,6 +2204,207 @@ fn class_spec(common: &ContractCommon) -> Option<tailwind::Spec> {
     }
     let classes = classes.trim();
     (!classes.is_empty()).then(|| tailwind::parse(classes))
+}
+
+fn class_inputs_hash(class: Option<&str>, class_list: &[String]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    class.hash(&mut hasher);
+    class_list.len().hash(&mut hasher);
+    for class in class_list {
+        class.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+fn contract_layout_hash(layout: Option<&ContractLayout>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    hash_contract_layout(layout, &mut hasher);
+    hasher.finish()
+}
+
+fn hash_contract_layout<H: Hasher>(layout: Option<&ContractLayout>, state: &mut H) {
+    let Some(layout) = layout else {
+        state.write_u8(0);
+        return;
+    };
+
+    state.write_u8(1);
+    hash_option_display(layout.display, state);
+    hash_option_direction(layout.direction, state);
+    hash_option_f32(layout.grow, state);
+    hash_option_f32(layout.shrink, state);
+    hash_option_length(layout.basis.as_ref(), state);
+    hash_option_length(layout.width.as_ref(), state);
+    hash_option_length(layout.height.as_ref(), state);
+    hash_option_length(layout.min_width.as_ref(), state);
+    hash_option_length(layout.min_height.as_ref(), state);
+    hash_option_length(layout.max_width.as_ref(), state);
+    hash_option_length(layout.max_height.as_ref(), state);
+    hash_option_f32(layout.gap_x, state);
+    hash_option_f32(layout.gap_y, state);
+    hash_option_edges(layout.padding.as_ref(), state);
+    hash_option_edges(layout.margin.as_ref(), state);
+    hash_option_align(layout.align, state);
+    hash_option_justify(layout.justify, state);
+    hash_option_bool(layout.wrap, state);
+
+    layout.columns.len().hash(state);
+    for column in &layout.columns {
+        hash_track(column, state);
+    }
+
+    layout.rows.len().hash(state);
+    for row in &layout.rows {
+        hash_track(row, state);
+    }
+
+    hash_option_u16(layout.col_span, state);
+    hash_option_u16(layout.row_span, state);
+    hash_option_overflow(layout.overflow_x, state);
+    hash_option_overflow(layout.overflow_y, state);
+}
+
+fn hash_option_display<H: Hasher>(value: Option<ContractDisplay>, state: &mut H) {
+    let Some(value) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(match value {
+        ContractDisplay::Flow => 1,
+        ContractDisplay::Flex => 2,
+        ContractDisplay::Grid => 3,
+        ContractDisplay::Overlay => 4,
+    });
+}
+
+fn hash_option_direction<H: Hasher>(value: Option<ContractDirection>, state: &mut H) {
+    let Some(value) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(match value {
+        ContractDirection::Row => 1,
+        ContractDirection::Column => 2,
+    });
+}
+
+fn hash_option_align<H: Hasher>(value: Option<ContractAlign>, state: &mut H) {
+    let Some(value) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(match value {
+        ContractAlign::Start => 1,
+        ContractAlign::Center => 2,
+        ContractAlign::End => 3,
+        ContractAlign::Stretch => 4,
+    });
+}
+
+fn hash_option_justify<H: Hasher>(value: Option<ContractJustify>, state: &mut H) {
+    let Some(value) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(match value {
+        ContractJustify::Start => 1,
+        ContractJustify::Center => 2,
+        ContractJustify::End => 3,
+    });
+}
+
+fn hash_option_overflow<H: Hasher>(value: Option<ContractOverflow>, state: &mut H) {
+    let Some(value) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(match value {
+        ContractOverflow::Visible => 1,
+        ContractOverflow::Hidden => 2,
+        ContractOverflow::Scroll => 3,
+    });
+}
+
+fn hash_option_u16<H: Hasher>(value: Option<u16>, state: &mut H) {
+    match value {
+        Some(value) => {
+            state.write_u8(1);
+            state.write_u16(value);
+        }
+        None => state.write_u8(0),
+    }
+}
+
+fn hash_option_bool<H: Hasher>(value: Option<bool>, state: &mut H) {
+    match value {
+        Some(false) => state.write_u8(1),
+        Some(true) => state.write_u8(2),
+        None => state.write_u8(0),
+    }
+}
+
+fn hash_option_f32<H: Hasher>(value: Option<f32>, state: &mut H) {
+    match value {
+        Some(value) => {
+            state.write_u8(1);
+            state.write_u32(value.to_bits());
+        }
+        None => state.write_u8(0),
+    }
+}
+
+fn hash_option_edges<H: Hasher>(value: Option<&ContractEdges>, state: &mut H) {
+    let Some(edges) = value else {
+        state.write_u8(0);
+        return;
+    };
+    state.write_u8(1);
+    state.write_u32(edges.top.to_bits());
+    state.write_u32(edges.right.to_bits());
+    state.write_u32(edges.bottom.to_bits());
+    state.write_u32(edges.left.to_bits());
+}
+
+fn hash_option_length<H: Hasher>(value: Option<&ContractLength>, state: &mut H) {
+    let Some(length) = value else {
+        state.write_u8(0);
+        return;
+    };
+
+    state.write_u8(1);
+    hash_length(length, state);
+}
+
+fn hash_length<H: Hasher>(value: &ContractLength, state: &mut H) {
+    match value {
+        ContractLength::Auto => state.write_u8(0),
+        ContractLength::Px { value } => {
+            state.write_u8(1);
+            state.write_u32(value.to_bits());
+        }
+        ContractLength::Percent { value } => {
+            state.write_u8(2);
+            state.write_u32(value.to_bits());
+        }
+    }
+}
+
+fn hash_track<H: Hasher>(value: &ContractTrack, state: &mut H) {
+    match value {
+        ContractTrack::Auto => state.write_u8(0),
+        ContractTrack::Fr { value } => {
+            state.write_u8(1);
+            state.write_u32(value.to_bits());
+        }
+        ContractTrack::Px { value } => {
+            state.write_u8(2);
+            state.write_u32(value.to_bits());
+        }
+        ContractTrack::Percent { value } => {
+            state.write_u8(3);
+            state.write_u32(value.to_bits());
+        }
+    }
 }
 
 fn effective_layout(
@@ -3042,13 +3309,13 @@ fn build_runtime_hierarchy<'a>(
                 item.label.as_str(),
                 compat_hierarchy_item_kind(item.kind),
             )
-                .expanded(item.open)
-                .locked(item.locked)
-                .children(build_runtime_hierarchy(
-                    item.children.as_slice(),
-                    runtime_ids,
-                    bindings,
-                ))
+            .expanded(item.open)
+            .locked(item.locked)
+            .children(build_runtime_hierarchy(
+                item.children.as_slice(),
+                runtime_ids,
+                bindings,
+            ))
         })
         .collect()
 }
@@ -3078,12 +3345,12 @@ fn build_runtime_file_tree<'a>(
                 item.label.as_str(),
                 compat_file_tree_item_kind(item.kind),
             )
-                .expanded(item.open)
-                .children(build_runtime_file_tree(
-                    item.children.as_slice(),
-                    runtime_ids,
-                    bindings,
-                ))
+            .expanded(item.open)
+            .children(build_runtime_file_tree(
+                item.children.as_slice(),
+                runtime_ids,
+                bindings,
+            ))
         })
         .collect()
 }
@@ -3551,7 +3818,9 @@ fn compat_label_weight(weight: super::LabelWeight) -> crate::runtime_components:
     }
 }
 
-fn compat_button_variant(variant: super::ButtonVariant) -> crate::runtime_components::ButtonVariant {
+fn compat_button_variant(
+    variant: super::ButtonVariant,
+) -> crate::runtime_components::ButtonVariant {
     match variant {
         super::ButtonVariant::Primary => crate::runtime_components::ButtonVariant::Primary,
         super::ButtonVariant::Secondary => crate::runtime_components::ButtonVariant::Secondary,
@@ -3567,21 +3836,29 @@ fn compat_control_size(size: super::ControlSize) -> crate::runtime_components::C
     }
 }
 
-fn compat_number_input_axis(axis: super::NumberInputAxis) -> crate::runtime_components::NumberInputAxis {
+fn compat_number_input_axis(
+    axis: super::NumberInputAxis,
+) -> crate::runtime_components::NumberInputAxis {
     match axis {
-        super::NumberInputAxis::Horizontal => crate::runtime_components::NumberInputAxis::Horizontal,
+        super::NumberInputAxis::Horizontal => {
+            crate::runtime_components::NumberInputAxis::Horizontal
+        }
         super::NumberInputAxis::Vertical => crate::runtime_components::NumberInputAxis::Vertical,
     }
 }
 
-fn compat_select_variant(variant: super::SelectVariant) -> crate::runtime_components::SelectVariant {
+fn compat_select_variant(
+    variant: super::SelectVariant,
+) -> crate::runtime_components::SelectVariant {
     match variant {
         super::SelectVariant::Default => crate::runtime_components::SelectVariant::Default,
         super::SelectVariant::Secondary => crate::runtime_components::SelectVariant::Secondary,
     }
 }
 
-fn compat_dialogue_intent(intent: super::DialogueIntent) -> crate::runtime_components::DialogueIntent {
+fn compat_dialogue_intent(
+    intent: super::DialogueIntent,
+) -> crate::runtime_components::DialogueIntent {
     match intent {
         super::DialogueIntent::Default => crate::runtime_components::DialogueIntent::Default,
         super::DialogueIntent::Alert => crate::runtime_components::DialogueIntent::Alert,
@@ -3597,7 +3874,9 @@ fn compat_hierarchy_icon_style(
     }
 }
 
-fn compat_hierarchy_style(style: super::HierarchyStyle) -> crate::runtime_components::HierarchyStyle {
+fn compat_hierarchy_style(
+    style: super::HierarchyStyle,
+) -> crate::runtime_components::HierarchyStyle {
     match style {
         super::HierarchyStyle::Normal => crate::runtime_components::HierarchyStyle::Normal,
         super::HierarchyStyle::Component => crate::runtime_components::HierarchyStyle::Component,
@@ -3633,7 +3912,9 @@ fn compat_popover_align(align: super::PopoverAlign) -> crate::runtime_components
     }
 }
 
-fn compat_drag_board_region(region: super::DragBoardRegion) -> crate::runtime_components::DragBoardRegion {
+fn compat_drag_board_region(
+    region: super::DragBoardRegion,
+) -> crate::runtime_components::DragBoardRegion {
     match region {
         super::DragBoardRegion::Left => crate::runtime_components::DragBoardRegion::Left,
         super::DragBoardRegion::Right => crate::runtime_components::DragBoardRegion::Right,
@@ -3660,7 +3941,9 @@ fn compat_audio_playback_state(
     }
 }
 
-fn compat_hierarchy_item_kind(kind: super::HierarchyItemKind) -> crate::runtime_components::HierarchyItemKind {
+fn compat_hierarchy_item_kind(
+    kind: super::HierarchyItemKind,
+) -> crate::runtime_components::HierarchyItemKind {
     match kind {
         super::HierarchyItemKind::Folder => crate::runtime_components::HierarchyItemKind::Folder,
         super::HierarchyItemKind::GameObject => {
@@ -3678,7 +3961,9 @@ fn compat_hierarchy_item_kind(kind: super::HierarchyItemKind) -> crate::runtime_
     }
 }
 
-fn compat_file_tree_item_kind(kind: super::FileTreeItemKind) -> crate::runtime_components::FileTreeItemKind {
+fn compat_file_tree_item_kind(
+    kind: super::FileTreeItemKind,
+) -> crate::runtime_components::FileTreeItemKind {
     match kind {
         super::FileTreeItemKind::Folder => crate::runtime_components::FileTreeItemKind::Folder,
         super::FileTreeItemKind::Collection => {
@@ -3686,9 +3971,7 @@ fn compat_file_tree_item_kind(kind: super::FileTreeItemKind) -> crate::runtime_c
         }
         super::FileTreeItemKind::Script => crate::runtime_components::FileTreeItemKind::Script,
         super::FileTreeItemKind::Project => crate::runtime_components::FileTreeItemKind::Project,
-        super::FileTreeItemKind::Markdown => {
-            crate::runtime_components::FileTreeItemKind::Markdown
-        }
+        super::FileTreeItemKind::Markdown => crate::runtime_components::FileTreeItemKind::Markdown,
         super::FileTreeItemKind::File => crate::runtime_components::FileTreeItemKind::File,
     }
 }
@@ -3916,23 +4199,26 @@ mod tests {
         class_background_color, class_corner_radius, class_label_weight, class_shadow, class_spec,
         class_text_color, class_text_size, container_layout_plan, contract_toast_shadow,
         effective_layout, make_id, render_tree, resolved_icon_tint, should_emit_dialogue_closed,
-        taffy_item_style, TaffyDisplay,
+        taffy_item_style, FrameRenderer, TaffyDisplay,
     };
     use crate::contract::{
         ContractActions, ContractAlign, ContractButton, ContractColumn, ContractCommon,
         ContractDirection, ContractDisplay, ContractDropdownMenu, ContractEdges, ContractIcon,
         ContractInput, ContractJustify, ContractLabel, ContractLayout, ContractLength,
-        ContractMenuAction, ContractMenuEntry, ContractNode, ContractOverflow, ContractSizedBox,
-        ContractToastItem, ContractToastViewport, ContractTrack, ContractTree, EventKind, NodeId,
+        ContractMenuAction, ContractMenuEntry, ContractNode, ContractOverflow, ContractRow,
+        ContractSizedBox, ContractToastItem, ContractToastViewport, ContractTrack, ContractTree,
+        EventKind, LabelTone as ContractLabelTone, LabelWeight as ContractLabelWeight, NodeId,
+        ToastIntent as ContractToastIntent, ToastPlacement as ContractToastPlacement,
     };
     use crate::layout::taffy;
-    use crate::runtime_components::{LabelWeight, ToastIntent};
+    use crate::runtime_components::{ComponentUiExt, LabelWeight as UiLabelWeight};
     use crate::theme::{self, ColorRole, ThemeMode, ThemeSpec};
     use crate::ui::tokens;
     use egui::{
         pos2, CentralPanel, Context, CornerRadius, Event, Modifiers, PointerButton, RawInput, Shape,
     };
     use std::collections::BTreeMap;
+    use std::time::{Duration, Instant};
 
     fn run_frame(
         context: &Context,
@@ -3945,6 +4231,26 @@ mod tests {
                 let new_events = render_tree(ui, tree);
                 if !new_events.is_empty() {
                     events = new_events;
+                }
+            });
+        });
+        events
+    }
+
+    fn run_frame_with_style_cache(
+        context: &Context,
+        input: RawInput,
+        tree: &ContractTree,
+        style_cache_enabled: bool,
+    ) -> Vec<crate::contract::ContractEvent> {
+        let mut events = Vec::new();
+        let _ = context.run(input, |context| {
+            CentralPanel::default().show(context, |ui| {
+                let mut components = ui.components();
+                let mut renderer = FrameRenderer::with_style_cache_enabled(style_cache_enabled);
+                renderer.render_node(&mut components, &tree.root);
+                if !renderer.events.is_empty() {
+                    events = renderer.events;
                 }
             });
         });
@@ -4019,6 +4325,148 @@ mod tests {
                 shortcut: None,
             })],
         }))
+    }
+
+    fn large_render_tree_benchmark_fixture(
+        section_count: usize,
+        controls_per_section: usize,
+    ) -> ContractTree {
+        let mut sections = Vec::with_capacity(section_count);
+        for section_idx in 0..section_count {
+            let mut section_children = Vec::with_capacity(controls_per_section * 2);
+            for control_idx in 0..controls_per_section {
+                let mut button_common = ContractCommon::new(format!(
+                    "benchmark.section.{section_idx}.control.{control_idx}.button"
+                ));
+                button_common.class = Some(String::from(
+                    "w-[50%] h-[25%] min-w-44 max-h-[25%] overflow-hidden border rounded-md bg-card text-card-foreground",
+                ));
+                button_common.class_list = vec![
+                    String::from("flex"),
+                    String::from("items-center"),
+                    String::from("justify-center"),
+                    String::from("grow"),
+                    String::from("shrink-0"),
+                    String::from("basis-[33%]"),
+                    String::from("p-2"),
+                    String::from("m-1"),
+                ];
+                section_children.push(ContractNode::Button(ContractButton {
+                    common: button_common,
+                    label: format!("Open {section_idx}:{control_idx}"),
+                    action_id: None,
+                    variant: None,
+                    size: None,
+                    leading_icon: None,
+                    trailing_text: None,
+                    trailing_icon: None,
+                    icon_only: false,
+                    selected: false,
+                }));
+
+                let mut label_common = ContractCommon::new(format!(
+                    "benchmark.section.{section_idx}.control.{control_idx}.label"
+                ));
+                label_common.class = Some(String::from("text-sm text-muted-foreground"));
+                label_common.class_list = vec![
+                    String::from("w-full"),
+                    String::from("min-h-6"),
+                    String::from("break-words"),
+                ];
+                section_children.push(ContractNode::Label(ContractLabel {
+                    common: label_common,
+                    text: format!("Section {section_idx} · Item {control_idx}"),
+                    tone: None,
+                    weight: None,
+                    size: None,
+                    truncate: false,
+                }));
+            }
+
+            let mut section_common =
+                ContractCommon::new(format!("benchmark.section.{section_idx}"));
+            section_common.class = Some(String::from(
+                "flex flex-row items-stretch justify-start gap-2 overflow-hidden",
+            ));
+            section_common.class_list = vec![
+                String::from("w-full"),
+                String::from("p-2"),
+                String::from("m-1"),
+            ];
+
+            sections.push(ContractNode::Row(ContractRow {
+                common: section_common,
+                gap: 8.0,
+                justify: ContractJustify::Start,
+                align: ContractAlign::Stretch,
+                children: section_children,
+            }));
+        }
+
+        let mut root_common = ContractCommon::new("benchmark.root");
+        root_common.class = Some(String::from(
+            "flex flex-col items-stretch justify-start gap-2 overflow-y-scroll",
+        ));
+        root_common.class_list = vec![
+            String::from("w-full"),
+            String::from("h-full"),
+            String::from("p-2"),
+        ];
+
+        ContractTree::new(ContractNode::Column(ContractColumn {
+            common: root_common,
+            gap: 6.0,
+            justify: ContractJustify::Start,
+            align: ContractAlign::Stretch,
+            children: sections,
+        }))
+    }
+
+    fn benchmark_render_tree_duration(
+        tree: &ContractTree,
+        style_cache_enabled: bool,
+        frame_count: usize,
+    ) -> Duration {
+        let context = Context::default();
+        theme::install(&context, ThemeSpec::default(), ThemeMode::Dark);
+
+        for _ in 0..3 {
+            let _ = run_frame_with_style_cache(
+                &context,
+                RawInput::default(),
+                tree,
+                style_cache_enabled,
+            );
+        }
+
+        let started = Instant::now();
+        for _ in 0..frame_count {
+            let _ = run_frame_with_style_cache(
+                &context,
+                RawInput::default(),
+                tree,
+                style_cache_enabled,
+            );
+        }
+        started.elapsed()
+    }
+
+    fn benchmark_render_tree_median_duration(
+        tree: &ContractTree,
+        style_cache_enabled: bool,
+        frame_count: usize,
+        samples: usize,
+    ) -> Duration {
+        let mut durations = Vec::with_capacity(samples);
+        for _ in 0..samples {
+            durations.push(benchmark_render_tree_duration(
+                tree,
+                style_cache_enabled,
+                frame_count,
+            ));
+        }
+        durations.sort_unstable();
+        durations[samples / 2]
     }
 
     #[test]
@@ -4164,7 +4612,7 @@ mod tests {
 
         let toast_tree = ContractTree::new(ContractNode::ToastViewport(ContractToastViewport {
             common: ContractCommon::new("toast.viewport"),
-            placement: crate::runtime_components::ToastPlacement::BottomRight,
+            placement: ContractToastPlacement::BottomRight,
             width: 320.0,
             margin_x: 16.0,
             margin_y: 16.0,
@@ -4175,7 +4623,7 @@ mod tests {
                 item_id: "toast.saved".to_owned(),
                 title: "Saved".to_owned(),
                 description: Some("The contract tree round-tripped successfully.".to_owned()),
-                intent: ToastIntent::Success,
+                intent: ContractToastIntent::Success,
                 duration_secs: 0.05,
                 action_id: Some("toast.saved".into()),
             }],
@@ -4215,7 +4663,7 @@ mod tests {
 
         let cleared_tree = ContractTree::new(ContractNode::ToastViewport(ContractToastViewport {
             common: ContractCommon::new("toast.viewport"),
-            placement: crate::runtime_components::ToastPlacement::BottomRight,
+            placement: ContractToastPlacement::BottomRight,
             width: 320.0,
             margin_x: 16.0,
             margin_y: 16.0,
@@ -4380,7 +4828,7 @@ mod tests {
         let spec = class_spec(&common).expect("class spec should parse");
 
         assert_eq!(class_text_size(Some(&spec)), Some(20.0));
-        assert_eq!(class_label_weight(Some(&spec)), Some(LabelWeight::Bold));
+        assert_eq!(class_label_weight(Some(&spec)), Some(UiLabelWeight::Bold));
         assert_eq!(
             class_text_color(Some(&spec), runtime),
             Some(theme::resolved_color(runtime, ColorRole::Destructive))
@@ -4389,8 +4837,8 @@ mod tests {
         let tree = ContractTree::new(ContractNode::Label(ContractLabel {
             common,
             text: "Explicit label".to_owned(),
-            tone: Some(crate::runtime_components::LabelTone::Muted),
-            weight: Some(LabelWeight::Regular),
+            tone: Some(ContractLabelTone::Muted),
+            weight: Some(ContractLabelWeight::Regular),
             size: Some(11.0),
             truncate: false,
         }));
@@ -4466,6 +4914,53 @@ mod tests {
             })
         );
         assert_eq!(layout.height, Some(ContractLength::Percent { value: 0.25 }));
+    }
+
+    #[test]
+    fn style_cache_reuses_class_and_layout_derivation_for_equivalent_nodes() {
+        let mut renderer = FrameRenderer::with_style_cache_enabled(true);
+
+        let mut common_a = ContractCommon::new("cache.a");
+        common_a.class = Some(String::from("flex gap-2 items-center"));
+        common_a.class_list = vec![String::from("w-full"), String::from("p-2")];
+
+        let mut common_b = ContractCommon::new("cache.b");
+        common_b.class = Some(String::from("flex gap-2 items-center"));
+        common_b.class_list = vec![String::from("w-full"), String::from("p-2")];
+
+        let first = renderer.resolve_common_style(&common_a);
+        let second = renderer.resolve_common_style(&common_b);
+
+        assert_eq!(renderer.class_spec_cache.len(), 1);
+        assert_eq!(renderer.effective_layout_cache.len(), 1);
+        assert_eq!(first.class_spec, second.class_spec);
+        assert_eq!(first.layout, second.layout);
+    }
+
+    #[test]
+    fn style_cache_keeps_layout_derivation_distinct_when_layout_inputs_differ() {
+        let mut renderer = FrameRenderer::with_style_cache_enabled(true);
+
+        let mut common_a = ContractCommon::new("cache.a");
+        common_a.class = Some(String::from("flex gap-2 items-center"));
+        common_a.layout = Some(ContractLayout {
+            width: Some(ContractLength::Percent { value: 0.5 }),
+            ..ContractLayout::default()
+        });
+
+        let mut common_b = ContractCommon::new("cache.b");
+        common_b.class = Some(String::from("flex gap-2 items-center"));
+        common_b.layout = Some(ContractLayout {
+            width: Some(ContractLength::Percent { value: 0.75 }),
+            ..ContractLayout::default()
+        });
+
+        let first = renderer.resolve_common_style(&common_a);
+        let second = renderer.resolve_common_style(&common_b);
+
+        assert_eq!(renderer.class_spec_cache.len(), 1);
+        assert_eq!(renderer.effective_layout_cache.len(), 2);
+        assert_ne!(first.layout, second.layout);
     }
 
     #[test]
@@ -4887,6 +5382,38 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, EventKind::Clicked);
+    }
+
+    #[test]
+    fn render_tree_style_cache_reduces_cpu_time_on_large_tree() {
+        const SECTION_COUNT: usize = 72;
+        const CONTROLS_PER_SECTION: usize = 10;
+        const FRAMES_PER_SAMPLE: usize = 14;
+        const SAMPLE_COUNT: usize = 3;
+
+        let tree = large_render_tree_benchmark_fixture(SECTION_COUNT, CONTROLS_PER_SECTION);
+
+        let baseline =
+            benchmark_render_tree_median_duration(&tree, false, FRAMES_PER_SAMPLE, SAMPLE_COUNT);
+        let cached =
+            benchmark_render_tree_median_duration(&tree, true, FRAMES_PER_SAMPLE, SAMPLE_COUNT);
+
+        let baseline_ns = baseline.as_nanos();
+        let cached_ns = cached.as_nanos();
+        let improvement = if baseline_ns > 0 {
+            ((baseline_ns.saturating_sub(cached_ns) as f64) * 100.0) / baseline_ns as f64
+        } else {
+            0.0
+        };
+
+        println!(
+            "render_tree microbenchmark (median of {SAMPLE_COUNT} samples, {FRAMES_PER_SAMPLE} frames): baseline={baseline:?}, cached={cached:?}, improvement={improvement:.2}%"
+        );
+
+        assert!(
+            cached < baseline,
+            "style cache should reduce render_tree CPU time on a large tree (baseline={baseline:?}, cached={cached:?})"
+        );
     }
 
     fn find_text_shape<'a>(

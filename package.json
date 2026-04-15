@@ -1,0 +1,15 @@
+{
+  "name": "egui-component-types",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "generate:contract-types": "cargo run -p clay-jsx-runtime --bin generate-contract-types",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

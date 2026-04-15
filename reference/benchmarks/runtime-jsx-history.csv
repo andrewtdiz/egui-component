@@ -1,0 +1,7 @@
+timestamp_unix_secs,git_sha,profile,label_count,commit_throughput_commits_per_sec,event_dispatch_latency_p50_ms,event_dispatch_latency_p95_ms,callback_drain_latency_p50_ms,callback_drain_latency_p95_ms,a_grade_passed
+1776284314,3a49b50dd12bd5ed69734836d21eb518c9ba824a,medium,240,175.031,5.550,6.920,0.296,2.580,true
+1776284314,3a49b50dd12bd5ed69734836d21eb518c9ba824a,large,720,38.975,25.121,29.391,1.193,9.141,true
+1776284355,3a49b50dd12bd5ed69734836d21eb518c9ba824a,medium,240,185.153,5.338,6.154,0.283,3.110,true
+1776284355,3a49b50dd12bd5ed69734836d21eb518c9ba824a,large,720,39.372,25.000,27.802,0.823,7.892,true
+1776284426,3a49b50dd12bd5ed69734836d21eb518c9ba824a,medium,240,197.332,5.022,5.617,0.267,2.632,true
+1776284426,3a49b50dd12bd5ed69734836d21eb518c9ba824a,large,720,40.124,24.599,27.103,0.906,8.663,true

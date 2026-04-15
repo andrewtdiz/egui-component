@@ -1,5 +1,5 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Button } from "./button.tsx";
 import { Label, LabelMuted } from "./primary/label.tsx";
@@ -13,13 +13,11 @@ export function DragBoardCard({ title, description, empty = false, className, ch
 }
 
 function moveEvent(event: unknown, item: Item, from: string, to: string, index: number, id: string) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
   const value = { item_id: id, from, to };
-  return { ...base, value, metadata: { ...metadata, item_id: id, item_index: index, from, to, item } };
+  return eventWithValue(event, value, { item_id: id, item_index: index, from, to, item });
 }
 
-export function DragBoardColumn({ title, region, items, onChange }: { title: string; region: string; items: Item[]; onChange?: Handler }) {
+export function DragBoardColumn({ title, region, items, onChange }: { title: string; region: string; items: Item[]; onChange?: Handler<{ item_id: string; from: string; to: string }> }) {
   const normalizedRegion = region.toLowerCase();
   const regionItems = items.filter((item) => String(item.region ?? "left").toLowerCase() === normalizedRegion);
 
@@ -47,6 +45,6 @@ export function DragBoardColumn({ title, region, items, onChange }: { title: str
   );
 }
 
-export function DragBoard({ items = [], leftTitle = "Left", rightTitle = "Right", className, onChange, ...props }: NodeProps & { items?: Item[]; leftTitle?: string; rightTitle?: string; onChange?: Handler } & Record<string, unknown>) {
+export function DragBoard({ items = [], leftTitle = "Left", rightTitle = "Right", className, onChange, ...props }: NodeProps & { items?: Item[]; leftTitle?: string; rightTitle?: string; onChange?: Handler<{ item_id: string; from: string; to: string }> } & Record<string, unknown>) {
   return <DragBoardRoot {...props} className={className}><DragBoardColumn title={leftTitle} region="left" items={items} onChange={onChange} /><DragBoardColumn title={rightTitle} region="right" items={items} onChange={onChange} /></DragBoardRoot>;
 }

@@ -1,9 +1,9 @@
 import { useState } from "egui";
-import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
-export type PopoverProps = NodeProps & { open?: boolean; triggerLabel?: string; width?: number; side?: string; align?: string } & Record<string, unknown>;
+export type PopoverProps = NodeProps & { open?: boolean; triggerLabel?: string; width?: number; side?: string; align?: string; onOpen?: Handler<boolean>; onClose?: Handler<boolean> } & Record<string, unknown>;
 
 export function PopoverRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
   return <div {...nodeProps(props, cn("flex flex-col gap-2", className))}>{children}</div>;
@@ -21,8 +21,8 @@ export function Popover({ children, open, triggerLabel = "Open", width, classNam
     if (open == null) {
       setInternalOpen(next);
     }
-    if (next) onOpen?.(event ?? null, next);
-    else onClose?.(event ?? null, next);
+    if (next) onOpen?.(eventWithValue(event, next, { open: next }), next);
+    else onClose?.(eventWithValue(event, next, { open: next }), next);
   };
   return (
     <PopoverRoot {...props} className={className}>

@@ -5,6 +5,7 @@ Cargo.lock
 .DS_Store
 *.log
 .codex-home/
+node_modules/
 
 .agents/*
 !.agents/authoring/

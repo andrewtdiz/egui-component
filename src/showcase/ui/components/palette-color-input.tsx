@@ -8,7 +8,7 @@ const defaultPalette = ["#111827", "#2896ff", "#10b981", "#f43f5e", "#f59e0b", "
 const DEFAULT_SWATCH_STROKE = { width: 1, color: "#94a3b8" };
 const SELECTED_SWATCH_STROKE = { width: 2, color: "#2896ff" };
 
-export type PaletteColorInputProps = NodeProps & { value?: string; palette?: string[]; allowCustom?: boolean; customLabel?: string; onChange?: Handler } & Record<string, unknown>;
+export type PaletteColorInputProps = NodeProps & { value?: string; palette?: string[]; allowCustom?: boolean; customLabel?: string; onChange?: Handler<string> } & Record<string, unknown>;
 
 export function PaletteColorInput({ value = "#2896ff", palette = defaultPalette, allowCustom = true, customLabel = "Custom", className, onChange, ...props }: PaletteColorInputProps) {
   const baseId = requireNodeId(props, "PaletteColorInput");

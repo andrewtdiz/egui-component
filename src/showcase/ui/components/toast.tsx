@@ -1,9 +1,10 @@
 import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { eventWithValue, type Handler } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Label, LabelMuted } from "./primary/label.tsx";
 
-export type ToastViewportProps = NodeProps & { toasts?: Item[] } & Record<string, unknown>;
+export type ToastViewportProps = NodeProps & { toasts?: Item[]; onClose?: Handler<string> } & Record<string, unknown>;
 
 export function ToastViewport({ toasts = [], children, className, onClose, ...props }: ToastViewportProps) {
   const baseId = requireNodeId(props, "ToastViewport");
@@ -59,7 +60,7 @@ export function ToastDescription({ description, className, ...props }: NodeProps
   return <LabelMuted {...props} text={description} className={cn("text-xs", className)} />;
 }
 
-export function ToastClose({ toast, title, index = 0, onClose, className, ...props }: NodeProps & { toast: Item; title: string; index?: number } & Record<string, unknown>) {
+export function ToastClose({ toast, title, index = 0, onClose, className, ...props }: NodeProps & { toast: Item; title: string; index?: number; onClose?: Handler<string> } & Record<string, unknown>) {
   const id = itemId(toast, String(index));
   return (
     <Button
@@ -69,7 +70,7 @@ export function ToastClose({ toast, title, index = 0, onClose, className, ...pro
       leadingIcon="x"
       size="sm"
       className={cn("h-7 w-7", className)}
-      onClick={(event) => onClose?.({ ...(event as object), metadata: { item_id: id, item_label: title, item_index: index, toast } }, id)}
+      onClick={(event) => onClose?.(eventWithValue(event, id, { item_id: id, item_label: title, item_index: index, toast }), id)}
     />
   );
 }
@@ -78,7 +79,7 @@ export function ToastAction({ children, variant = "secondary", className, ...pro
   return <Button {...props} variant={variant} className={className}>{children}</Button>;
 }
 
-export function Toast({ toast, index = 0, onClose, children }: { toast: Item; index?: number; onClose?: NodeProps["onClose"]; children?: unknown }) {
+export function Toast({ toast, index = 0, onClose, children }: { toast: Item; index?: number; onClose?: Handler<string>; children?: NodeProps["children"] }) {
   const id = itemId(toast, String(index));
   const title = itemLabel(toast, "Toast");
   const description = toast.description == null ? undefined : String(toast.description);

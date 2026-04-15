@@ -1,12 +1,6 @@
-import { cn, itemId, itemLabel, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
-
-function itemEvent(event: unknown, item: Item, value: string, label: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: value, item_label: label, item_index: index, item } };
-}
 
 export function ToggleGroupRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
   return (
@@ -30,8 +24,8 @@ export function ToggleGroupItem({
   index: number;
   selected?: boolean;
   baseId?: string;
-  onSelect?: (event: unknown, value: string) => void;
-  onChange?: (event: unknown, value: string) => void;
+  onSelect?: Handler<string>;
+  onChange?: Handler<string>;
 } & Record<string, unknown>) {
   const id = itemId(item, String(index));
   const label = itemLabel(item, id);
@@ -43,7 +37,7 @@ export function ToggleGroupItem({
       selected={selected}
       className={className}
       onClick={(event) => {
-        const nextEvent = itemEvent(event, item, id, label, index);
+        const nextEvent = eventWithValue(event, id, { item_id: id, item_label: label, item_index: index, item });
         onSelect?.(nextEvent, id);
         onChange?.(nextEvent, id);
       }}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "benchmark_name": "runtime-jsx-architecture-hot-paths",
+  "command": "cargo run --example runtime-jsx-benchmark",
+  "warmup_iterations": 12,
+  "measured_iterations": 64,
+  "drain_settle_millis": 2,
+  "profiles": [
+    {
+      "id": "medium",
+      "label_count": 240,
+      "a_grade": {
+        "commit_throughput_commits_per_sec_min": 150.0,
+        "event_dispatch_latency_p50_ms_max": 7.0,
+        "event_dispatch_latency_p95_ms_max": 12.0,
+        "callback_drain_latency_p50_ms_max": 3.0,
+        "callback_drain_latency_p95_ms_max": 6.0
+      }
+    },
+    {
+      "id": "large",
+      "label_count": 720,
+      "a_grade": {
+        "commit_throughput_commits_per_sec_min": 35.0,
+        "event_dispatch_latency_p50_ms_max": 26.0,
+        "event_dispatch_latency_p95_ms_max": 32.0,
+        "callback_drain_latency_p50_ms_max": 8.0,
+        "callback_drain_latency_p95_ms_max": 12.0
+      }
+    }
+  ]
+}

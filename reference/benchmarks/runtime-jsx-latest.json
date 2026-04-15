@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "benchmark_name": "runtime-jsx-architecture-hot-paths",
+  "git_sha": "3a49b50dd12bd5ed69734836d21eb518c9ba824a",
+  "timestamp_unix_secs": 1776284426,
+  "command": "cargo run --example runtime-jsx-benchmark",
+  "warmup_iterations": 12,
+  "measured_iterations": 64,
+  "drain_settle_millis": 2,
+  "profiles": [
+    {
+      "id": "medium",
+      "label_count": 240,
+      "commit_throughput": {
+        "measured_commits": 64,
+        "total_elapsed_ms": 324.326,
+        "commits_per_sec": 197.332
+      },
+      "event_dispatch_latency": {
+        "samples": 64,
+        "min_ms": 4.501,
+        "mean_ms": 5.068,
+        "p50_ms": 5.022,
+        "p95_ms": 5.617,
+        "max_ms": 6.047
+      },
+      "callback_drain_latency": {
+        "samples": 64,
+        "min_ms": 0.197,
+        "mean_ms": 0.566,
+        "p50_ms": 0.267,
+        "p95_ms": 2.632,
+        "max_ms": 2.876
+      },
+      "a_grade": {
+        "passed": true,
+        "commit_throughput_passed": true,
+        "event_dispatch_latency_passed": true,
+        "callback_drain_latency_passed": true,
+        "thresholds": {
+          "commit_throughput_commits_per_sec_min": 150.0,
+          "event_dispatch_latency_p50_ms_max": 7.0,
+          "event_dispatch_latency_p95_ms_max": 12.0,
+          "callback_drain_latency_p50_ms_max": 3.0,
+          "callback_drain_latency_p95_ms_max": 6.0
+        }
+      }
+    },
+    {
+      "id": "large",
+      "label_count": 720,
+      "commit_throughput": {
+        "measured_commits": 64,
+        "total_elapsed_ms": 1595.044,
+        "commits_per_sec": 40.124
+      },
+      "event_dispatch_latency": {
+        "samples": 64,
+        "min_ms": 23.4,
+        "mean_ms": 24.923,
+        "p50_ms": 24.599,
+        "p95_ms": 27.103,
+        "max_ms": 31.55
+      },
+      "callback_drain_latency": {
+        "samples": 64,
+        "min_ms": 0.486,
+        "mean_ms": 4.009,
+        "p50_ms": 0.906,
+        "p95_ms": 8.663,
+        "max_ms": 9.719
+      },
+      "a_grade": {
+        "passed": true,
+        "commit_throughput_passed": true,
+        "event_dispatch_latency_passed": true,
+        "callback_drain_latency_passed": true,
+        "thresholds": {
+          "commit_throughput_commits_per_sec_min": 35.0,
+          "event_dispatch_latency_p50_ms_max": 26.0,
+          "event_dispatch_latency_p95_ms_max": 32.0,
+          "callback_drain_latency_p50_ms_max": 8.0,
+          "callback_drain_latency_p95_ms_max": 12.0
+        }
+      }
+    }
+  ]
+}

@@ -1,14 +1,12 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Icon } from "./primary/icon.tsx";
 import { Label } from "./primary/label.tsx";
 import { Twemoji } from "./primary/twemoji.tsx";
 
 function itemEvent(event: unknown, item: Item, id: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value: id, metadata: { ...metadata, item_id: id, item_index: index, item } };
+  return eventWithValue(event, id, { item_id: id, item_index: index, item });
 }
 
 export function HierarchyRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
@@ -21,7 +19,7 @@ export function HierarchyGlyph({ item, iconStyle }: { item: Item; iconStyle: str
   return <Twemoji emoji={String(emoji)} size={16} />;
 }
 
-export function HierarchyRow({ item, selectedIds, iconStyle, depth, treeId, fallback, rowHeight = 32, onSelect }: { item: Item; selectedIds: string[]; iconStyle: string; depth: number; treeId: string; fallback: string; rowHeight?: number; onSelect?: Handler }) {
+export function HierarchyRow({ item, selectedIds, iconStyle, depth, treeId, fallback, rowHeight = 32, onSelect }: { item: Item; selectedIds: string[]; iconStyle: string; depth: number; treeId: string; fallback: string; rowHeight?: number; onSelect?: Handler<string> }) {
   const id = itemId(item, fallback);
   const children = Array.isArray(item.children) ? item.children as Item[] : [];
   const open = item.open ?? item.expanded ?? true;
@@ -50,7 +48,7 @@ export function HierarchyRow({ item, selectedIds, iconStyle, depth, treeId, fall
   );
 }
 
-export function Hierarchy({ items = [], selectedItemId, selectedItemIds, iconStyle = "emoji", className, onSelect, rowHeight = 32, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; selectedItemIds?: string[]; iconStyle?: string; rowHeight?: number } & Record<string, unknown>) {
+export function Hierarchy({ items = [], selectedItemId, selectedItemIds, iconStyle = "emoji", className, onSelect, rowHeight = 32, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; selectedItemIds?: string[]; iconStyle?: string; rowHeight?: number; onSelect?: Handler<string> } & Record<string, unknown>) {
   const selectedIds = selectedItemIds ?? (selectedItemId != null ? [selectedItemId] : []);
   const baseId = requireNodeId(props, "Hierarchy");
   return <HierarchyRoot {...props} className={className}>{items.map((item, index) => <HierarchyRow key={itemId(item, String(index))} item={item} selectedIds={selectedIds} iconStyle={iconStyle} depth={0} treeId={baseId} fallback={String(index)} rowHeight={rowHeight} onSelect={onSelect} />)}</HierarchyRoot>;

@@ -51,7 +51,7 @@ The runtime path is:
 
 1. `src/host/mod.rs` wires the eframe shell and `src/host/app.rs` owns the editor/preview UI.
 2. `crates/clay-jsx-runtime` owns the host-neutral `deno_core::JsRuntime` session, `.jsx`/`.tsx` transpilation through `deno_ast`, and the shared React/reconciler/scheduler virtual modules.
-3. `crates/clay-jsx-egui-bridge/src/mod.js`, `jsx_runtime_api.js`, `runtime_api.js`, `lowering_api.js`, and `motion_api.js` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules plus the egui-specific lowering and event runtime.
+3. `crates/clay-jsx-egui-bridge/src/mod.ts`, `jsx_runtime_api.ts`, `runtime_api.ts`, `lowering_api.ts`, and `motion_api.ts` provide the virtual `egui`, `clay`, `motion/react`, and `react/motion` modules plus the egui-specific lowering and event runtime.
 4. `render(<App />)` updates one persistent React root for the session.
 5. The stable `egui` / `clay` surface now exposes the supported React hooks and helpers: `useState`, `useEffect`, `useReducer`, `useRef`, `useContext`, `useSyncExternalStore`, `startTransition`, `useDeferredValue`, `createContext`, `render`, `eventValue`, `log`, and `requestRepaint`.
 6. The host-neutral runtime installs `setTimeout`, `setInterval`, `requestAnimationFrame`, and explicit wake plumbing so timer-driven or effect-driven state updates can request the next egui frame without relying on incidental input.

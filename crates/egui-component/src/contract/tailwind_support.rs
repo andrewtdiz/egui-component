@@ -334,7 +334,7 @@ mod tests {
     };
     use crate::contract::{
         ContractButton, ContractCard, ContractCommon, ContractInput, ContractNode, ContractRow,
-        ContractTooltip, ContractTree,
+        ContractTooltip, ContractTree, TooltipPlacement,
     };
 
     #[test]
@@ -459,7 +459,7 @@ mod tests {
             text: "Tooltip".into(),
             width: 220.0,
             delay_ms: 0,
-            placement: crate::runtime_components::TooltipPlacement::Top,
+            placement: TooltipPlacement::Top,
         }));
 
         assert_eq!(

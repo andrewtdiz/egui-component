@@ -1,8 +1,13 @@
 import { cn } from "./lib/cn.ts";
 
-export type Children = unknown;
-export type Handler = (event: unknown, value?: unknown) => void;
+export type Children = string | number | boolean | null | undefined | EventRecord | Children[];
+export type Handler<TValue = unknown> = (event: unknown, value?: TValue) => void;
 export type Item = Record<string, unknown>;
+export type EventRecord = Record<string, unknown>;
+export type EventWithValue<TValue = unknown> = EventRecord & {
+  value: TValue;
+  metadata: EventRecord;
+};
 
 export type NodeProps = {
   id?: string;
@@ -28,6 +33,16 @@ export type NodeProps = {
   onClose?: Handler;
   onCommand?: Handler;
 };
+
+function asEventRecord(event: unknown): EventRecord {
+  return typeof event === "object" && event != null ? event as EventRecord : {};
+}
+
+function asEventMetadata(event: unknown): EventRecord {
+  const base = asEventRecord(event);
+  const metadata = base.metadata;
+  return typeof metadata === "object" && metadata != null ? metadata as EventRecord : {};
+}
 
 export function nodeProps(props: NodeProps & Record<string, unknown>, className?: string) {
   const {
@@ -58,6 +73,15 @@ export function nodeProps(props: NodeProps & Record<string, unknown>, className?
   else if (enabled != null) attrs.enabled = enabled;
 
   return attrs;
+}
+
+export function eventWithMetadata(event: unknown, metadata: EventRecord) {
+  const base = asEventRecord(event);
+  return { ...base, metadata: { ...asEventMetadata(event), ...metadata } };
+}
+
+export function eventWithValue<TValue>(event: unknown, value: TValue, metadata: EventRecord): EventWithValue<TValue> {
+  return { ...eventWithMetadata(event, metadata), value } as EventWithValue<TValue>;
 }
 
 export function resolveNodeId(props: { id?: string; nodeId?: string }) {

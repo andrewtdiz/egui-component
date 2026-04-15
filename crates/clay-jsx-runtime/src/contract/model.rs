@@ -1620,8 +1620,25 @@ pub struct ContractToastItem {
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ContractEvent {
+    /// Primary retained-tree event route.
+    ///
+    /// Bridge runtimes dispatch events against the committed retained tree by
+    /// stable `node_id` first.
     pub node_id: NodeId,
     pub kind: EventKind,
+    /// Optional secondary dispatch route used by bridge runtimes.
+    ///
+    /// The v1 event boundary permits bridge dispatchers to route one incoming
+    /// event across these candidate keys, in order:
+    ///
+    /// - `{node_id}:{kind}`
+    /// - `{node_id}:*`
+    /// - `action:{action_id}:{kind}`
+    /// - `action:{action_id}:*`
+    ///
+    /// When both `node_id` and `action_id` are present, bridge dispatchers
+    /// must avoid invoking the same logical handler registration twice even if
+    /// that registration is reachable through multiple candidate keys.
     #[serde(default)]
     pub action_id: Option<ActionId>,
     #[serde(default)]
@@ -2034,6 +2051,24 @@ mod tests {
         assert!(json.contains("\"clicked\""));
         assert!(json.contains("\"button.save\""));
         assert!(json.contains("\"Save\""));
+    }
+
+    #[test]
+    fn contract_event_round_trips_node_and_action_routes() {
+        let event = ContractEvent::new("route.node", EventKind::Clicked)
+            .action(Some("route.action".into()));
+
+        let json = serde_json::to_string(&event).expect("serialize event");
+        let decoded: ContractEvent = serde_json::from_str(&json).expect("deserialize event");
+
+        assert_eq!(decoded.node_id.as_str(), "route.node");
+        assert_eq!(
+            decoded
+                .action_id
+                .as_ref()
+                .map(|action_id| action_id.as_str()),
+            Some("route.action")
+        );
     }
 
     #[test]

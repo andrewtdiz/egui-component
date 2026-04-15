@@ -1,5 +1,5 @@
 import { useState } from "egui";
-import { cn, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { LabelMuted } from "./primary/label.tsx";
@@ -14,8 +14,8 @@ export function EmojiSelectorTrigger({ value = "🙂", placeholder = "🙂", tri
   return <Button {...props} className={className} variant={triggerVariant} size="md">{value ?? placeholder}</Button>;
 }
 
-export function EmojiSelectorItem({ emoji, selected = false, onSelect }: { emoji: string; selected?: boolean; onSelect?: Handler }) {
-  return <Button variant={selected ? "primary" : "ghost"} selected={selected} size="sm" className="h-8 w-8 p-0" label={emoji} onClick={(event) => onSelect?.({ ...(event as object), value: emoji, metadata: { emoji } }, emoji)} />;
+export function EmojiSelectorItem({ emoji, selected = false, onSelect }: { emoji: string; selected?: boolean; onSelect?: Handler<string> }) {
+  return <Button variant={selected ? "primary" : "ghost"} selected={selected} size="sm" className="h-8 w-8 p-0" label={emoji} onClick={(event) => onSelect?.(eventWithValue(event, emoji, { emoji }), emoji)} />;
 }
 
 export function EmojiSelectorContent({ emojis = DEFAULT_EMOJIS, value, onSelect, className, ...props }: NodeProps & { emojis?: string[]; value?: string; onSelect?: Handler } & Record<string, unknown>) {
@@ -31,7 +31,7 @@ export function EmojiSelectorContent({ emojis = DEFAULT_EMOJIS, value, onSelect,
   );
 }
 
-export function EmojiSelector({ value = "🙂", placeholder = "🙂", triggerVariant = "secondary", className, onSelect, ...props }: NodeProps & { value?: string; placeholder?: string; triggerVariant?: string; onSelect?: Handler } & Record<string, unknown>) {
+export function EmojiSelector({ value = "🙂", placeholder = "🙂", triggerVariant = "secondary", className, onSelect, ...props }: NodeProps & { value?: string; placeholder?: string; triggerVariant?: string; onSelect?: Handler<string> } & Record<string, unknown>) {
   const [open, setOpen] = useState(false);
   const baseId = requireNodeId(props, "EmojiSelector");
   const resolvedValue = value ?? placeholder;

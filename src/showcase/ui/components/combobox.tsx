@@ -1,20 +1,14 @@
-import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { Input } from "./input.tsx";
 import { LabelMuted } from "./primary/label.tsx";
 
-function selectionEvent(event: unknown, item: Item, value: string[], label: string, index: number, itemValue: string) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: itemValue, item_label: label, item_index: index, item } };
-}
-
 function toggleSelection(values: string[], id: string) {
   return values.includes(id) ? values.filter((value) => value !== id) : [...values, id];
 }
 
-export function Combobox({ items = [], selectedItemIds = [], query = "", placeholder = "Select options", filterPlaceholder = "Filter", searchable = true, className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemIds?: string[]; query?: string; placeholder?: string; filterPlaceholder?: string; searchable?: boolean } & Record<string, unknown>) {
+export function Combobox({ items = [], selectedItemIds = [], query = "", placeholder = "Select options", filterPlaceholder = "Filter", searchable = true, className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemIds?: string[]; query?: string; placeholder?: string; filterPlaceholder?: string; searchable?: boolean; onSelect?: Handler<string[]>; onChange?: Handler<string> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "Combobox");
   const disabled = isDisabled(props);
   const selected = new Set(selectedItemIds);
@@ -89,7 +83,7 @@ export function ComboboxEmpty({ text = "No matches", className, ...props }: Node
   return <LabelMuted {...props} text={text} className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)} />;
 }
 
-export function ComboboxItem({ item, itemId: id, label, index = 0, selected = false, value, className, onSelect, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; value?: string[]; onSelect?: Handler } & Record<string, unknown>) {
+export function ComboboxItem({ item, itemId: id, label, index = 0, selected = false, value, className, onSelect, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; value?: string[]; onSelect?: Handler<string[]> } & Record<string, unknown>) {
   const itemValue = id ?? String(index);
   const text = label ?? (item == null ? itemValue : itemLabel(item, itemValue));
   const nextValue = value ?? [itemValue];
@@ -103,7 +97,7 @@ export function ComboboxItem({ item, itemId: id, label, index = 0, selected = fa
       leadingIcon={selected ? "check" : undefined}
       disabled={disabled}
       className={className}
-      onClick={(event) => onSelect?.(item == null ? event : selectionEvent(event, item, nextValue, text, index, itemValue), nextValue)}
+      onClick={(event) => onSelect?.(item == null ? event : eventWithValue(event, nextValue, { item_id: itemValue, item_label: text, item_index: index, item }), nextValue)}
     >
       {children ?? text}
     </Button>

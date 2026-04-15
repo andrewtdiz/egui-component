@@ -1,6 +1,6 @@
 import { useState } from "egui";
 import { styles } from "../lib/styles.ts";
-import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
@@ -36,7 +36,7 @@ export function Collapsible({
   trailingIcon,
   onToggle,
   ...props
-}: NodeProps & { title?: string; open?: boolean; leadingIcon?: string; trailingIcon?: string } & Record<string, unknown>) {
+}: NodeProps & { title?: string; open?: boolean; leadingIcon?: string; trailingIcon?: string; onToggle?: Handler<boolean> } & Record<string, unknown>) {
   const [internalOpen, setInternalOpen] = useState(open ?? true);
   const resolvedOpen = open ?? internalOpen;
   const baseId = requireNodeId(props, "Collapsible");
@@ -45,9 +45,7 @@ export function Collapsible({
     if (open == null) {
       setInternalOpen(next);
     }
-    const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-    const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-    onToggle?.({ ...base, value: next, metadata: { ...metadata, open: next } }, next);
+    onToggle?.(eventWithValue(event, next, { open: next }), next);
   };
 
   return (

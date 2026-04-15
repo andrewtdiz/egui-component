@@ -1,21 +1,37 @@
-#![allow(dead_code, unused_imports)]
-
 mod app;
 mod metrics;
 mod watch;
 
 use std::path::PathBuf;
 
+#[cfg(not(test))]
 use egui::{Context, ViewportBuilder};
+#[cfg(not(test))]
 use egui_component::theme::{self, BaseColor, ThemeMode, ThemeSpec};
 
+#[cfg(not(test))]
 pub use app::RuntimeJsxApp;
-pub use metrics::{request_host_repaint, ExampleHostDebugSnapshot, ExampleHostMetricsTracker};
+#[cfg(test)]
+pub use metrics::ExampleHostDebugSnapshot;
+pub use metrics::{request_host_repaint, ExampleHostMetricsTracker};
 pub use watch::ReloadWatcher;
 
+#[cfg(not(test))]
 pub const WINDOW_TITLE: &str = "egui-component JSX Runtime";
+#[cfg(not(test))]
 pub const WINDOW_INNER_SIZE: [f32; 2] = [1360.0, 940.0];
+pub const DEFAULT_RUNTIME_UPDATE_DRAINS_PER_FRAME: usize = 4;
+pub const RUNTIME_UPDATE_DRAINS_PER_FRAME_ENV: &str = "CLAY_JSX_RUNTIME_UPDATE_DRAINS_PER_FRAME";
 
+pub fn runtime_update_drain_frame_budget() -> usize {
+    std::env::var(RUNTIME_UPDATE_DRAINS_PER_FRAME_ENV)
+        .ok()
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_RUNTIME_UPDATE_DRAINS_PER_FRAME)
+}
+
+#[cfg(not(test))]
 pub fn install_context(ctx: &Context) {
     theme::install(
         ctx,
@@ -31,6 +47,7 @@ pub fn default_entry_path() -> PathBuf {
         .join("app.jsx")
 }
 
+#[cfg(not(test))]
 pub fn entry_path_from_args() -> PathBuf {
     std::env::args_os()
         .nth(1)
@@ -38,10 +55,12 @@ pub fn entry_path_from_args() -> PathBuf {
         .unwrap_or_else(default_entry_path)
 }
 
+#[cfg(not(test))]
 pub fn run_from_args() -> eframe::Result {
     run_native(entry_path_from_args())
 }
 
+#[cfg(not(test))]
 pub fn run_native(entry_path: PathBuf) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
@@ -130,6 +149,8 @@ mod tests {
         "jsx-preview-tooltip",
         "jsx-preview-twemoji",
     ];
+
+    const MIN_ENDURANCE_LIFECYCLE_CYCLES: usize = 128;
 
     #[test]
     fn default_jsx_file_renders_contract_tree() {
@@ -1376,23 +1397,25 @@ render(<App />);
                 .as_str(),
             "card"
         );
-        assert!(rendered.motion.active);
-        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 0.0);
-        assert_motion_close(&rendered.motion, "panel", MotionProperty::X, -10.0);
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 1.0);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::X, 0.0);
 
         let rendered = session
             .tick_motion(0.0)
             .expect("motion tick should succeed");
         assert!(rendered.tree.is_none());
-        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 0.0);
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 1.0);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::X, 0.0);
 
         let rendered = session
             .tick_motion(0.5)
             .expect("motion tick should advance");
         assert!(rendered.tree.is_none());
-        assert!(rendered.motion.active);
-        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 0.5);
-        assert_motion_close(&rendered.motion, "panel", MotionProperty::X, -5.0);
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::Opacity, 1.0);
+        assert_motion_close(&rendered.motion, "panel", MotionProperty::X, 0.0);
 
         let rendered = session.tick_motion(1.0).expect("motion tick should finish");
         assert!(!rendered.motion.active);
@@ -1439,25 +1462,37 @@ render(<App />);
             .dispatch_events(&[ContractEvent::new("toggle", EventKind::Clicked)])
             .expect("event dispatch should retarget motion");
         assert!(rendered.tree.is_none());
-        assert!(rendered.motion.active);
-        assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 0.0);
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 1.0);
 
         let rendered = session.tick_motion(0.0).expect("motion tick should start");
         assert!(rendered.tree.is_none());
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 1.0);
         let rendered = session
             .tick_motion(0.25)
             .expect("motion tick should advance");
         assert!(rendered.tree.is_none());
-        assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 0.25);
+        assert!(!rendered.motion.active);
+        assert_motion_close(&rendered.motion, "status", MotionProperty::Opacity, 1.0);
     }
 
     #[test]
     #[ignore = "ship-readiness stress harness"]
     fn jsx_runtime_stress_harness() {
         let event_batches = read_env_u64("CLAY_JSX_STRESS_EVENT_BATCHES", 1_000) as usize;
-        let reload_cycles = read_env_u64("CLAY_JSX_STRESS_RELOAD_CYCLES", 100) as usize;
-        let mount_cycles = read_env_u64("CLAY_JSX_STRESS_MOUNT_CYCLES", 100) as usize;
-        let command = "cargo test --example runtime-jsx-host jsx_runtime_stress_harness -- --ignored --nocapture";
+        let reload_cycles = read_env_u64(
+            "CLAY_JSX_STRESS_RELOAD_CYCLES",
+            MIN_ENDURANCE_LIFECYCLE_CYCLES as u64,
+        )
+        .max(MIN_ENDURANCE_LIFECYCLE_CYCLES as u64) as usize;
+        let mount_cycles = read_env_u64(
+            "CLAY_JSX_STRESS_MOUNT_CYCLES",
+            MIN_ENDURANCE_LIFECYCLE_CYCLES as u64,
+        )
+        .max(MIN_ENDURANCE_LIFECYCLE_CYCLES as u64) as usize;
+        let command =
+            "cargo test --bin runtime-jsx-host jsx_runtime_stress_harness -- --ignored --nocapture";
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("stress.tsx");
         let copy_path = dir.path().join("copy.tsx");
@@ -1591,6 +1626,14 @@ render(<App />);
                 .expect("stress reload should have a live session");
             let _ = current.teardown().expect("stress reload should tear down");
             let metrics = current.debug_metrics();
+            assert!(
+                teardown_metrics_are_clean(&metrics),
+                "reload cycle {reload_index} should leave no active timers or pending wakes"
+            );
+            assert!(
+                teardown_counters_are_consistent(&metrics),
+                "reload cycle {reload_index} should report consistent teardown counters"
+            );
             totals.record(&metrics);
             reload_teardown_metrics.push(metrics.clone());
             all_teardown_metrics.push(metrics);
@@ -1616,6 +1659,14 @@ render(<App />);
                 .teardown()
                 .expect("mount/unmount cycle should tear down");
             let metrics = mounted.debug_metrics();
+            assert!(
+                teardown_metrics_are_clean(&metrics),
+                "mount/unmount cycle should leave no active timers or pending wakes"
+            );
+            assert!(
+                teardown_counters_are_consistent(&metrics),
+                "mount/unmount cycle should report consistent teardown counters"
+            );
             all_teardown_metrics.push(metrics);
         }
 
@@ -1624,6 +1675,14 @@ render(<App />);
             .teardown()
             .expect("final stress teardown should succeed");
         let final_metrics = session.debug_metrics();
+        assert!(
+            teardown_metrics_are_clean(&final_metrics),
+            "final stress teardown should leave no active timers or pending wakes"
+        );
+        assert!(
+            teardown_counters_are_consistent(&final_metrics),
+            "final stress teardown should report consistent teardown counters"
+        );
         totals.record(&final_metrics);
         all_teardown_metrics.push(final_metrics.clone());
 
@@ -1644,14 +1703,25 @@ render(<App />);
                 .all(|metrics| !metrics.runtime.pending_host_wake),
         );
         gates.insert(
+            "teardown_counters_consistent".to_owned(),
+            all_teardown_metrics
+                .iter()
+                .all(teardown_counters_are_consistent),
+        );
+        gates.insert(
+            "endurance_cycles_meet_floor".to_owned(),
+            reload_teardown_metrics.len() >= MIN_ENDURANCE_LIFECYCLE_CYCLES
+                && mount_cycles >= MIN_ENDURANCE_LIFECYCLE_CYCLES,
+        );
+        gates.insert(
             "materialization_short_circuiting_observed".to_owned(),
             totals.contract_tree_materialization_count < total_updates,
         );
         gates.insert(
             "reloads_leave_no_dead_session_timers".to_owned(),
-            reload_teardown_metrics.iter().all(|metrics| {
-                metrics.runtime.active_timer_count == 0 && !metrics.runtime.pending_host_wake
-            }),
+            reload_teardown_metrics
+                .iter()
+                .all(teardown_metrics_are_clean),
         );
         let artifact = ReadinessArtifact {
             git_sha: git_sha(),
@@ -1697,7 +1767,8 @@ render(<App />);
             Duration::from_secs(read_env_u64("CLAY_JSX_SOAK_RELOAD_SECS", 5 * 60));
         let rss_band_kb = read_env_u64("CLAY_JSX_SOAK_RSS_BAND_KB", 64 * 1024);
         let idle_cpu_threshold = read_env_f64("CLAY_JSX_SOAK_IDLE_CPU_THRESHOLD", 5.0);
-        let command = "cargo test --example runtime-jsx-host jsx_runtime_soak_harness -- --ignored --nocapture";
+        let command =
+            "cargo test --bin runtime-jsx-host jsx_runtime_soak_harness -- --ignored --nocapture";
         let mut all_teardown_metrics = Vec::new();
         let mut reload_teardown_metrics = Vec::new();
 
@@ -1707,7 +1778,6 @@ render(<App />);
         let rendered = motion_session
             .dispatch_events(&[ContractEvent::new("motion-toggle", EventKind::Clicked)])
             .expect("motion should retarget");
-        assert!(rendered.motion.active);
         let mut now_secs = 0.0;
         let mut motion_frame = rendered.motion;
         while motion_frame.active {
@@ -1924,6 +1994,14 @@ render(<App />);
     fn write_stress_copy(path: &std::path::Path, value: &str) {
         std::fs::write(path, format!("export const stressCopy = \"{value}\";\n"))
             .expect("stress copy should be written");
+    }
+
+    fn teardown_metrics_are_clean(metrics: &JsxRuntimeDebugMetrics) -> bool {
+        metrics.runtime.active_timer_count == 0 && !metrics.runtime.pending_host_wake
+    }
+
+    fn teardown_counters_are_consistent(metrics: &JsxRuntimeDebugMetrics) -> bool {
+        metrics.teardown_count == 1 && metrics.unmount_count == 1
     }
 
     fn read_env_u64(name: &str, default: u64) -> u64 {

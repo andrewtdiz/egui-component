@@ -1,5 +1,7 @@
 use super::model::{ContractFamilyId, CONTRACT_MODEL_VERSION};
 use crate::contract::EventKind;
+use sha2::{Digest, Sha256};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -3037,6 +3039,13 @@ const SHARED_TYPES: [ContractSharedTypeSpec; 37] = [
     supported_shared_type("toast_item", "Toast Item", ContractSharedTypeKind::Object, "Toast lifecycle item.", &TOAST_ITEM_FIELDS, &EMPTY_VARIANTS),
 ];
 
+static SCHEMA_FINGERPRINT: LazyLock<String> = LazyLock::new(|| {
+    let schema_json = schema_json().expect("contract schema should serialize");
+    let mut digest = Sha256::new();
+    digest.update(schema_json.as_bytes());
+    format!("{:x}", digest.finalize())
+});
+
 pub fn registry() -> &'static [ContractFamilySpec] {
     FAMILIES
 }
@@ -3059,6 +3068,10 @@ pub fn schema_json() -> serde_json::Result<String> {
 
 pub fn schema_json_pretty() -> serde_json::Result<String> {
     serde_json::to_string_pretty(&schema())
+}
+
+pub fn schema_fingerprint() -> &'static str {
+    SCHEMA_FINGERPRINT.as_str()
 }
 
 pub fn reference_markdown() -> String {
@@ -3205,7 +3218,8 @@ fn event_kind_id(kind: EventKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        reference_markdown, registry, schema_json_pretty, shared_types, ContractSupportStatus,
+        reference_markdown, registry, schema_fingerprint, schema_json_pretty, shared_types,
+        ContractSupportStatus,
     };
 
     #[test]
@@ -3236,6 +3250,14 @@ mod tests {
         assert!(json.contains("\"support\""));
         assert!(json.contains("\"support_summary\""));
         assert!(!shared_types().is_empty());
+    }
+
+    #[test]
+    fn schema_fingerprint_is_stable_sha256_hex() {
+        let fingerprint = schema_fingerprint();
+        assert_eq!(fingerprint.len(), 64);
+        assert!(fingerprint.chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert_eq!(fingerprint, schema_fingerprint());
     }
 
     #[test]

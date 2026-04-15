@@ -1,14 +1,8 @@
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
-export type ButtonGroupProps = NodeProps & { items?: Item[]; selectedItemId?: string } & Record<string, unknown>;
-
-function itemEvent(event: unknown, item: Item, value: string, label: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: value, item_label: label, item_index: index, item } };
-}
+export type ButtonGroupProps = NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler<string>; onCommand?: Handler<string> } & Record<string, unknown>;
 
 export function ButtonGroup({ children, items, selectedItemId, className, onSelect, onCommand, ...props }: ButtonGroupProps) {
   const baseId = requireNodeId(props, "ButtonGroup");
@@ -48,7 +42,7 @@ export function ButtonGroupRoot({ children, className, ...props }: NodeProps & R
   );
 }
 
-export function ButtonGroupItem({ item, itemId: id, label, index = 0, selected = false, className, onSelect, onCommand, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; onSelect?: Handler; onCommand?: Handler } & Record<string, unknown>) {
+export function ButtonGroupItem({ item, itemId: id, label, index = 0, selected = false, className, onSelect, onCommand, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; onSelect?: Handler<string>; onCommand?: Handler<string> } & Record<string, unknown>) {
   const value = id ?? String(index);
   const text = label ?? (item == null ? value : itemLabel(item, value));
 
@@ -59,7 +53,7 @@ export function ButtonGroupItem({ item, itemId: id, label, index = 0, selected =
       selected={selected}
       className={className}
       onClick={(event) => {
-        const nextEvent = item == null ? event : itemEvent(event, item, value, text, index);
+        const nextEvent = item == null ? event : eventWithValue(event, value, { item_id: value, item_label: text, item_index: index, item });
         onSelect?.(nextEvent, value);
         onCommand?.(nextEvent, value);
       }}

@@ -1,14 +1,8 @@
-import { cn, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, isDisabled, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 
-function selectionEvent(event: unknown, item: Item, value: string, label: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value, metadata: { ...metadata, item_id: value, item_label: label, item_index: index, item } };
-}
-
-export function Select({ items = [], selectedItemId, placeholder = "Select an option", leadingIcon, variant = "default", className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; placeholder?: string; leadingIcon?: string; variant?: string } & Record<string, unknown>) {
+export function Select({ items = [], selectedItemId, placeholder = "Select an option", leadingIcon, variant = "default", className, onSelect, onChange, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; placeholder?: string; leadingIcon?: string; variant?: string; onSelect?: Handler<string>; onChange?: Handler<string | undefined> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "Select");
   const selectedItem = items.find((item, index) => itemId(item, String(index)) === selectedItemId);
   const selectedLabel = selectedItem == null ? placeholder : itemLabel(selectedItem, selectedItemId ?? "selected");
@@ -53,7 +47,7 @@ export function SelectRoot({ children, className, ...props }: NodeProps & Record
   return <div {...nodeProps(props, cn("flex flex-col gap-1.5", className))}>{children}</div>;
 }
 
-export function SelectTrigger({ label, placeholder = false, variant = "default", leadingIcon, className, onChange, selectedItemId, ...props }: NodeProps & { label?: string; placeholder?: boolean; variant?: string; leadingIcon?: string; selectedItemId?: string; onChange?: Handler } & Record<string, unknown>) {
+export function SelectTrigger({ label, placeholder = false, variant = "default", leadingIcon, className, onChange, selectedItemId, ...props }: NodeProps & { label?: string; placeholder?: boolean; variant?: string; leadingIcon?: string; selectedItemId?: string; onChange?: Handler<string | undefined> } & Record<string, unknown>) {
   const disabled = isDisabled(props);
   return (
     <Button
@@ -78,7 +72,7 @@ export function SelectContent({ children, className, ...props }: NodeProps & Rec
   );
 }
 
-export function SelectItem({ item, itemId: id, label, index = 0, selected = false, className, onSelect, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; onSelect?: Handler } & Record<string, unknown>) {
+export function SelectItem({ item, itemId: id, label, index = 0, selected = false, className, onSelect, children, ...props }: NodeProps & { item?: Item; itemId?: string; label?: string; index?: number; selected?: boolean; onSelect?: Handler<string> } & Record<string, unknown>) {
   const value = id ?? String(index);
   const text = label ?? (item == null ? value : itemLabel(item, value));
   const disabled = isDisabled(props);
@@ -91,7 +85,7 @@ export function SelectItem({ item, itemId: id, label, index = 0, selected = fals
       selected={selected}
       disabled={disabled}
       className={className}
-      onClick={(event) => onSelect?.(item == null ? event : selectionEvent(event, item, value, text, index), value)}
+      onClick={(event) => onSelect?.(item == null ? event : eventWithValue(event, value, { item_id: value, item_label: text, item_index: index, item }), value)}
     >
       {children ?? text}
     </Button>

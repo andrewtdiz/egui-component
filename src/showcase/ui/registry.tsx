@@ -7,6 +7,7 @@ import {
   tsxOwnedCount,
 } from "./migration-manifest.ts";
 import { Button, Card, Label, Separator, componentPreviews } from "./components/index.tsx";
+import type { Children } from "./component-support.ts";
 import { styles } from "./lib/styles.ts";
 
 type Preview = {
@@ -14,7 +15,7 @@ type Preview = {
   label: string;
   section: string;
   summary: string;
-  render: () => unknown;
+  render: () => Children;
 };
 
 const SIDEPANEL_WIDTH = 264;

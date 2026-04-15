@@ -1,20 +1,18 @@
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Card } from "./card.tsx";
 import { Icon } from "./primary/icon.tsx";
 import { Label } from "./primary/label.tsx";
 
 function itemEvent(event: unknown, item: Item, id: string, index: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value: id, metadata: { ...metadata, item_id: id, item_index: index, item } };
+  return eventWithValue(event, id, { item_id: id, item_index: index, item });
 }
 
 export function FileTreeRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
   return <Card {...props} className={cn(styles.surfaceMuted, "rounded-md", className)} paddingX={6} paddingY={6}>{children}</Card>;
 }
 
-export function FileTreeRow({ item, selectedItemId, depth, treeId, fallback, onSelect }: { item: Item; selectedItemId?: string; depth: number; treeId: string; fallback: string; onSelect?: Handler }) {
+export function FileTreeRow({ item, selectedItemId, depth, treeId, fallback, onSelect }: { item: Item; selectedItemId?: string; depth: number; treeId: string; fallback: string; onSelect?: Handler<string> }) {
   const id = itemId(item, fallback);
   const children = Array.isArray(item.children) ? item.children as Item[] : [];
   const open = item.open ?? item.expanded ?? true;
@@ -40,7 +38,7 @@ export function FileTreeRow({ item, selectedItemId, depth, treeId, fallback, onS
   );
 }
 
-export function FileTree({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler } & Record<string, unknown>) {
+export function FileTree({ items = [], selectedItemId, className, onSelect, ...props }: NodeProps & { items?: Item[]; selectedItemId?: string; onSelect?: Handler<string> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "FileTree");
   return <FileTreeRoot {...props} className={className}>{items.map((item, index) => <FileTreeRow key={itemId(item, String(index))} item={item} selectedItemId={selectedItemId} depth={0} treeId={baseId} fallback={String(index)} onSelect={onSelect} />)}</FileTreeRoot>;
 }

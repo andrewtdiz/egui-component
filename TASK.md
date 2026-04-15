@@ -1,118 +1,151 @@
-# Runtime A-Grade TASK List
 
-Reference architecture notes captured from DeepWiki:
-- `reference/deepwiki/react-three-fiber-runtime-architecture.md`
+- [ ] Codify the JS/Rust ownership boundary for the retained renderer
+  - Problem: The runtime already spans an embedded JS engine, a custom React reconciler, a bridge layer, and a Rust-owned retained tree, but the ownership boundary is only implied by the code. That makes it too easy to copy the wrong lesson from browser renderers and accidentally let JS act like it owns native UI objects.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: `clay-jsx-runtime` owns the embedded `JsRuntime` and shared React substrate, while `clay-jsx-egui-bridge` lowers committed JS host nodes into semantic mutations and applies them to the Rust `HostTree`. That split should be elevated into an explicit architecture invariant.
+    - File references:
+      - `crates/clay-jsx-runtime/README.md`
+      - `crates/clay-jsx-egui-bridge/README.md`
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-egui-bridge/src/host_tree.rs`
+  - Verification:
+    - Add crate-level documentation describing the ownership contract and the allowed JS-to-Rust boundary.
+    - Audit the bridge ops so JS does not directly create or mutate native renderer objects outside the committed batch protocol.
+    - Run `cargo test -p clay-jsx-runtime -p clay-jsx-egui-bridge`.
 
-## Reliability-Critical Fixes
+- [ ] Introduce an explicit commit transport abstraction and keep JSON behind it
+  - Problem: The commit path is hard-wired to JSON strings today, which couples the React host config, the Deno op boundary, and the Rust decode path. That makes it harder to evaluate typed transport later without rewriting the whole bridge at once.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: `enqueueCommitBatch()` stringifies each batch before calling `op_commit_mutations`, and Rust stores those payloads as `commit_batches_json`. The shared runtime already has a typed `serde_v8` decode path elsewhere, so commit transport should be abstracted instead of being permanently bound to JSON.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+  - Verification:
+    - Add a transport interface for commit batches with a JSON backend that preserves current behavior.
+    - Add a typed transport spike or benchmark path for mutation batches without changing renderer semantics.
+    - Prove that existing commit protocol tests still pass with the transport abstraction in place.
 
-- [ ] Problem: Zero-interval repeating timers can busy-loop the timer worker.
-  Context: `setInterval(..., 0)` currently allows an interval of `0ms`, which can cause non-progressing loops and catastrophic reliability failure.
-  Context (Files): `crates/clay-jsx-runtime/src/host_runtime_api.js`, `crates/clay-jsx-runtime/src/runtime.rs`.
-  Verification: Add `clay-jsx-runtime` tests proving `setInterval(0)` is clamped and callback draining remains responsive without CPU spin.
+- [ ] Freeze the minimal v1 host-config surface and document unsupported features
+  - Problem: The reconciler host config is large enough that unsupported features can creep in by accident. A structurally solid v1 needs a deliberate surface area and an explicit list of what is intentionally out of scope.
+  - Reference: `reference/deepwiki/react-three-fiber-runtime-architecture.md`
+  - Context: The host config already runs in mutation mode, creates lightweight host nodes, supports hide/unhide, schedules microtasks and timers, and disables hydration and persistence. That is the right shape for v1, but it needs to be frozen and documented as the supported contract.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-runtime/src/host_runtime_api.js`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+  - Verification:
+    - Enumerate the supported host-config responsibilities for v1 in checked-in docs.
+    - Add tests for create, append, insert, remove, reorder, text, hide, and unhide semantics.
+    - Add explicit guards or docs for unsupported features such as hydration, persistence, and direct native host refs.
 
-- [ ] Problem: The timer worker lacks a defensive guard for invalid repeating intervals.
-  Context: Even if JS boundary clamps values, Rust-side guards are required to guarantee worker progress under malformed or future call paths.
-  Context (Files): `crates/clay-jsx-runtime/src/runtime.rs`.
-  Verification: Add a Rust unit test that injects invalid repeat intervals and asserts worker progress, bounded drain behavior, and clean shutdown.
+- [ ] Make the commit protocol states explicit and session-atomic
+  - Problem: The runtime already behaves like a commit protocol with queueing, decoding, validation, acknowledgement, and controlled failure, but those states are spread across JS and Rust rather than treated as one explicit protocol.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: JS prepares and flushes pending mutations, Rust clones the retained tree, decodes and validates each batch, acknowledges applied batch ids, and enters a controlled failure state when the protocol breaks. The all-or-nothing semantics should be specified and tested as one session-level contract.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/host_tree.rs`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+  - Verification:
+    - Document the protocol states and legal transitions for commit enqueue, decode, validate, acknowledge, reject, and fail.
+    - Add tests for decode failure, schema/version mismatch, invalid mutations, and post-apply validation failure.
+    - Prove that failed batches leave the previously committed tree and metrics unchanged except for the expected failure counters.
 
-- [ ] Problem: Timer catch-up replays can burst unbounded callbacks after stalls/sleep.
-  Context: Replaying every missed interval tick can produce massive callback storms and runtime jitter.
-  Context (Files): `crates/clay-jsx-runtime/src/runtime.rs`, `crates/clay-jsx-runtime/src/host_runtime_api.js`.
-  Verification: Add tests simulating long stalls and assert per-drain callback caps/coalescing semantics.
+- [ ] Stabilize event-handler registration and dispatch routing
+  - Problem: Event delivery depends on descriptor-driven handler registration plus a runtime dispatch table. That is correct in principle, but stale registrations, remount churn, and multi-key routing can still create duplicate or surprising behavior if the mapping is not treated as a first-class subsystem.
+  - Reference: `reference/deepwiki/react-three-fiber-runtime-architecture.md`
+  - Context: Materialized descriptors attach handler registrations into `container.handlers`, and `dispatchEvent()` routes one incoming event across `node_id` and `action_id` candidate keys while deduplicating by registration object identity. This system should be specified as the stable event boundary for the retained tree.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-runtime/src/contract/model.rs`
+      - `crates/clay-jsx-egui-bridge/src/lib.rs`
+  - Verification:
+    - Add tests that cover node-id routing, action-id routing, wildcard routing, and duplicate-key suppression.
+    - Add tests proving handler registrations are removed on subtree clear, replace, hide, unmount, and reload.
+    - Verify that reorder and remount operations preserve intended handler behavior without double invocation.
 
-- [ ] Problem: A single event may invoke the same handler twice via `node_id` and `action_id` routes.
-  Context: Handler registration and dispatch currently permit duplicate invocation paths for one logical event.
-  Context (Files): `crates/clay-jsx-egui-bridge/src/lowering_api.js`, `crates/clay-jsx-egui-bridge/src/runtime_api.js`, `src/contract/model.rs`.
-  Verification: Add bridge integration tests dispatching events with both fields and assert exactly one handler invocation.
+- [ ] Unify invalidation, timers, and bounded host-callback draining
+  - Problem: `requestRepaint`, timers, RAF callbacks, and host wake requests already exist, but the runtime still needs one explicit scheduling model so the host knows when work is pending, how much work may drain per wake, and when another frame must be scheduled.
+  - Reference: `reference/deepwiki/react-three-fiber-runtime-architecture.md`
+  - Context: The shared runtime exposes host-owned timers, `requestAnimationFrame`, and `requestRepaint`, while `drain_host_callbacks()` processes a bounded number of callbacks per wake. The bridge then drains runtime updates on demand. That wake contract should be formalized as the v1 scheduling model.
+    - File references:
+      - `crates/clay-jsx-runtime/src/host_runtime_api.js`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+  - Verification:
+    - Document when JS must request another wake and when the host must schedule another drain.
+    - Add tests covering effect-driven updates, timer-driven updates, RAF callbacks, and bounded multi-drain convergence.
+    - Benchmark worst-case callback bursts and assert the configured per-drain cap is respected.
 
-- [ ] Problem: Host-tree mutation application is not transactional.
-  Context: Partial mutation application can persist if a later mutation in the batch fails, leaving inconsistent retained state.
-  Context (Files): `crates/clay-jsx-egui-bridge/src/host_tree.rs`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Add rollback tests showing failed batches leave host tree state byte-for-byte identical to pre-batch state.
+- [ ] Keep motion updates structurally separate from contract-tree updates
+  - Problem: Motion state is retained alongside the host tree, but it should not accidentally force full contract-tree rematerialization or structural batch semantics when nothing structural changed.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: `HostMutation::changes_contract_tree()` already excludes motion-only mutations, and `tick_motion()` returns `tree: None` while still producing a `MotionFrame`. That separation should be enforced as an explicit v1 invariant rather than a convenient implementation detail.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/host_tree.rs`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/motion.rs`
+  - Verification:
+    - Add tests proving motion-only updates do not rematerialize the contract tree.
+    - Add tests proving structural mutations preserve retained motion state when appropriate.
+    - Benchmark motion-heavy screens separately from structural commit benchmarks.
 
-- [ ] Problem: JS->Rust commit flow has no explicit acknowledgment/recovery protocol.
-  Context: If Rust rejects a commit, JS reconciler state can advance without deterministic host resync.
-  Context (Files): `crates/clay-jsx-runtime/src/runtime.rs`, `crates/clay-jsx-egui-bridge/src/runtime_api.js`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Add integration tests that force commit rejection and assert deterministic recovery path (resync or controlled session fail).
+- [ ] Define the hot-reload and state-restoration policy for v1
+  - Problem: Hot reload is exposed as an API surface, but the current implementation remounts cold and intentionally does not restore hook state. Without an explicit policy, callers can assume stronger guarantees than the runtime actually provides.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: The bridge captures an empty hot-reload state shape, installs optional reload state into JS, and documents that hook-state restoration is deferred. V1 should state clearly that reload is a clean remount with deterministic teardown rather than partial state reuse.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/README.md`
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+  - Verification:
+    - Add tests proving reload always runs effect cleanup before tearing down the previous session.
+    - Add tests proving failed replacement loads preserve the last good session until the new session is validated.
+    - Document hook-state restoration as explicitly deferred work rather than implied future behavior.
 
-- [ ] Problem: Reload is destructive before replacement validation.
-  Context: Current reload flow tears down the live session before proving the new session can load/render.
-  Context (Files): `examples/runtime-jsx/app.rs`, `examples/runtime-jsx-motion.rs`.
-  Verification: Add app-level tests where reload fails and previous rendered tree remains visible and interactive.
+- [ ] Unify error containment and host-visible recovery policy
+  - Problem: Reconciler failures, runtime callback failures, and commit protocol failures all affect session health, but they need one coherent host-facing policy so embedders know when to continue, when to surface a bounded error state, and when to force reload.
+  - Reference: `reference/deepwiki/react-three-fiber-runtime-architecture.md`
+  - Context: The runtime reports uncaught, caught, and recoverable reconciler errors, captures pending fatal runtime errors, and transitions to a controlled failure state after commit rejection. These failure paths should be normalized into one host-visible recovery contract.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-runtime/src/clay_jsx_runtime.ts`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+  - Verification:
+    - Add host-visible error categories and dispositions for recoverable, boundary-contained, fatal, and protocol-failed sessions.
+    - Add fixtures for render throws, effect throws, event-handler throws, and commit rejection.
+    - Verify deterministic host behavior for continue, bounded failure, reload-required, and teardown paths.
 
-- [ ] Problem: Reconciler errors are not surfaced as structured host errors.
-  Context: Routing uncaught/caught/recoverable errors only to logging prevents robust host-level recovery policy.
-  Context (Files): `crates/clay-jsx-runtime/src/clay_jsx_runtime.ts`, `crates/clay-jsx-egui-bridge/src/runtime_api.js`, `crates/clay-jsx-runtime/src/runtime.rs`.
-  Verification: Add tests proving Rust receives structured error categories and host behavior is deterministic for each category.
+- [ ] Add architecture-level integration tests and benchmark gates
+  - Problem: The architecture is complex enough that unit tests alone will not prevent regressions. The runtime needs explicit end-to-end coverage for the bridge contract plus a small benchmark contract for hot paths.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: The codebase already has targeted tests and some microbenchmarks, but the v1 architecture still needs one checked-in gate for end-to-end behavior across load, render, dispatch, async updates, motion, teardown, and reload.
+    - File references:
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/runtime.rs`
+      - `crates/clay-jsx-egui-bridge/src/lib.rs`
+      - `reference/benchmarks/`
+  - Verification:
+    - Add an integration matrix that covers initial render, sync event updates, async timer updates, motion ticks, teardown, and reload.
+    - Add benchmark artifacts for commit throughput, event-dispatch latency, and callback-drain latency on representative trees.
+    - Make the architecture checks runnable in CI with failing exit codes on invariant regressions.
 
-## Reliability Hardening
-
-- [ ] Problem: Runtime tree failures are not isolated by an explicit error-boundary containment policy.
-  Context: A-grade reliability requires bounded failure scope and clear recovery semantics for runtime-authored exceptions.
-  Context (Files): `crates/clay-jsx-egui-bridge/src/runtime_api.js`, `examples/runtime-jsx/app.rs`, `crates/clay-jsx-egui-bridge/src/lib.rs`.
-  Verification: Add TSX failure fixtures (render/effect throw) and tests asserting bounded failure plus successful recovery after fix/reload.
-
-- [ ] Problem: Watch target resolution can fail on missing nested import paths.
-  Context: Missing intermediate directories can break watcher setup and degrade hot-reload resilience.
-  Context (Files): `examples/runtime-jsx/watch.rs`, `examples/runtime-jsx/app.rs`, `examples/runtime-jsx-motion.rs`.
-  Verification: Add watcher tests for nested missing imports and assert watch registration falls back to nearest existing ancestor.
-
-- [ ] Problem: Runtime mutation buffering is unbounded under delayed host drains.
-  Context: Unbounded queues risk memory growth and latency spikes during host stalls.
-  Context (Files): `crates/clay-jsx-runtime/src/runtime.rs`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Add stress tests proving hard queue limits/backpressure behavior and explicit overflow metrics/logging.
-
-- [ ] Problem: Lifecycle leak guarantees are not enforced at stronger endurance thresholds.
-  Context: A-grade reliability needs high-confidence proof across repeated mount/reload/unmount cycles.
-  Context (Files): `examples/runtime-jsx/mod.rs`, `crates/clay-jsx-egui-bridge/src/lib.rs`.
-  Verification: Extend readiness harness to 100+ cycles and assert zero active timers, zero pending wakes, and consistent teardown counters.
-
-## Performance-Critical Fixes
-
-- [ ] Problem: Runtime execution competes with UI rendering on the egui frame thread.
-  Context: Load/dispatch/drain/tick work on the UI thread can cause frame drops under heavier workloads.
-  Context (Files): `examples/runtime-jsx/app.rs`, `examples/runtime-jsx-motion.rs`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Introduce worker/session-thread architecture and benchmark proving improved UI responsiveness during burst workloads.
-
-- [ ] Problem: Pending runtime updates are drained only once per frame.
-  Context: Single-drain behavior can leave backlog and multi-frame convergence lag during async bursts.
-  Context (Files): `examples/runtime-jsx/app.rs`, `examples/runtime-jsx-motion.rs`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Add bounded-loop drain tests asserting latest-state convergence within configured frame budgets.
-
-- [ ] Problem: Due-timer transfer uses repeated JSON stringify/parse on hot paths.
-  Context: Serialization overhead adds avoidable allocation and CPU cost during frequent wake cycles.
-  Context (Files): `crates/clay-jsx-runtime/src/runtime.rs`, `crates/clay-jsx-runtime/src/host_runtime_api.js`.
-  Verification: Replace with typed op transfer and benchmark reduced allocations/latency versus baseline.
-
-- [ ] Problem: Tailwind class parsing/effective-layout derivation repeats per node and per path.
-  Context: Repeated parse work scales poorly with large trees and duplicate Taffy traversal.
-  Context (Files): `src/contract/renderer.rs`, `src/ui/tailwind/parse.rs`, `src/ui/tailwind/parse_layout.rs`.
-  Verification: Add cache keyed by stable identity/hash and microbenchmarks showing lower `render_tree` CPU time on large trees.
-
-- [ ] Problem: Motion mutation payloads include unnecessary `clear_motion` operations.
-  Context: Emitting clears for nodes that never had motion inflates mutation payload size and apply work.
-  Context (Files): `crates/clay-jsx-egui-bridge/src/runtime_api.js`, `crates/clay-jsx-egui-bridge/src/host_tree.rs`, `crates/clay-jsx-egui-bridge/src/runtime.rs`.
-  Verification: Add mutation diff tests and benchmarks showing reduced payload size and apply latency on non-motion-heavy screens.
-
-- [ ] Problem: Reorder/index operations use repeated sibling scans in hot commit paths.
-  Context: O(n^2)-like behavior can surface under large sibling lists and frequent reorders.
-  Context (Files): `crates/clay-jsx-egui-bridge/src/runtime_api.js`.
-  Verification: Add deep-reorder benchmarks proving improved p95 commit time after indexed parent-child mapping.
-
-## A-Grade Evidence Gates
-
-- [ ] Problem: No standardized, reproducible benchmark contract defines A-grade performance.
-  Context: Performance claims require stable p50/p95 metrics for core runtime operations on representative tree sizes.
-  Context (Files): `examples/runtime-jsx/mod.rs`, `reference/benchmarks/`.
-  Verification: Add benchmark target and artifacts tracking `dispatch_events`, `drain_pending_runtime_updates`, and `render_tree` latency.
-
-- [ ] Problem: Reliability soak/stress gates are not mandatory in automated release validation.
-  Context: A-grade reliability requires enforced CI gating on leak/recovery stability, not optional/manual runs.
-  Context (Files): `examples/runtime-jsx/mod.rs`, `.github/workflows/`.
-  Verification: Add CI jobs for soak/stress harnesses with machine-readable artifact checks and failing exit codes on gate violations.
-
-- [ ] Problem: Release criteria for A-grade are not codified as enforceable thresholds.
-  Context: Without explicit thresholds, quality grade remains subjective and can regress unnoticed.
-  Context (Files): `TASK.md`, `scripts/`, `docs/`.
-  Verification: Add checked-in release checklist + automated gate script requiring zero critical/high known defects and passing latency/reliability thresholds.
-
+- [ ] Explicitly defer non-v1 features and guard them from leaking into the core design
+  - Problem: A first version becomes structurally fragile when advanced features arrive implicitly. Features that are not part of the reliable core should be deferred on purpose and marked as such in code and docs.
+  - Reference: `reference/deepwiki/react-three-fiber-solid-v1-runtime-architecture.md`
+  - Context: The current runtime already signals some deferrals, including hydration off, persistence off, and hook-state restoration deferred. That discipline should be broadened to all non-v1 features so the core architecture stays small and predictable.
+    - File references:
+      - `crates/clay-jsx-egui-bridge/src/runtime_api.ts`
+      - `crates/clay-jsx-egui-bridge/README.md`
+      - `crates/clay-jsx-runtime/src/runtime.rs`
+      - `TASK.md`
+  - Verification:
+    - List the deferred features in checked-in docs, including hydration, persistence, direct native host refs, hook-state restoration, and production transport replacement.
+    - Add guards, comments, or feature flags where unsupported paths could otherwise be assumed to work.
+    - Review new architecture work against this list before merging follow-up features.
+  - Notes:
+    - Frozen deferred-feature list lives at `docs/jsx-runtime-v1-deferred-features.md`.
+    - Typed commit transport remains test/benchmark-only and now requires explicit opt-in instead of silently behaving like a production feature.

@@ -1,10 +1,10 @@
 import { useState } from "egui";
-import { cn, itemId, itemLabel, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { DropdownMenuContent, type MenuEntry } from "./dropdown-menu.tsx";
 
-export type OpenWithProps = NodeProps & { entries?: MenuEntry[]; selectedItemId?: string; placeholder?: string; open?: boolean; triggerVariant?: string } & Record<string, unknown>;
+export type OpenWithProps = NodeProps & { entries?: MenuEntry[]; selectedItemId?: string; placeholder?: string; open?: boolean; triggerVariant?: string; onCommand?: Handler<string | undefined>; onOpen?: Handler<string | undefined>; onClose?: Handler<string | undefined> } & Record<string, unknown>;
 
 export function OpenWithRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
   return <div {...nodeProps(props, cn("flex flex-col gap-1.5", className))}>{children}</div>;
@@ -52,8 +52,8 @@ export function OpenWith({ entries = [], selectedItemId, placeholder = "Open Wit
     if (open == null) {
       setInternalOpen(next);
     }
-    if (next) onOpen?.(event ?? null, selectedItemId);
-    else onClose?.(event ?? null, selectedItemId);
+    if (next) onOpen?.(eventWithValue(event, selectedItemId, { open: next }), selectedItemId);
+    else onClose?.(eventWithValue(event, selectedItemId, { open: next }), selectedItemId);
   };
 
   return (
@@ -63,7 +63,7 @@ export function OpenWith({ entries = [], selectedItemId, placeholder = "Open Wit
         label={label}
         icon={icon == null ? undefined : String(icon)}
         triggerVariant={triggerVariant}
-        onAction={(event) => onCommand?.({ ...(event as object), metadata: { item_id: selectedItemId, item_label: label } }, selectedItemId)}
+        onAction={(event) => onCommand?.(eventWithValue(event, selectedItemId, { item_id: selectedItemId, item_label: label }), selectedItemId)}
         onMenu={(event) => setOpen(!resolvedOpen, event)}
       />
       {resolvedOpen && entries.length > 0 && (

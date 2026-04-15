@@ -1,10 +1,14 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
+#[cfg(test)]
+use clay_jsx_egui_bridge::JsxRuntimeSession;
 use clay_jsx_egui_bridge::{
-    HotReloadState, JsxRuntimeDebugMetrics, JsxRuntimeLoadOutcome, JsxRuntimeSession, MotionFrame,
+    JsxRuntimeDebugMetrics, JsxRuntimeSessionWorker, JsxRuntimeWorkerDebugSnapshot,
+    JsxRuntimeWorkerEvent, JsxRuntimeWorkerReloadOutcome, MotionFrame,
 };
 use egui::{CentralPanel, Context, RichText, TopBottomPanel};
 use egui_component::{
@@ -12,22 +16,32 @@ use egui_component::{
     theme::{self, BaseColor, ThemeMode, ThemeSpec},
 };
 
-use super::{default_entry_path, request_host_repaint, ExampleHostMetricsTracker, ReloadWatcher};
 #[cfg(test)]
 use super::ExampleHostDebugSnapshot;
+use super::{
+    default_entry_path, request_host_repaint, runtime_update_drain_frame_budget,
+    ExampleHostMetricsTracker, ReloadWatcher,
+};
 
 #[derive(Debug)]
 pub struct RuntimeJsxApp {
     entry_path: PathBuf,
-    hot_reload_state: Option<HotReloadState>,
     initialized: bool,
     reload_watcher: Option<ReloadWatcher>,
-    session: Option<JsxRuntimeSession>,
+    runtime_worker: Option<JsxRuntimeSessionWorker>,
+    reload_in_flight: bool,
+    dispatch_in_flight: bool,
+    drain_in_flight: bool,
+    tick_in_flight: bool,
+    queued_dispatch_events: Vec<ContractEvent>,
     rendered: Option<ContractTree>,
     motion: MotionFrame,
+    max_runtime_update_drains_per_frame: usize,
+    remaining_runtime_update_drains_this_frame: usize,
     watched_files: BTreeSet<PathBuf>,
     error: Option<String>,
     metrics: ExampleHostMetricsTracker,
+    live_session_metrics: Option<JsxRuntimeDebugMetrics>,
     last_torn_down_session: Option<JsxRuntimeDebugMetrics>,
 }
 
@@ -40,25 +54,37 @@ impl Default for RuntimeJsxApp {
 impl RuntimeJsxApp {
     pub fn new(entry_path: impl Into<PathBuf>) -> Self {
         let entry_path = entry_path.into();
+        let max_runtime_update_drains_per_frame = runtime_update_drain_frame_budget();
         Self {
             entry_path,
-            hot_reload_state: None,
             initialized: false,
             reload_watcher: None,
-            session: None,
+            runtime_worker: None,
+            reload_in_flight: false,
+            dispatch_in_flight: false,
+            drain_in_flight: false,
+            tick_in_flight: false,
+            queued_dispatch_events: Vec::new(),
             rendered: None,
             motion: MotionFrame::default(),
+            max_runtime_update_drains_per_frame,
+            remaining_runtime_update_drains_this_frame: max_runtime_update_drains_per_frame,
             watched_files: BTreeSet::new(),
             error: None,
             metrics: ExampleHostMetricsTracker::default(),
+            live_session_metrics: None,
             last_torn_down_session: None,
         }
     }
 
     fn update_frame(&mut self, ctx: &Context) {
+        self.reset_runtime_update_drain_frame_budget();
+        self.ensure_runtime_worker(ctx);
+        self.collect_worker_events(ctx);
         self.reload_initial_or_external_changes(ctx);
-        self.drain_pending_runtime_updates(ctx);
-        self.tick_runtime_motion(ctx);
+        self.drive_runtime_update_drain_loop(ctx);
+        self.schedule_tick_runtime_motion(ctx);
+        self.collect_worker_events(ctx);
 
         TopBottomPanel::top("jsx_runtime_topbar")
             .resizable(false)
@@ -75,6 +101,7 @@ impl RuntimeJsxApp {
     }
 
     fn render_preview(&mut self, ui: &mut egui::Ui) {
+        self.collect_worker_events(ui.ctx());
         let mut frame_events = Vec::new();
 
         ui.add_space(16.0);
@@ -85,30 +112,32 @@ impl RuntimeJsxApp {
                     .color(ui.visuals().error_fg_color),
             );
             ui.label(RichText::new(error.as_str()).small().weak());
-        } else {
-            match self.rendered.as_ref() {
-                Some(tree) => {
-                    let events = render_tree(ui, tree);
-                    if !events.is_empty() {
-                        frame_events = events;
-                    }
+        }
+
+        match self.rendered.as_ref() {
+            Some(tree) => {
+                let events = render_tree(ui, tree);
+                if !events.is_empty() {
+                    frame_events = events;
                 }
-                None => {
-                    ui.label(RichText::new("No JSX tree has been rendered yet.").weak());
-                }
+            }
+            None => {
+                ui.label(RichText::new("No JSX tree has been rendered yet.").weak());
             }
         }
 
         if !frame_events.is_empty() {
             self.dispatch_events_to_runtime(&frame_events, ui.ctx());
         }
+
+        self.collect_worker_events(ui.ctx());
     }
 
     fn reload_initial_or_external_changes(&mut self, ctx: &Context) {
         self.ensure_reload_watcher(ctx);
         if !self.initialized {
             self.initialized = true;
-            self.reload_from_disk(ctx);
+            self.request_reload_from_disk(ctx);
             return;
         }
 
@@ -117,137 +146,293 @@ impl RuntimeJsxApp {
             .as_mut()
             .is_some_and(|watcher| watcher.take_pending_reload())
         {
-            self.reload_from_disk(ctx);
+            self.request_reload_from_disk(ctx);
         }
     }
 
+    #[cfg(test)]
     fn reload_from_disk(&mut self, ctx: &Context) {
-        self.metrics.note_reload_attempt();
-        self.capture_hot_reload_state();
-        self.teardown_session();
-
-        match JsxRuntimeSession::load_with_hot_reload_state_outcome(
-            &self.entry_path,
-            self.hot_reload_state.as_ref(),
-        ) {
-            JsxRuntimeLoadOutcome::Loaded {
-                mut session,
-                rendered,
-            } => {
-                self.set_watched_files(
-                    session
-                        .dependency_paths()
-                        .into_iter()
-                        .chain([self.entry_path.clone()]),
-                );
-                install_session_wake_callback(&mut session, ctx, self.metrics.clone());
-                self.session = Some(session);
-                self.rendered = rendered.tree;
-                self.motion = rendered.motion;
-                self.error = None;
-                self.metrics.note_reload_success();
-                if self.motion.active {
-                    request_host_repaint(ctx, &self.metrics);
-                }
-                self.drain_pending_runtime_updates(ctx);
-            }
-            JsxRuntimeLoadOutcome::Failed(failure) => {
-                self.session = None;
-                self.motion = MotionFrame::default();
-                self.rendered = None;
-                self.error = Some(format!(
-                    "Failed to load {}: {error}",
-                    self.entry_path.display(),
-                    error = failure.error
-                ));
-                self.set_watched_files(collect_failure_tracked_files(
-                    failure.dependency_paths,
-                    &self.entry_path,
-                ));
-                self.metrics.note_reload_failure();
-            }
-        }
+        self.ensure_runtime_worker(ctx);
+        self.request_reload_from_disk(ctx);
+        self.wait_for_runtime_worker_idle(ctx, std::time::Duration::from_secs(10));
     }
 
     fn dispatch_events_to_runtime(&mut self, events: &[ContractEvent], ctx: &Context) {
-        let Some(session) = self.session.as_mut() else {
+        if events.is_empty() {
             return;
-        };
-
-        match session.dispatch_events(events) {
-            Ok(rendered) => {
-                if let Some(tree) = rendered.tree {
-                    self.rendered = Some(tree);
-                }
-                self.motion = rendered.motion;
-                self.error = None;
-                if self.motion.active {
-                    request_host_repaint(ctx, &self.metrics);
-                }
-            }
-            Err(error) => {
-                self.error = Some(error.to_string());
-            }
         }
+        self.queued_dispatch_events.extend_from_slice(events);
+        self.try_dispatch_queued_events(ctx);
     }
 
+    #[cfg(test)]
     fn drain_pending_runtime_updates(&mut self, ctx: &Context) {
-        let Some(session) = self.session.as_mut() else {
-            return;
-        };
+        self.reset_runtime_update_drain_frame_budget();
+        self.drive_runtime_update_drain_loop(ctx);
+        self.wait_for_runtime_worker_idle(ctx, std::time::Duration::from_secs(2));
+    }
 
-        match session.drain_pending_runtime_updates() {
-            Ok(Some(rendered)) => {
-                self.metrics.note_runtime_update_drain();
-                if let Some(tree) = rendered.tree {
-                    self.rendered = Some(tree);
-                }
-                self.motion = rendered.motion;
+    fn ensure_runtime_worker(&mut self, ctx: &Context) {
+        if self.runtime_worker.is_some() {
+            return;
+        }
+        let repaint_ctx = ctx.clone();
+        let repaint_metrics = self.metrics.clone();
+        let wake_callback: Arc<dyn Fn() + Send + Sync + 'static> = Arc::new(move || {
+            request_host_repaint(&repaint_ctx, &repaint_metrics);
+        });
+        match JsxRuntimeSessionWorker::spawn(Some(wake_callback)) {
+            Ok(worker) => {
+                self.runtime_worker = Some(worker);
                 self.error = None;
-                if self.motion.active {
-                    request_host_repaint(ctx, &self.metrics);
-                }
             }
-            Ok(None) => self.metrics.note_runtime_update_drain_empty(),
             Err(error) => {
-                self.error = Some(error.to_string());
+                self.error = Some(format!("Failed to start JSX runtime worker: {error}"));
             }
         }
     }
 
-    fn tick_runtime_motion(&mut self, ctx: &Context) {
-        if !self.motion.active {
+    fn request_reload_from_disk(&mut self, ctx: &Context) {
+        self.ensure_runtime_worker(ctx);
+        if self.reload_in_flight {
             return;
         }
-        let Some(session) = self.session.as_mut() else {
+        let Some(worker) = self.runtime_worker.as_ref() else {
             return;
         };
 
+        self.metrics.note_reload_attempt();
+        match worker.request_reload(self.entry_path.clone()) {
+            Ok(()) => {
+                self.reload_in_flight = true;
+                request_host_repaint(ctx, &self.metrics);
+            }
+            Err(error) => {
+                self.error = Some(format!("Failed to queue JSX runtime reload: {error}"));
+            }
+        }
+    }
+
+    fn try_dispatch_queued_events(&mut self, ctx: &Context) {
+        if self.dispatch_in_flight || self.queued_dispatch_events.is_empty() {
+            return;
+        }
+        if self.live_session_metrics.is_none() {
+            return;
+        }
+        let Some(worker) = self.runtime_worker.as_ref() else {
+            return;
+        };
+
+        let events = std::mem::take(&mut self.queued_dispatch_events);
+        match worker.request_dispatch_events(events) {
+            Ok(()) => {
+                self.dispatch_in_flight = true;
+                request_host_repaint(ctx, &self.metrics);
+            }
+            Err(error) => {
+                self.error = Some(format!(
+                    "Failed to queue JSX runtime event dispatch: {error}"
+                ));
+            }
+        }
+    }
+
+    fn reset_runtime_update_drain_frame_budget(&mut self) {
+        self.remaining_runtime_update_drains_this_frame = self.max_runtime_update_drains_per_frame;
+    }
+
+    fn drive_runtime_update_drain_loop(&mut self, ctx: &Context) {
+        if self.schedule_drain_pending_runtime_updates(ctx) {
+            self.collect_worker_events(ctx);
+        }
+    }
+
+    fn schedule_drain_pending_runtime_updates(&mut self, ctx: &Context) -> bool {
+        if self.drain_in_flight || self.live_session_metrics.is_none() {
+            return false;
+        }
+        if self.remaining_runtime_update_drains_this_frame == 0 {
+            return false;
+        }
+        let Some(worker) = self.runtime_worker.as_ref() else {
+            return false;
+        };
+        match worker.request_drain_pending_runtime_updates() {
+            Ok(()) => {
+                self.drain_in_flight = true;
+                self.remaining_runtime_update_drains_this_frame -= 1;
+                request_host_repaint(ctx, &self.metrics);
+                true
+            }
+            Err(error) => {
+                self.error = Some(format!("Failed to queue JSX runtime update drain: {error}"));
+                false
+            }
+        }
+    }
+
+    fn schedule_tick_runtime_motion(&mut self, ctx: &Context) {
+        if !self.motion.active || self.tick_in_flight || self.live_session_metrics.is_none() {
+            return;
+        }
+        let Some(worker) = self.runtime_worker.as_ref() else {
+            return;
+        };
         let now_secs = ctx.input(|input| input.time);
-        match session.tick_motion(now_secs) {
-            Ok(rendered) => {
-                self.motion = rendered.motion;
-                if self.motion.active {
-                    request_host_repaint(ctx, &self.metrics);
-                }
-                self.error = None;
+        match worker.request_tick_motion(now_secs) {
+            Ok(()) => {
+                self.tick_in_flight = true;
+                request_host_repaint(ctx, &self.metrics);
             }
             Err(error) => {
-                self.error = Some(error.to_string());
+                self.error = Some(format!("Failed to queue JSX runtime motion tick: {error}"));
             }
         }
     }
 
-    fn capture_hot_reload_state(&mut self) {
-        if self.error.is_some() {
-            return;
+    fn collect_worker_events(&mut self, ctx: &Context) {
+        loop {
+            let next_event = {
+                let Some(worker) = self.runtime_worker.as_ref() else {
+                    return;
+                };
+                worker.try_recv_event()
+            };
+
+            match next_event {
+                Ok(Some(event)) => self.handle_worker_event(event, ctx),
+                Ok(None) => break,
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    self.runtime_worker = None;
+                    self.clear_in_flight_requests();
+                    break;
+                }
+            }
         }
-        let Some(session) = self.session.as_mut() else {
-            return;
-        };
-        if let Ok(hot_reload_state) = session.capture_hot_reload_state() {
-            self.hot_reload_state = Some(hot_reload_state);
+    }
+
+    fn handle_worker_event(&mut self, event: JsxRuntimeWorkerEvent, ctx: &Context) {
+        match event {
+            JsxRuntimeWorkerEvent::ReloadCompleted { outcome, snapshot } => {
+                self.reload_in_flight = false;
+                self.apply_worker_snapshot(snapshot);
+                match outcome {
+                    JsxRuntimeWorkerReloadOutcome::Loaded {
+                        rendered,
+                        dependency_paths,
+                    } => {
+                        self.set_watched_files(
+                            dependency_paths
+                                .into_iter()
+                                .chain([self.entry_path.clone()]),
+                        );
+                        self.apply_rendered_update(rendered, ctx);
+                        self.error = None;
+                        self.metrics.note_reload_success();
+                    }
+                    JsxRuntimeWorkerReloadOutcome::Failed(failure) => {
+                        self.error = Some(format!(
+                            "Failed to load {}: {error}",
+                            self.entry_path.display(),
+                            error = failure.error
+                        ));
+                        self.set_watched_files(collect_failure_tracked_files(
+                            failure.dependency_paths,
+                            &self.entry_path,
+                        ));
+                        self.metrics.note_reload_failure();
+                        if self.live_session_metrics.is_none() {
+                            self.motion = MotionFrame::default();
+                            self.rendered = None;
+                        }
+                    }
+                }
+            }
+            JsxRuntimeWorkerEvent::DispatchCompleted { result, snapshot } => {
+                self.dispatch_in_flight = false;
+                self.apply_worker_snapshot(snapshot);
+                match result {
+                    Ok(rendered) => {
+                        self.apply_rendered_update(rendered, ctx);
+                        self.error = None;
+                    }
+                    Err(error) => {
+                        self.error = Some(error.to_string());
+                    }
+                }
+                self.try_dispatch_queued_events(ctx);
+            }
+            JsxRuntimeWorkerEvent::DrainCompleted { result, snapshot } => {
+                self.drain_in_flight = false;
+                self.apply_worker_snapshot(snapshot);
+                let mut should_queue_follow_up = false;
+                match result {
+                    Ok(Some(rendered)) => {
+                        self.metrics.note_runtime_update_drain();
+                        self.apply_rendered_update(rendered, ctx);
+                        self.error = None;
+                        should_queue_follow_up = true;
+                    }
+                    Ok(None) => {
+                        self.metrics.note_runtime_update_drain_empty();
+                    }
+                    Err(error) => {
+                        self.error = Some(error.to_string());
+                    }
+                }
+                if should_queue_follow_up {
+                    let _ = self.schedule_drain_pending_runtime_updates(ctx);
+                }
+            }
+            JsxRuntimeWorkerEvent::TickCompleted { result, snapshot } => {
+                self.tick_in_flight = false;
+                self.apply_worker_snapshot(snapshot);
+                match result {
+                    Ok(rendered) => {
+                        self.apply_rendered_update(rendered, ctx);
+                        self.error = None;
+                    }
+                    Err(error) => {
+                        self.error = Some(error.to_string());
+                    }
+                }
+            }
+            JsxRuntimeWorkerEvent::TeardownCompleted { result, snapshot } => {
+                self.clear_in_flight_requests();
+                self.apply_worker_snapshot(snapshot);
+                if let Err(error) = result {
+                    self.error = Some(error.to_string());
+                }
+            }
         }
+    }
+
+    fn apply_worker_snapshot(&mut self, snapshot: JsxRuntimeWorkerDebugSnapshot) {
+        self.live_session_metrics = snapshot.live_session;
+        self.last_torn_down_session = snapshot.last_torn_down_session;
+    }
+
+    fn apply_rendered_update(
+        &mut self,
+        rendered: clay_jsx_egui_bridge::RenderedJsx,
+        ctx: &Context,
+    ) {
+        if let Some(tree) = rendered.tree {
+            self.rendered = Some(tree);
+        }
+        self.motion = rendered.motion;
+        if self.motion.active {
+            request_host_repaint(ctx, &self.metrics);
+        }
+    }
+
+    fn clear_in_flight_requests(&mut self) {
+        self.reload_in_flight = false;
+        self.dispatch_in_flight = false;
+        self.drain_in_flight = false;
+        self.tick_in_flight = false;
     }
 
     fn ensure_reload_watcher(&mut self, ctx: &Context) {
@@ -279,18 +464,45 @@ impl RuntimeJsxApp {
         }
     }
 
-    fn teardown_session(&mut self) {
-        if let Some(mut session) = self.session.take() {
-            let _ = session.teardown();
-            self.last_torn_down_session = Some(session.debug_metrics());
+    #[cfg(test)]
+    fn has_pending_worker_requests(&self) -> bool {
+        self.reload_in_flight
+            || self.dispatch_in_flight
+            || self.drain_in_flight
+            || self.tick_in_flight
+    }
+
+    #[cfg(test)]
+    fn wait_for_runtime_worker_idle(&mut self, ctx: &Context, timeout: std::time::Duration) {
+        let deadline = std::time::Instant::now() + timeout;
+        while self.has_pending_worker_requests() && std::time::Instant::now() < deadline {
+            self.collect_worker_events(ctx);
+            if self.has_pending_worker_requests() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
         }
+        self.collect_worker_events(ctx);
+        if self.has_pending_worker_requests() {
+            self.error = Some(format!(
+                "timed out waiting for JSX runtime worker after {:?}",
+                timeout
+            ));
+        }
+    }
+
+    fn shutdown_runtime_worker(&mut self) {
+        let Some(mut worker) = self.runtime_worker.take() else {
+            return;
+        };
+        let _ = worker.request_teardown();
+        let _ = worker.shutdown();
     }
 
     #[cfg(test)]
     pub(crate) fn debug_snapshot(&self) -> ExampleHostDebugSnapshot {
         ExampleHostDebugSnapshot {
             host: self.metrics.snapshot(),
-            live_session: self.session.as_ref().map(JsxRuntimeSession::debug_metrics),
+            live_session: self.live_session_metrics.clone(),
             last_torn_down_session: self.last_torn_down_session.clone(),
         }
     }
@@ -301,6 +513,12 @@ impl eframe::App for RuntimeJsxApp {
         theme::set_theme(ctx, ThemeSpec::preset(BaseColor::Neutral));
         theme::set_mode(ctx, ThemeMode::System);
         self.update_frame(ctx);
+    }
+}
+
+impl Drop for RuntimeJsxApp {
+    fn drop(&mut self) {
+        self.shutdown_runtime_worker();
     }
 }
 
@@ -316,20 +534,15 @@ fn collect_failure_tracked_files(
     paths.into_iter().collect()
 }
 
-fn install_session_wake_callback(
-    session: &mut JsxRuntimeSession,
-    ctx: &Context,
-    metrics: ExampleHostMetricsTracker,
-) {
-    let ctx = ctx.clone();
-    session.set_wake_callback(move || request_host_repaint(&ctx, &metrics));
-}
-
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::{
+        path::Path,
+        time::{Duration, Instant},
+    };
 
-    use clay_jsx_runtime::contract::{ContractEvent, ContractNode, EventKind, EventValue};
+    use clay_jsx_runtime::contract::{ContractEvent, ContractNode, EventKind};
+    use egui::{pos2, CentralPanel, Event, Modifiers, PointerButton, RawInput};
     use tempfile::tempdir;
 
     use super::*;
@@ -385,11 +598,11 @@ export function Copy() {
     }
 
     #[test]
-    fn failed_reload_tracks_attempted_dependencies_and_recovers_with_cold_state() {
+    fn failed_reload_keeps_live_tree_visible_and_interactive_until_recovery() {
         let dir = tempdir().expect("temp dir should be created");
         let entry_path = dir.path().join("app.tsx");
         let child_path = dir.path().join("copy.tsx");
-        let extra_path = dir.path().join("extra.tsx");
+        let extra_path = dir.path().join("nested").join("runtime").join("extra.tsx");
         std::fs::write(
             &entry_path,
             r#"
@@ -400,12 +613,7 @@ function App() {
   const [checked, setChecked] = useState(false);
   return (
     <div id="root" data-slot="column">
-      <input
-        id="toggle"
-        type="checkbox"
-        checked={checked}
-        onToggle={(event, value) => setChecked(Boolean(value))}
-      />
+      <button id="toggle" label="Toggle" onClick={() => setChecked((value) => !value)} />
       <label id="status" text={checked ? "On" : "Off"} />
       <Copy />
     </div>
@@ -429,21 +637,16 @@ export function Copy() {
         let mut app = RuntimeJsxApp::new(&entry_path);
         let ctx = egui::Context::default();
         app.reload_from_disk(&ctx);
+        app.ensure_reload_watcher(&ctx);
+        assert!(
+            app.reload_watcher.is_some(),
+            "expected reload watcher to be active for missing-import fallback coverage"
+        );
 
-        let rendered = app
-            .session
-            .as_mut()
-            .expect("session should be loaded")
-            .dispatch_events(&[ContractEvent::new("toggle", EventKind::Toggled)
-                .value(Some(EventValue::Boolean(true)))])
-            .expect("toggle should update state");
-        if let Some(tree) = rendered.tree {
-            app.rendered = Some(tree);
-        }
-        app.motion = rendered.motion;
+        app.dispatch_events_to_runtime(&[ContractEvent::new("toggle", EventKind::Clicked)], &ctx);
+        app.wait_for_runtime_worker_idle(&ctx, Duration::from_secs(5));
 
         let tree = rendered_tree(&app);
-        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(true));
         assert_eq!(
             label_text(find_node(&tree.root, "status").expect("status label should exist")),
             Some("On")
@@ -452,7 +655,7 @@ export function Copy() {
         std::fs::write(
             &child_path,
             r#"
-import { Extra } from "./extra.tsx";
+import { Extra } from "./nested/runtime/extra.tsx";
 
 export function Copy() {
   return (
@@ -468,26 +671,71 @@ export function Copy() {
 
         app.reload_from_disk(&ctx);
         assert!(
-            app.session.is_none(),
-            "failed reload should tear down the live session"
+            app.debug_snapshot().live_session.is_some(),
+            "failed reload should keep the previous live session"
         );
         assert!(
-            app.rendered.is_none(),
-            "failed reload should clear the rendered tree"
-        );
-        assert!(
-            app.hot_reload_state.is_some(),
-            "the API-compatible hot reload snapshot should still be captured"
+            app.rendered.is_some(),
+            "failed reload should keep the previous rendered tree visible"
         );
         assert!(
             app.error.is_some(),
             "expected failed reload to surface an error"
         );
+        let reload_error = app
+            .error
+            .as_deref()
+            .expect("expected failed reload to preserve the runtime load error");
+        assert!(
+            !reload_error.contains("Failed to update JSX reload watcher"),
+            "missing nested imports should register a nearest-existing watch ancestor, got watcher failure: {reload_error}"
+        );
         assert!(
             app.watched_files.contains(&extra_path),
             "attempted dependency set should include the new missing import"
         );
+        assert!(
+            app.debug_snapshot().last_torn_down_session.is_none(),
+            "failed reload should not tear down the previous live session"
+        );
 
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("On")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "copy").expect("copy label should exist")),
+            Some("Old copy")
+        );
+
+        run_preview_frame(&mut app, &ctx, RawInput::default());
+        assert!(
+            app.error.is_some(),
+            "render_preview should keep the reload error banner visible before interaction"
+        );
+
+        assert!(
+            click_preview_toggle_until_status(&mut app, &ctx, "Off"),
+            "render_preview should keep the stale tree interactive via UI-originated events while the reload error is shown"
+        );
+        assert!(
+            app.error.is_none(),
+            "successful UI-originated event dispatch should clear the reload error"
+        );
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("Off")
+        );
+
+        std::fs::create_dir_all(
+            extra_path
+                .parent()
+                .expect("nested missing dependency should have a parent directory"),
+        )
+        .expect("missing dependency directories should be created");
         std::fs::write(
             &extra_path,
             r#"
@@ -504,7 +752,6 @@ export function Extra() {
         );
 
         let tree = rendered_tree(&app);
-        assert_eq!(checkbox_value(&tree.root, "toggle"), Some(false));
         assert_eq!(
             label_text(find_node(&tree.root, "status").expect("status label should exist")),
             Some("Off")
@@ -525,7 +772,7 @@ export function Extra() {
         assert_eq!(snapshot.host.reload_recovery_count, 1);
         let torn_down = snapshot
             .last_torn_down_session
-            .expect("failed reload should capture the dead session metrics");
+            .expect("successful replacement should capture the previous session metrics");
         assert_eq!(torn_down.teardown_count, 1);
         assert_eq!(torn_down.runtime.active_timer_count, 0);
         assert!(!torn_down.runtime.pending_host_wake);
@@ -533,6 +780,162 @@ export function Extra() {
             .live_session
             .expect("recovered reload should have a live session");
         assert_eq!(live.render_call_count, 1);
+    }
+
+    #[test]
+    fn failed_reload_from_render_throw_keeps_live_tree_visible_and_recovers_after_fix() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("app.tsx");
+        let panel_path = dir.path().join("panel.tsx");
+        write_runtime_failure_entry_fixture(&entry_path);
+        write_panel_fixture_healthy(&panel_path, "Healthy panel");
+
+        let mut app = RuntimeJsxApp::new(&entry_path);
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
+
+        app.dispatch_events_to_runtime(&[ContractEvent::new("toggle", EventKind::Clicked)], &ctx);
+        app.wait_for_runtime_worker_idle(&ctx, Duration::from_secs(5));
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("On")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Healthy panel")
+        );
+
+        write_panel_fixture_render_throw(&panel_path);
+        app.reload_from_disk(&ctx);
+
+        assert!(
+            app.debug_snapshot().live_session.is_some(),
+            "failed reload should keep the previous live session"
+        );
+        assert!(
+            app.rendered.is_some(),
+            "failed reload should keep the previous rendered tree visible"
+        );
+        let error = app
+            .error
+            .as_deref()
+            .expect("expected failed reload to surface an error");
+        assert!(
+            error.contains("render reload boom"),
+            "expected render throw reason in reload error: {error}"
+        );
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("On")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Healthy panel")
+        );
+
+        assert!(
+            click_preview_toggle_until_status(&mut app, &ctx, "Off"),
+            "render_preview should keep the stale tree interactive after a render-throw reload failure"
+        );
+
+        write_panel_fixture_healthy(&panel_path, "Recovered panel");
+        app.reload_from_disk(&ctx);
+        assert!(
+            app.error.is_none(),
+            "reload should recover once the runtime render throw is fixed"
+        );
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("Off")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Recovered panel")
+        );
+    }
+
+    #[test]
+    fn failed_reload_from_effect_throw_keeps_live_tree_visible_and_recovers_after_fix() {
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("app.tsx");
+        let panel_path = dir.path().join("panel.tsx");
+        write_runtime_failure_entry_fixture(&entry_path);
+        write_panel_fixture_healthy(&panel_path, "Healthy panel");
+
+        let mut app = RuntimeJsxApp::new(&entry_path);
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
+
+        app.dispatch_events_to_runtime(&[ContractEvent::new("toggle", EventKind::Clicked)], &ctx);
+        app.wait_for_runtime_worker_idle(&ctx, Duration::from_secs(5));
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("On")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Healthy panel")
+        );
+
+        write_panel_fixture_effect_throw(&panel_path);
+        app.reload_from_disk(&ctx);
+
+        assert!(
+            app.debug_snapshot().live_session.is_some(),
+            "failed reload should keep the previous live session"
+        );
+        assert!(
+            app.rendered.is_some(),
+            "failed reload should keep the previous rendered tree visible"
+        );
+        let error = app
+            .error
+            .as_deref()
+            .expect("expected failed reload to surface an error");
+        assert!(
+            error.contains("effect reload boom"),
+            "expected effect throw reason in reload error: {error}"
+        );
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("On")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Healthy panel")
+        );
+
+        assert!(
+            click_preview_toggle_until_status(&mut app, &ctx, "Off"),
+            "render_preview should keep the stale tree interactive after an effect-throw reload failure"
+        );
+
+        write_panel_fixture_healthy(&panel_path, "Recovered panel");
+        app.reload_from_disk(&ctx);
+        assert!(
+            app.error.is_none(),
+            "reload should recover once the runtime effect throw is fixed"
+        );
+
+        let tree = rendered_tree(&app);
+        assert_eq!(
+            label_text(find_node(&tree.root, "status").expect("status label should exist")),
+            Some("Off")
+        );
+        assert_eq!(
+            label_text(find_node(&tree.root, "panel").expect("panel label should exist")),
+            Some("Recovered panel")
+        );
     }
 
     #[test]
@@ -573,9 +976,9 @@ render(<App />);
         });
 
         let snapshot = app.debug_snapshot();
-        assert_eq!(
-            snapshot.host.runtime_update_drain_count,
-            before.host.runtime_update_drain_count + 1
+        assert!(
+            snapshot.host.runtime_update_drain_count >= before.host.runtime_update_drain_count + 1,
+            "timer-driven state should produce at least one visible drain"
         );
         assert!(
             snapshot.host.repaint_request_count >= 1,
@@ -592,6 +995,95 @@ render(<App />);
         assert_eq!(
             label_text(find_node(&tree.root, "status").expect("status label should exist")),
             Some("ready")
+        );
+    }
+
+    #[test]
+    fn async_burst_runtime_updates_converge_to_latest_state_within_frame_drain_budget() {
+        const BURST_CALLBACK_COUNT: usize = 257;
+        const FRAME_DRAIN_BUDGET: usize = 2;
+        const MAX_FRAMES_TO_CONVERGE: usize = 3;
+
+        let dir = tempdir().expect("temp dir should be created");
+        let entry_path = dir.path().join("burst-async.tsx");
+        std::fs::write(
+            &entry_path,
+            format!(
+                r#"
+import {{ render, useEffect, useState }} from "egui";
+
+function App() {{
+  const [count, setCount] = useState(0);
+  useEffect(() => {{
+    for (let next = 1; next <= {BURST_CALLBACK_COUNT}; next += 1) {{
+      setTimeout(() => setCount(next), 0);
+    }}
+  }}, []);
+
+  return <label id="status" text={{String(count)}} />;
+}}
+
+render(<App />);
+"#,
+            ),
+        )
+        .expect("entry file should be written");
+
+        let mut app = RuntimeJsxApp::new(&entry_path);
+        app.max_runtime_update_drains_per_frame = FRAME_DRAIN_BUDGET;
+        let ctx = egui::Context::default();
+        app.reload_from_disk(&ctx);
+        app.initialized = true;
+
+        let mut frame_statuses = Vec::new();
+        let mut frame_drain_attempts = Vec::new();
+        let mut converged_frame = None;
+
+        for frame in 1..=MAX_FRAMES_TO_CONVERGE {
+            let before = app.debug_snapshot().host;
+            run_update_frame(&mut app, &ctx);
+            let after = app.debug_snapshot().host;
+
+            let frame_drain_attempts_this_frame = drain_attempt_delta(&before, &after);
+            assert!(
+                frame_drain_attempts_this_frame <= FRAME_DRAIN_BUDGET as u64,
+                "frame {frame} exceeded the configured per-frame drain budget ({frame_drain_attempts_this_frame} > {FRAME_DRAIN_BUDGET})"
+            );
+            frame_drain_attempts.push(frame_drain_attempts_this_frame);
+
+            let status = label_text(
+                find_node(&rendered_tree(&app).root, "status")
+                    .expect("status label should exist while advancing update frames"),
+            )
+            .unwrap_or("<missing>")
+            .to_owned();
+            frame_statuses.push(status.clone());
+            if status == BURST_CALLBACK_COUNT.to_string() {
+                converged_frame = Some(frame);
+                break;
+            }
+
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            frame_drain_attempts.iter().any(|attempts| *attempts > 0),
+            "expected rendered preview frames to drain async runtime work; observed attempts={frame_drain_attempts:?}, statuses={frame_statuses:?}"
+        );
+
+        let converged_frame = converged_frame.unwrap_or_else(|| {
+            panic!(
+                "runtime did not converge to latest visible burst value within {MAX_FRAMES_TO_CONVERGE} rendered frames; statuses={frame_statuses:?}, drain attempts={frame_drain_attempts:?}"
+            )
+        });
+        assert!(
+            converged_frame <= MAX_FRAMES_TO_CONVERGE,
+            "latest burst value should converge within {MAX_FRAMES_TO_CONVERGE} rendered frames"
+        );
+        assert_eq!(
+            frame_statuses.last().map(String::as_str),
+            Some("257"),
+            "preview-rendered status text should show the latest burst value once convergence completes"
         );
     }
 
@@ -642,20 +1134,82 @@ render(<label id="status" text="steady" />);
         })
     }
 
-    fn checkbox_value(node: &ContractNode, node_id: &str) -> Option<bool> {
-        if node.node_id().as_str() == node_id {
-            if let ContractNode::Checkbox(checkbox) = node {
-                return Some(checkbox.value);
+    fn run_preview_frame(app: &mut RuntimeJsxApp, ctx: &egui::Context, input: RawInput) {
+        let _ = ctx.run(input, |context| {
+            CentralPanel::default().show(context, |ui| {
+                app.render_preview(ui);
+            });
+        });
+    }
+
+    fn run_update_frame(app: &mut RuntimeJsxApp, ctx: &egui::Context) {
+        let _ = ctx.run(RawInput::default(), |context| {
+            app.update_frame(context);
+        });
+    }
+
+    fn drain_attempt_delta(
+        before: &super::super::metrics::ExampleHostMetrics,
+        after: &super::super::metrics::ExampleHostMetrics,
+    ) -> u64 {
+        (after.runtime_update_drain_count - before.runtime_update_drain_count)
+            + (after.runtime_update_drain_empty_count - before.runtime_update_drain_empty_count)
+    }
+
+    fn click_preview_toggle_until_status(
+        app: &mut RuntimeJsxApp,
+        ctx: &egui::Context,
+        expected_status: &str,
+    ) -> bool {
+        run_preview_frame(app, ctx, RawInput::default());
+        for y in (56..=360).step_by(24) {
+            for x in (24..=360).step_by(24) {
+                let position = pos2(x as f32, y as f32);
+                run_preview_frame(app, ctx, press_at(position));
+                run_preview_frame(app, ctx, release_at(position));
+                app.wait_for_runtime_worker_idle(ctx, Duration::from_secs(2));
+
+                let status = label_text(
+                    find_node(&rendered_tree(app).root, "status")
+                        .expect("status label should exist while probing UI clicks"),
+                );
+                if status == Some(expected_status) {
+                    return true;
+                }
             }
         }
 
-        for child in contract_children(node) {
-            if let Some(value) = checkbox_value(child, node_id) {
-                return Some(value);
-            }
-        }
+        false
+    }
 
-        None
+    fn press_at(position: egui::Pos2) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            ..RawInput::default()
+        }
+    }
+
+    fn release_at(position: egui::Pos2) -> RawInput {
+        RawInput {
+            events: vec![
+                Event::PointerMoved(position),
+                Event::PointerButton {
+                    pos: position,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            ..RawInput::default()
+        }
     }
 
     fn find_node<'a>(node: &'a ContractNode, node_id: &str) -> Option<&'a ContractNode> {
@@ -709,5 +1263,72 @@ render(<label id="status" text="steady" />);
             }
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    fn write_runtime_failure_entry_fixture(entry_path: &Path) {
+        std::fs::write(
+            entry_path,
+            r#"
+import { render, useState } from "egui";
+import { FaultPanel } from "./panel.tsx";
+
+function App() {
+  const [enabled, setEnabled] = useState(false);
+  return (
+    <div id="root" data-slot="column">
+      <button id="toggle" label="Toggle" onClick={() => setEnabled((value) => !value)} />
+      <label id="status" text={enabled ? "On" : "Off"} />
+      <FaultPanel />
+    </div>
+  );
+}
+
+render(<App />);
+"#,
+        )
+        .expect("entry fixture should be written");
+    }
+
+    fn write_panel_fixture_healthy(panel_path: &Path, text: &str) {
+        std::fs::write(
+            panel_path,
+            format!(
+                r#"
+export function FaultPanel() {{
+  return <label id="panel" text={text:?} />;
+}}
+"#,
+            ),
+        )
+        .expect("healthy panel fixture should be written");
+    }
+
+    fn write_panel_fixture_render_throw(panel_path: &Path) {
+        std::fs::write(
+            panel_path,
+            r#"
+export function FaultPanel() {
+  throw new Error("render reload boom");
+}
+"#,
+        )
+        .expect("render-throw panel fixture should be written");
+    }
+
+    fn write_panel_fixture_effect_throw(panel_path: &Path) {
+        std::fs::write(
+            panel_path,
+            r#"
+import { useEffect } from "egui";
+
+export function FaultPanel() {
+  useEffect(() => {
+    throw new Error("effect reload boom");
+  }, []);
+  return <label id="panel" text="Broken panel" />;
+}
+"#,
+        )
+        .expect("effect-throw panel fixture should be written");
     }
 }

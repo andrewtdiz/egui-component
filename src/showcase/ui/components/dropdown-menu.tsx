@@ -1,6 +1,6 @@
 import { useState } from "egui";
 import { styles } from "../lib/styles.ts";
-import { cn, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, itemId, itemLabel, type Handler, type Item, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Card } from "./card.tsx";
 import { LabelMuted } from "./primary/label.tsx";
@@ -15,6 +15,9 @@ export type DropdownMenuProps = NodeProps & {
   triggerVariant?: string;
   open?: boolean;
   width?: number;
+  onCommand?: Handler<string>;
+  onOpen?: Handler<boolean>;
+  onClose?: Handler<boolean>;
 } & Record<string, unknown>;
 
 export function DropdownMenuRoot({ children, className, ...props }: NodeProps & Record<string, unknown>) {
@@ -68,8 +71,8 @@ export function DropdownMenu({
     if (open == null) {
       setInternalOpen(next);
     }
-    if (next) onOpen?.(event ?? null, resolvedOpen);
-    else onClose?.(event ?? null, resolvedOpen);
+    if (next) onOpen?.(eventWithValue(event, next, { open: next }), resolvedOpen);
+    else onClose?.(eventWithValue(event, next, { open: next }), resolvedOpen);
   };
 
   return (
@@ -104,7 +107,7 @@ export function DropdownMenuContent({
   children,
 }: NodeProps & {
   entries?: MenuEntry[];
-  onCommand?: Handler;
+  onCommand?: Handler<string>;
   onClose?: () => void;
 } & Record<string, unknown>) {
   return (
@@ -126,7 +129,7 @@ export function DropdownMenuEntry({
   baseId?: string;
   entry: MenuEntry;
   index: number;
-  onCommand?: Handler;
+  onCommand?: Handler<string>;
   onClose?: () => void;
 }) {
   if (entry === "-" || entry === "separator") {
@@ -140,7 +143,7 @@ export function DropdownMenuEntry({
   return <DropdownMenuItem baseId={baseId} item={entry} index={index} onCommand={onCommand} onClose={onClose} />;
 }
 
-export function DropdownMenuItem({ baseId = "menu-item", item, index = 0, onCommand, onClose, className }: { baseId?: string; item: Item; index?: number; onCommand?: Handler; onClose?: () => void; className?: string }) {
+export function DropdownMenuItem({ baseId = "menu-item", item, index = 0, onCommand, onClose, className }: { baseId?: string; item: Item; index?: number; onCommand?: Handler<string>; onClose?: () => void; className?: string }) {
   const id = itemId(item, String(index));
   const label = itemLabel(item, id);
   const nested = Array.isArray(item.entries) ? (item.entries as MenuEntry[]) : [];
@@ -164,7 +167,7 @@ export function DropdownMenuItem({ baseId = "menu-item", item, index = 0, onComm
         trailingText={shortcut}
         trailingIcon={nested.length > 0 ? "chevron-right" : undefined}
         onClick={(event) => {
-          onCommand?.({ ...(event as object), metadata }, actionId);
+          onCommand?.(eventWithValue(event, actionId, metadata), actionId);
           onClose?.();
         }}
       >

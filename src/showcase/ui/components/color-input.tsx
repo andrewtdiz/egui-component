@@ -3,7 +3,7 @@ import { Color } from "./primary/color.tsx";
 import { Input } from "./input.tsx";
 import { LabelMuted } from "./primary/label.tsx";
 
-export type ColorInputProps = NodeProps & { value?: string; label?: string; onChange?: Handler } & Record<string, unknown>;
+export type ColorInputProps = NodeProps & { value?: string; label?: string; onChange?: Handler<string> } & Record<string, unknown>;
 
 export function ColorInput({ value = "#2896ff", label = "Color", className, onChange, ...props }: ColorInputProps) {
   const baseId = requireNodeId(props, "ColorInput");

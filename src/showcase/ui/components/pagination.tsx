@@ -1,14 +1,8 @@
-import { cn, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
+import { cn, eventWithValue, type Handler, type NodeProps, nodeProps, requireNodeId } from "../component-support.ts";
 import { Button } from "./button.tsx";
 import { Label } from "./primary/label.tsx";
 
 type PaginationItem = number | "ellipsis";
-
-function pageEvent(event: unknown, page: number) {
-  const base = typeof event === "object" && event != null ? event as Record<string, unknown> : {};
-  const metadata = typeof base.metadata === "object" && base.metadata != null ? base.metadata as Record<string, unknown> : {};
-  return { ...base, value: page, metadata: { ...metadata, page } };
-}
 
 function paginationItems(currentPage: number, pageCount: number, siblingCount: number): PaginationItem[] {
   if (pageCount <= 0) return [];
@@ -39,21 +33,21 @@ export function PaginationRoot({ children, className, ...props }: NodeProps & Re
   return <div {...nodeProps(props, cn("flex flex-row flex-wrap items-center gap-1", className))}>{children}</div>;
 }
 
-export function PaginationPrevious({ currentPage, baseId = "pagination", onSelect }: { currentPage: number; baseId?: string; onSelect?: (event: unknown, value: number) => void }) {
+export function PaginationPrevious({ currentPage, baseId = "pagination", onSelect }: { currentPage: number; baseId?: string; onSelect?: Handler<number> }) {
   if (currentPage <= 1) return null;
-  return <Button id={`${baseId}-previous`} size="sm" variant="ghost" leadingIcon="chevron-left" className="shrink-0" onClick={(event) => onSelect?.(pageEvent(event, currentPage - 1), currentPage - 1)}>Previous</Button>;
+  return <Button id={`${baseId}-previous`} size="sm" variant="ghost" leadingIcon="chevron-left" className="shrink-0" onClick={(event) => onSelect?.(eventWithValue(event, currentPage - 1, { page: currentPage - 1 }), currentPage - 1)}>Previous</Button>;
 }
 
-export function PaginationNext({ currentPage, pageCount, baseId = "pagination", onSelect }: { currentPage: number; pageCount: number; baseId?: string; onSelect?: (event: unknown, value: number) => void }) {
+export function PaginationNext({ currentPage, pageCount, baseId = "pagination", onSelect }: { currentPage: number; pageCount: number; baseId?: string; onSelect?: Handler<number> }) {
   if (currentPage >= pageCount) return null;
-  return <Button id={`${baseId}-next`} size="sm" variant="ghost" trailingIcon="chevron-right" className="shrink-0" onClick={(event) => onSelect?.(pageEvent(event, currentPage + 1), currentPage + 1)}>Next</Button>;
+  return <Button id={`${baseId}-next`} size="sm" variant="ghost" trailingIcon="chevron-right" className="shrink-0" onClick={(event) => onSelect?.(eventWithValue(event, currentPage + 1, { page: currentPage + 1 }), currentPage + 1)}>Next</Button>;
 }
 
 export function PaginationEllipsis({ index, baseId = "pagination" }: { index: number; baseId?: string }) {
   return <Label key={`ellipsis-${index}`} id={`${baseId}-ellipsis-${index}`} text="..." tone="muted" className="px-2 shrink-0 text-sm text-muted-foreground" />;
 }
 
-export function PaginationPage({ page, currentPage, baseId = "pagination", onSelect }: { page: number; currentPage: number; baseId?: string; onSelect?: (event: unknown, value: number) => void }) {
+export function PaginationPage({ page, currentPage, baseId = "pagination", onSelect }: { page: number; currentPage: number; baseId?: string; onSelect?: Handler<number> }) {
   return (
     <Button
       id={`${baseId}-page-${page}`}
@@ -62,14 +56,14 @@ export function PaginationPage({ page, currentPage, baseId = "pagination", onSel
       selected={page === currentPage}
       width={32}
       className="h-8 shrink-0"
-      onClick={(event) => onSelect?.(pageEvent(event, page), page)}
+      onClick={(event) => onSelect?.(eventWithValue(event, page, { page }), page)}
     >
       {String(page)}
     </Button>
   );
 }
 
-export function PaginationContent({ currentPage = 1, pageCount = 1, siblingCount = 1, baseId = "pagination", onSelect }: { currentPage?: number; pageCount?: number; siblingCount?: number; baseId?: string; onSelect?: (event: unknown, value: number) => void }) {
+export function PaginationContent({ currentPage = 1, pageCount = 1, siblingCount = 1, baseId = "pagination", onSelect }: { currentPage?: number; pageCount?: number; siblingCount?: number; baseId?: string; onSelect?: Handler<number> }) {
   const current = Math.min(Math.max(Math.round(currentPage || 1), 1), Math.max(pageCount, 1));
   const pages = paginationItems(current, Math.max(pageCount, 0), Math.max(siblingCount, 0));
 
@@ -82,7 +76,7 @@ export function PaginationContent({ currentPage = 1, pageCount = 1, siblingCount
   );
 }
 
-export function Pagination({ currentPage = 1, pageCount = 1, siblingCount = 1, className, onSelect, ...props }: NodeProps & { currentPage?: number; pageCount?: number; siblingCount?: number } & Record<string, unknown>) {
+export function Pagination({ currentPage = 1, pageCount = 1, siblingCount = 1, className, onSelect, ...props }: NodeProps & { currentPage?: number; pageCount?: number; siblingCount?: number; onSelect?: Handler<number> } & Record<string, unknown>) {
   const baseId = requireNodeId(props, "Pagination");
   return (
     <PaginationRoot {...props} className={className}>

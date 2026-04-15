@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         mpsc::{self, Receiver, SyncSender},
         Arc, Mutex,
@@ -129,13 +129,22 @@ pub fn watch_paths_for_files(files: &BTreeSet<PathBuf>) -> BTreeMap<PathBuf, Rec
             continue;
         }
 
-        if let Some(parent) = path.parent() {
-            watched_paths.insert(parent.to_path_buf(), RecursiveMode::NonRecursive);
-        } else {
-            watched_paths.insert(path.clone(), RecursiveMode::NonRecursive);
-        }
+        watched_paths.insert(
+            nearest_existing_watch_ancestor(path),
+            RecursiveMode::NonRecursive,
+        );
     }
     watched_paths
+}
+
+fn nearest_existing_watch_ancestor(path: &Path) -> PathBuf {
+    for ancestor in path.ancestors() {
+        if ancestor.exists() {
+            return ancestor.to_path_buf();
+        }
+    }
+
+    path.to_path_buf()
 }
 
 pub fn event_requires_reload(event: &Event) -> bool {
@@ -264,6 +273,43 @@ mod tests {
         assert!(
             !watched.contains_key(&normalize_watch_path(missing)),
             "missing files are watched via the parent directory"
+        );
+    }
+
+    #[test]
+    fn watch_paths_for_nested_missing_imports_fallback_to_nearest_existing_ancestor() {
+        let temp = tempfile::tempdir().expect("temp dir should exist");
+        let existing = temp.path().join("existing.tsx");
+        let nested = temp.path().join("nested");
+        std::fs::write(&existing, "export {}").expect("existing file should be written");
+        std::fs::create_dir_all(&nested).expect("nested directory should be created");
+
+        let missing = nested.join("deeper").join("missing.tsx");
+        let missing_parent = missing
+            .parent()
+            .expect("missing test fixture should have a parent")
+            .to_path_buf();
+
+        let watched = watch_paths_for_files(&BTreeSet::from([
+            normalize_watch_path(existing.clone()),
+            normalize_watch_path(missing.clone()),
+        ]));
+
+        assert_eq!(
+            watched.get(&normalize_watch_path(existing)),
+            Some(&RecursiveMode::NonRecursive)
+        );
+        assert_eq!(
+            watched.get(&normalize_watch_path(nested)),
+            Some(&RecursiveMode::NonRecursive)
+        );
+        assert!(
+            !watched.contains_key(&normalize_watch_path(missing_parent)),
+            "missing intermediate parent should not be registered directly"
+        );
+        assert!(
+            !watched.contains_key(&normalize_watch_path(missing)),
+            "missing file should be watched through the nearest existing ancestor"
         );
     }
 

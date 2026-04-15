@@ -1,3 +1,15 @@
+//! Rust-owned retained host tree for the egui bridge.
+//!
+//! JS never receives references to this retained state. The JS reconciler can
+//! only propose changes by emitting serialized [`HostMutationBatch`] payloads.
+//! Rust validates and applies those batches here, then materializes fresh
+//! `ContractTree` snapshots for the renderer host.
+//!
+//! Motion values are retained alongside, but structurally separate from, the
+//! contract tree. Motion-only mutations update the retained motion map without
+//! changing parent/child topology or forcing a fresh contract-tree
+//! materialization.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{anyhow, bail};
@@ -5,15 +17,36 @@ use clay_jsx_runtime::contract::{ContractNode, ContractTree, NodeId};
 
 use super::motion::{MotionFrame, MotionSpec, MotionTickResult, MotionValues};
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
+/// A declarative batch proposed by JS and validated/applied by Rust.
 pub struct HostMutationBatch {
     pub version: u32,
+    pub schema_fingerprint: String,
     #[serde(default)]
     pub mutations: Vec<HostMutation>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+impl HostMutationBatch {
+    pub fn changes_contract_tree(&self) -> bool {
+        self.mutations
+            .iter()
+            .any(HostMutation::changes_contract_tree)
+    }
+
+    pub fn changes_motion_state(&self) -> bool {
+        self.mutations
+            .iter()
+            .any(HostMutation::changes_motion_state)
+    }
+
+    pub fn is_motion_only(&self) -> bool {
+        !self.mutations.is_empty() && !self.changes_contract_tree() && self.changes_motion_state()
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+/// The only mutation vocabulary JS may use to request retained-tree changes.
 pub enum HostMutation {
     ReplaceRoot {
         subtree: ContractNode,
@@ -50,9 +83,14 @@ impl HostMutation {
     pub fn changes_contract_tree(&self) -> bool {
         !matches!(self, Self::SetMotion { .. } | Self::ClearMotion { .. })
     }
+
+    pub fn changes_motion_state(&self) -> bool {
+        matches!(self, Self::SetMotion { .. } | Self::ClearMotion { .. })
+    }
 }
 
 #[derive(Debug, Clone, Default)]
+/// Rust-owned retained tree built from validated [`HostMutation`] batches.
 pub struct HostTree {
     root_id: Option<NodeId>,
     nodes: BTreeMap<NodeId, HostNode>,
@@ -72,6 +110,25 @@ impl HostTree {
     }
 
     pub fn apply_mutations(&mut self, mutations: Vec<HostMutation>) -> anyhow::Result<()> {
+        if mutations.is_empty() {
+            return Ok(());
+        }
+
+        // Commit batches are transactional at the retained-tree boundary:
+        // either the whole batch validates and applies, or the previous tree is
+        // restored intact so JS never observes a partially applied native tree.
+        let checkpoint = self.clone();
+        if let Err(error) = self.apply_mutations_in_place(mutations) {
+            *self = checkpoint;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn apply_mutations_in_place(
+        &mut self,
+        mutations: Vec<HostMutation>,
+    ) -> anyhow::Result<()> {
         if mutations.is_empty() {
             return Ok(());
         }
@@ -175,6 +232,38 @@ impl HostTree {
             changed: false,
             frame: self.motion_frame(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retained_state_snapshot_bytes(&self) -> Vec<u8> {
+        let nodes = self
+            .nodes
+            .iter()
+            .map(|(node_id, node)| {
+                serde_json::json!({
+                    "node_id": node_id,
+                    "parent_id": node.parent_id,
+                    "child_ids": node.child_ids,
+                    "node": node.node,
+                })
+            })
+            .collect::<Vec<_>>();
+        let motion = self
+            .motion
+            .iter()
+            .map(|(node_id, values)| {
+                serde_json::json!({
+                    "node_id": node_id,
+                    "values": values,
+                })
+            })
+            .collect::<Vec<_>>();
+        serde_json::to_vec(&serde_json::json!({
+            "root_id": self.root_id,
+            "nodes": nodes,
+            "motion": motion,
+        }))
+        .expect("host tree retained-state snapshot should serialize")
     }
 
     fn replace_root(&mut self, subtree: ContractNode) -> anyhow::Result<()> {
@@ -635,6 +724,7 @@ fn supports_contract_children(node: &ContractNode) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{HostMutation, HostTree};
+    use crate::MotionProperty;
     use clay_jsx_runtime::contract::{ContractNode, NodeId};
     use serde_json::json;
 
@@ -746,6 +836,129 @@ mod tests {
             .is_err());
     }
 
+    #[test]
+    fn failed_batch_rolls_back_structural_mutations_byte_for_byte() {
+        let mut tree = HostTree::default();
+        tree.apply_mutations(vec![HostMutation::ReplaceRoot {
+            subtree: column("root", vec![label("a", "A"), label("b", "B")]),
+        }])
+        .expect("replace root should apply");
+        let checkpoint = snapshot_bytes(&tree);
+
+        let result = tree.apply_mutations(vec![
+            HostMutation::RemoveSubtree {
+                node_id: NodeId::from("a"),
+            },
+            HostMutation::SetChildren {
+                node_id: NodeId::from("root"),
+                child_ids: vec![NodeId::from("a"), NodeId::from("b")],
+            },
+        ]);
+
+        assert!(result.is_err());
+        assert_eq!(snapshot_bytes(&tree), checkpoint);
+    }
+
+    #[test]
+    fn failed_batch_rolls_back_motion_mutations_byte_for_byte() {
+        let mut tree = HostTree::default();
+        tree.apply_mutations(vec![HostMutation::ReplaceRoot {
+            subtree: column("root", vec![label("status", "ready")]),
+        }])
+        .expect("replace root should apply");
+        tree.apply_mutations(vec![HostMutation::SetMotion {
+            node_id: NodeId::from("status"),
+            motion: motion_spec(1.0),
+        }])
+        .expect("set motion should apply");
+        let checkpoint = snapshot_bytes(&tree);
+
+        let result = tree.apply_mutations(vec![
+            HostMutation::ClearMotion {
+                node_id: NodeId::from("status"),
+            },
+            HostMutation::SetMotion {
+                node_id: NodeId::from("missing"),
+                motion: motion_spec(0.25),
+            },
+        ]);
+
+        assert!(result.is_err());
+        assert_eq!(snapshot_bytes(&tree), checkpoint);
+    }
+
+    #[test]
+    fn motion_only_mutations_leave_the_materialized_contract_tree_unchanged() {
+        let mut tree = HostTree::default();
+        tree.apply_mutations(vec![HostMutation::ReplaceRoot {
+            subtree: column("root", vec![label("status", "ready")]),
+        }])
+        .expect("replace root should apply");
+
+        let materialized_before = tree.materialize().expect("tree should materialize");
+
+        tree.apply_mutations(vec![HostMutation::SetMotion {
+            node_id: NodeId::from("status"),
+            motion: motion_spec(1.0),
+        }])
+        .expect("motion-only update should apply");
+
+        let materialized_after = tree.materialize().expect("tree should still materialize");
+        assert_eq!(materialized_after, materialized_before);
+        assert_eq!(
+            tree.motion_frame()
+                .values
+                .get(&NodeId::from("status"))
+                .and_then(|values| values.get(MotionProperty::Opacity)),
+            Some(1.0)
+        );
+    }
+
+    #[test]
+    fn structural_mutations_preserve_motion_state_for_unaffected_nodes() {
+        let mut tree = HostTree::default();
+        tree.apply_mutations(vec![HostMutation::ReplaceRoot {
+            subtree: column(
+                "root",
+                vec![label("status", "ready"), label("sibling", "before")],
+            ),
+        }])
+        .expect("replace root should apply");
+        tree.apply_mutations(vec![HostMutation::SetMotion {
+            node_id: NodeId::from("status"),
+            motion: motion_spec(1.0),
+        }])
+        .expect("set motion should apply");
+        let retained_motion_before = tree.motion_frame();
+
+        tree.apply_mutations(vec![
+            HostMutation::UpdateNode {
+                node: label("sibling", "after"),
+            },
+            HostMutation::InsertSubtree {
+                parent_id: NodeId::from("root"),
+                index: 2,
+                subtree: label("tail", "tail"),
+            },
+            HostMutation::SetChildren {
+                node_id: NodeId::from("root"),
+                child_ids: vec![
+                    NodeId::from("sibling"),
+                    NodeId::from("status"),
+                    NodeId::from("tail"),
+                ],
+            },
+        ])
+        .expect("structural changes should apply without disturbing retained motion");
+
+        let root = tree.materialize().expect("tree should materialize").root;
+        assert_eq!(child_ids(&root), vec!["sibling", "status", "tail"]);
+        assert_eq!(label_text(&children(&root)[0]), "after");
+
+        let retained_motion_after = tree.motion_frame();
+        assert_eq!(retained_motion_after, retained_motion_before);
+    }
+
     fn column(node_id: &str, children: Vec<ContractNode>) -> ContractNode {
         serde_json::from_value(json!({
             "family": "column",
@@ -762,6 +975,19 @@ mod tests {
             "text": text,
         }))
         .expect("label should deserialize")
+    }
+
+    fn motion_spec(opacity: f32) -> super::MotionSpec {
+        serde_json::from_value(json!({
+            "animate": {
+                "opacity": opacity,
+            },
+        }))
+        .expect("motion spec should deserialize")
+    }
+
+    fn snapshot_bytes(tree: &HostTree) -> Vec<u8> {
+        tree.retained_state_snapshot_bytes()
     }
 
     fn children(node: &ContractNode) -> &[ContractNode] {
